@@ -1,0 +1,108 @@
+.matchupCard {
+    background: rgba(255, 255, 255, 0.02);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(238, 191, 28, 0.15);
+    border-radius: 12px;
+    padding: 25px;
+    margin-bottom: 25px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    transition: background 0.3s ease;
+}
+
+.matchupCard:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.scoreboardWrapper {
+    padding-bottom: 15px;
+}
+
+.expanded .scoreboardWrapper {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 25px;
+    margin-bottom: 25px;
+}
+
+.scoreboard {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.teamHeader { display: flex; align-items: center; gap: 20px; flex: 1; }
+.teamHeader:last-child { justify-content: flex-end; }
+
+.teamAvatar {
+    width: 60px; height: 60px; border-radius: 50%;
+    border: 2px solid #eebf1c; background: #111; object-fit: cover;
+}
+
+.teamNameContainer { display: flex; flex-direction: column; flex: 1; }
+.alignRight { text-align: right; align-items: flex-end; }
+
+.teamName { color: #f8fafc; font-weight: 700; font-size: 1.2em; }
+.projTotal { color: #94a3b8; font-size: 0.85em; margin-top: 4px; font-weight: 600; }
+
+.teamScore { font-size: 2.2em; font-weight: 900; letter-spacing: -1px; }
+.scoreGreen { color: #00ceb8; }
+.scoreRed { color: #ff2a6d; }
+
+.vsBadge {
+    background: rgba(238, 191, 28, 0.1); color: #eebf1c;
+    padding: 8px 16px; border-radius: 12px;
+    font-weight: 900; font-size: 1em;
+    border: 1px solid rgba(238, 191, 28, 0.3);
+    margin: 0 40px;
+    text-align: center;
+}
+
+/* Odds Bar */
+.oddsContainer { width: 100%; padding: 0 5%; box-sizing: border-box; }
+.oddsBar { display: flex; width: 100%; height: 6px; border-radius: 3px; overflow: hidden; background: #1e293b; margin-bottom: 8px; }
+.oddsGreen { background: #00ceb8; height: 100%; transition: width 0.5s ease-in-out; }
+.oddsRed { background: #ff2a6d; height: 100%; transition: width 0.5s ease-in-out; }
+.oddsText { display: flex; justify-content: space-between; font-weight: 800; font-size: 0.85em; }
+
+/* Player Rows Breakdowns */
+.playerBreakdown { 
+    display: flex; 
+    flex-direction: column; 
+    gap: 10px;
+    animation: slideDown 0.25s ease-out;
+}
+
+.playerRow {
+    display: flex; justify-content: space-between; align-items: center;
+    background: rgba(0, 0, 0, 0.2); border-radius: 8px; padding: 10px 15px;
+}
+
+.playerSide { display: flex; align-items: center; gap: 12px; flex: 1; }
+.rightSide { justify-content: flex-end; }
+
+.playerImg {
+    width: 42px; height: 42px; border-radius: 50%;
+    background-size: cover; background-position: center; background-color: #111;
+    border: 1px solid #334155;
+}
+
+.playerInfo { display: flex; flex-direction: column; flex: 1; }
+.pName { color: #f8fafc; font-size: 0.9em; font-weight: 600; }
+.pMeta { color: #94a3b8; font-size: 0.75em; text-transform: uppercase; margin-top: 2px; }
+
+.scoreBlock { display: flex; flex-direction: column; min-width: 65px; }
+.pScore { color: #cbd5e1; font-weight: bold; font-size: 1.05em; }
+.pProj { color: #64748b; font-size: 0.7em; margin-top: 2px; font-weight: 600; }
+
+.posBadge {
+    font-size: 0.72em; padding: 6px 0; border-radius: 6px;
+    width: 65px; text-align: center; margin: 0 15px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+
+.emptySlot { color: #475569; font-style: italic; font-size: 0.9em; flex: 1; }
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}

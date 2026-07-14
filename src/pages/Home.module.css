@@ -1,0 +1,85 @@
+.homeContainer {
+    padding: 30px 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.dashboardGrid {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr 1fr;
+    gap: 30px;
+    align-items: start;
+}
+
+.column {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+/* The Glassmorphism Card Effect */
+.commishNote, .hubCard {
+    background: rgba(255, 255, 255, 0.02);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(238, 191, 28, 0.15);
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.cardHeader {
+    margin-top: 0;
+    margin-bottom: 20px;
+    font-size: 1.25em;
+    color: #f8fafc;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 500;
+}
+
+.infoRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    font-size: 0.95em;
+}
+
+.infoLabel {
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+}
+
+.infoValue {
+    color: #f8fafc;
+    font-weight: 600;
+}
+
+.fullWidthBtn {
+    width: 100%;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #f8fafc;
+    border-radius: 8px;
+    padding: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: 0.2s;
+}
+
+.fullWidthBtn:hover {
+    border-color: #eebf1c;
+    color: #eebf1c;
+    background: rgba(238, 191, 28, 0.05);
+}
+
+.mobileLayout {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 10px;
+}

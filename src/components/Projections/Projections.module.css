@@ -1,0 +1,33 @@
+.card {
+    background: rgba(255, 255, 255, 0.02);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(238, 191, 28, 0.15);
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    padding: 10px 0;
+}
+.teamRow {
+    display: flex;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.teamRow:last-child { border-bottom: none; }
+.rankBadge {
+    color: #94a3b8;
+    font-size: 0.8em;
+    width: 30px;
+    text-align: center;
+}
+.avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    margin-right: 15px; border: 2px solid #eebf1c;
+    background: #111;
+}
+.teamInfo { flex-grow: 1; display: flex; flex-direction: column; }
+.teamName { color: #f8fafc; font-weight: 600; font-size: 0.95em; }
+.teamRecord { color: #94a3b8; font-size: 0.8em; margin-top: 4px; }
+.oddsInfo { display: flex; flex-direction: column; align-items: flex-end; font-size: 0.85em; }
+.oddsRow { display: flex; gap: 5px; margin-bottom: 2px; }
+.oddsLabel { color: #94a3b8; }
+.oddsValue { color: #f8fafc; font-weight: bold; }

@@ -1,0 +1,282 @@
+.overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
+    z-index: 10000;
+    /* Changed from display: none to visibility to allow smooth opacity tweening */
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.overlay.open {
+    visibility: visible;
+    opacity: 1;
+}
+
+.sidebar {
+    width: 320px;
+    height: 100%;
+    background: #0b0e14;
+    padding: 30px 20px;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid rgba(238, 191, 28, 0.2);
+    box-shadow: 10px 0 40px rgba(0, 0, 0, 0.5);
+    box-sizing: border-box;
+    transform: translateX(-100%);
+    /* Upgraded the bezier curve for a springier, smoother entrance */
+    transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.overlay.open .sidebar {
+    transform: translateX(0);
+}
+
+.top {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 35px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.brandLogo {
+    width: 200px;
+    height: auto;
+    object-fit: contain;
+}
+
+.closeBtn {
+    position: absolute;
+    right: 0;
+    background: none;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+}
+
+.closeBtn:hover {
+    color: #ff2a6d;
+}
+
+.menuContainer {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding-right: 5px;
+}
+
+/* Custom Scrollbar styling for smooth container physics */
+.menuContainer::-webkit-scrollbar { width: 4px; }
+.menuContainer::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
+
+.section {
+    margin-bottom: 30px;
+}
+
+.section h4 {
+    color: #475569;
+    font-size: 0.75em;
+    margin-top: 0;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    padding-left: 10px;
+}
+
+.commishHeader {
+    color: #ffaa00 !important;
+}
+
+.link, .dropdown {
+    color: #cbd5e1;
+    padding: 12px 15px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.92em;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.2s ease;
+}
+
+.link:hover, .dropdown:hover {
+    background: rgba(255, 255, 255, 0.03);
+    color: #f8fafc;
+}
+
+.link i, .dropdown i {
+    color: #64748b;
+    font-size: 1.25em;
+    transition: color 0.2s;
+}
+
+.link:hover i, .dropdown:hover i {
+    color: #eebf1c;
+}
+
+.dropdown {
+    justify-content: space-between;
+}
+
+.dropdownLabel {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.activeDropdown {
+    background: rgba(238, 191, 28, 0.03);
+    color: #eebf1c;
+}
+
+.activeDropdown i {
+    color: #eebf1c;
+}
+
+/* Smooth Rotation for the dropdown arrows */
+.chevron {
+    transition: transform 0.3s ease;
+}
+
+.chevronOpen {
+    transform: rotate(180deg);
+}
+
+.commishTrigger {
+    border: 1px solid rgba(255, 170, 0, 0.15);
+}
+
+.commishTrigger:hover {
+    background: rgba(255, 170, 0, 0.03);
+}
+
+.commishTrigger i { color: #ffaa00; }
+
+/* Smooth Accordion Logic for Dropdowns */
+.nested {
+    padding-left: 15px;
+    margin-top: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-left: 1px solid rgba(255, 255, 255, 0.05);
+    margin-left: 24px;
+    
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease, margin-top 0.3s ease;
+}
+
+.nestedOpen {
+    max-height: 400px;
+    opacity: 1;
+    margin-top: 5px;
+}
+
+.nested div {
+    color: #94a3b8;
+    padding: 10px 15px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.88em;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.15s;
+}
+
+.nested div i {
+    font-size: 1.15em;
+    color: #475569;
+}
+
+.nested div:hover {
+    background: rgba(255, 255, 255, 0.02);
+    color: #f8fafc;
+}
+
+.nested div:hover i {
+    color: #eebf1c;
+}
+
+.leagueItem {
+    display: flex;
+    align-items: center;
+    color: #94a3b8;
+    padding: 10px 15px;
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: 500;
+    border-radius: 8px;
+    transition: background 0.2s;
+}
+
+.leagueItem:hover {
+    background: rgba(255, 255, 255, 0.02);
+    color: #f8fafc;
+}
+
+.radio {
+    width: 10px;
+    height: 10px;
+    border: 2px solid;
+    border-radius: 50%;
+    margin-right: 15px;
+    flex-shrink: 0;
+    transition: all 0.2s;
+}
+
+.leagueItemAvatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid;
+    margin-right: 15px;
+    flex-shrink: 0;
+    object-fit: cover;
+}
+
+.activeLeagueText {
+    color: #eebf1c;
+    font-weight: 700;
+}
+
+.footer {
+    margin-top: auto;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.logoutLink {
+    color: #64748b;
+    padding: 12px 15px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9em;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.logoutLink:hover {
+    background: rgba(255, 42, 109, 0.05);
+    color: #ff2a6d;
+}
+
+.logoutLink:hover i {
+    color: #ff2a6d;
+}

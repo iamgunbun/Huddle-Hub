@@ -1,0 +1,215 @@
+.container {
+    padding: 30px 20px;
+    max-width: 900px;
+    margin: 0 auto;
+    font-family: 'Montserrat', sans-serif;
+}
+
+.loading {
+    text-align: center;
+    color: #eebf1c;
+    font-size: 1.2em;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-top: 100px;
+    letter-spacing: 2px;
+}
+
+/* SLEEK WHITE HEADER */
+.headerTitle {
+    color: #f8fafc;
+    text-transform: uppercase;
+    font-size: 2em;
+    letter-spacing: 2px;
+    margin-bottom: 30px;
+    font-weight: 500;
+    text-align: center;
+}
+
+.filters {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin-bottom: 40px;
+    flex-wrap: wrap;
+}
+
+.filterBtn {
+    padding: 10px 25px;
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.filterBtn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #f8fafc;
+}
+
+.filterBtn.active {
+    background: #eebf1c;
+    color: #0b0e14;
+    border-color: #eebf1c;
+}
+
+.feed {
+    display: flex;
+    flex-direction: column;
+}
+
+/* --- THE BRACKET CARD STYLE --- */
+.bracketCard {
+    display: flex;
+    background: #11141c; /* Very dark background to match screenshot */
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 20px 15px;
+    margin-bottom: 20px;
+}
+
+.bracketDecor {
+    width: 15px;
+    border: 1.5px solid #eebf1c; /* The gold bracket line */
+    border-right: none;
+    border-radius: 12px 0 0 12px;
+    margin-right: 20px;
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+.cardMain {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.teamNameLabel {
+    color: #f8fafc;
+    font-weight: 800;
+    font-size: 1.1em;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(238, 191, 28, 0.4); /* Gold divider line */
+    margin-bottom: 15px;
+    width: 100%;
+}
+
+.assetContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.assetRow {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    position: relative;
+    padding-right: 150px; /* Space for absolute timestamp */
+}
+
+.avatarWrapper {
+    position: relative;
+    width: 50px;
+    height: 50px;
+}
+
+.avatarImg {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background-size: cover;
+    background-position: center;
+    background-color: #111;
+    border: 2px solid transparent;
+}
+
+.avatarAdd { border-color: #22c55e; }
+.avatarDrop { border-color: #ff2a6d; }
+
+.badge {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    border: 2px solid #11141c; /* Creates the cut-out overlap look */
+}
+
+.badge i { font-size: 14px; font-weight: 900; }
+.badgeAdd { background: #22c55e; }
+.badgeDrop { background: #ff2a6d; }
+
+.assetText {
+    display: flex;
+    flex-direction: column;
+}
+
+.assetName {
+    color: #f8fafc;
+    font-weight: 700;
+    font-size: 1em;
+}
+
+.assetMeta {
+    color: #94a3b8;
+    font-size: 0.8em;
+    margin-top: 2px;
+}
+
+.txnTimestamp {
+    position: absolute;
+    right: 0;
+    bottom: 5px;
+    color: #64748b;
+    font-size: 0.75em;
+    font-style: italic;
+    font-weight: 500;
+}
+
+@media (max-width: 600px) {
+    .assetRow { padding-right: 0; flex-wrap: wrap; }
+    .txnTimestamp { position: relative; width: 100%; text-align: left; padding-left: 65px; margin-top: -5px; }
+}
+
+.noData {
+    text-align: center;
+    color: #64748b;
+    padding: 40px;
+    font-style: italic;
+}
+
+/* --- LOAD MORE --- */
+.loadMoreWrapper {
+    display: flex;
+    justify-content: center;
+    margin-top: 30px;
+}
+
+.loadMoreBtn {
+    background: transparent;
+    color: #eebf1c;
+    border: 2px solid #eebf1c;
+    padding: 10px 30px;
+    border-radius: 24px;
+    font-weight: 700;
+    font-size: 0.9em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.loadMoreBtn:hover {
+    background: #eebf1c;
+    color: #0b0e14;
+}

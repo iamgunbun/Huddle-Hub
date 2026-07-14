@@ -1,0 +1,109 @@
+.container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 80vh;
+    padding: 20px;
+    font-family: 'Montserrat', sans-serif;
+}
+
+.glassBox {
+    background: rgba(11, 14, 20, 0.8);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(238, 191, 28, 0.3);
+    border-radius: 16px;
+    padding: 50px 40px;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    max-width: 450px;
+    width: 100%;
+}
+
+.title {
+    color: #f8fafc;
+    font-size: 1.8em;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 0 0 10px 0;
+}
+
+.subtitle {
+    color: #94a3b8;
+    font-size: 1.1em;
+    margin: 0 0 30px 0;
+}
+
+.subtitle strong {
+    color: #eebf1c;
+}
+
+.errorBox {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    padding: 12px;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    font-size: 0.85em;
+    margin-bottom: 20px;
+    font-weight: bold;
+}
+
+.formGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 10px;
+}
+
+.instructions {
+    color: #cbd5e1;
+    font-size: 0.9em;
+    margin: 0;
+    font-weight: 600;
+}
+
+.inputField {
+    width: 100%;
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: #f8fafc;
+    font-family: inherit;
+    font-size: 1em;
+    font-weight: 500;
+    outline: none;
+    box-sizing: border-box;
+    transition: all 0.3s;
+}
+
+.inputField:focus {
+    border-color: #eebf1c;
+    box-shadow: 0 0 15px rgba(238, 191, 28, 0.15);
+}
+
+.goldBtn {
+    width: 100%;
+    padding: 16px;
+    background: linear-gradient(90deg, #b8860b, #ffd700, #b8860b);
+    background-size: 200% auto;
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: 0.5s;
+}
+
+.goldBtn:hover:not(:disabled) {
+    background-position: right center;
+    box-shadow: 0 0 20px rgba(238, 191, 28, 0.4);
+}
+
+.goldBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}

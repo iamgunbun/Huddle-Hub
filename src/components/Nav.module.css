@@ -1,0 +1,5 @@
+.nav { display: flex; justify-content: space-between; align-items: center; padding: 20px; background: rgba(11, 14, 20, 0.8); border-bottom: 1px solid rgba(238, 191, 28, 0.2); }
+.navLinks { display: flex; gap: 20px; }
+.navLink { color: #94a3b8; text-decoration: none; font-weight: 600; text-transform: uppercase; font-size: 0.85em; transition: 0.2s; }
+.navLink:hover { color: #eebf1c; }
+.active { color: #eebf1c; }

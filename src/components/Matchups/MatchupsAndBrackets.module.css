@@ -1,0 +1,124 @@
+.container { 
+    padding: 20px 0; 
+}
+
+.subNavigation { 
+    display: flex; justify-content: center; 
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08); 
+    margin-bottom: 40px; gap: 30px; padding-bottom: 15px;
+}
+.subToggleBtn { 
+    background: transparent; border: none; color: #64748b; 
+    padding: 10px 15px; font-weight: 700; font-size: 0.9em; text-transform: uppercase; cursor: pointer; transition: 0.2s;
+}
+.subToggleBtn:hover { color: #f8fafc; }
+.subToggleBtn.activeSub { color: #eebf1c; border-bottom: 2px solid #eebf1c; }
+
+.headerControls { display: flex; justify-content: space-between; margin-bottom: 30px; align-items: center; }
+.title { color: #f8fafc; text-transform: uppercase; font-size: 1.4em; margin: 0; }
+.weekSelect { background: #0b0e14; border: 1px solid #eebf1c; color: #eebf1c; padding: 10px 20px; border-radius: 8px; font-weight: 700; outline: none;}
+.scheduleGrid { display: flex; flex-direction: column; gap: 20px; }
+.emptyState { text-align: center; color: #94a3b8; padding: 40px; border: 1px dashed rgba(255,255,255,0.1); border-radius: 12px; }
+
+/* The Bracket Tree Layout Magic */
+.bracketContainer {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 20px;
+}
+
+.bracketWrapper {
+    display: flex;
+    justify-content: center;
+    align-items: stretch; /* Forces all columns to be strictly equal height */
+    gap: 30px;
+    padding: 10px;
+    min-height: 850px; 
+    min-width: max-content;
+}
+
+.bracketColumn {
+    display: flex;
+    flex-direction: column;
+    width: 310px;
+    height: 100%;
+}
+
+.roundHeader {
+    color: #f8fafc;
+    text-align: center;
+    margin-bottom: 25px;
+    font-weight: 700;
+    font-size: 0.85em;
+}
+
+.roundColumnLayout {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1; /* Pushes the flexbox logic through the column */
+}
+
+.mainMatchesSection {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    height: 600px; /* Fixed height mathematically forces symmetry across varying columns */
+}
+
+.consolationMatchesSection {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    margin-top: auto; /* Shoves the 3rd/5th/8th place matches aggressively to the bottom */
+    padding-top: 60px;
+    gap: 30px;
+}
+
+.matchCard {
+    background: #1e2530; 
+    border-radius: 12px;
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 15px;
+    min-height: 110px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+}
+
+.matchLabel {
+    text-align: center;
+    color: #eebf1c;
+    font-weight: 700;
+    font-size: 0.85em;
+    margin-bottom: 2px;
+    text-transform: uppercase;
+}
+
+.teamRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 34px;
+}
+
+.teamInfo { display: flex; align-items: center; gap: 15px; }
+.avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; border: 1px solid #444; background: #111; }
+.avatarPlaceholder { width: 34px; height: 34px; border-radius: 50%; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); }
+
+.teamName { 
+    color: #cbd5e1; font-size: 0.9em; font-weight: 500; 
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; 
+}
+
+.score { color: #94a3b8; font-weight: 600; font-size: 0.9em; }
+
+.byeBlockText {
+    text-align: center;
+    color: #94a3b8;
+    font-weight: 700;
+    font-size: 0.8em;
+    letter-spacing: 1px;
+    padding-top: 10px;
+    padding-bottom: 5px;
+}

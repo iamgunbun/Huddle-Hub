@@ -1,0 +1,82 @@
+:root {
+  /* Modern Dark Theme & Glassmorphism Palette */
+  --bg-main: #0b0e14;
+  --bg-card: rgba(22, 28, 38, 0.7);
+  --accent-primary: #04351e;
+  --accent-secondary: #eebf1c;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --neon-glow: 0 0 15px rgba(238, 191, 28, 0.3);
+
+  /* Legacy Template Variables */
+  --fff: #0b0e14; 
+  --eee: #1e2634;
+  --ddd: #334155;
+  --ccc: #64748b;
+  --bbb: #94a3b8;
+  --aaa: #cbd5e1;
+  --g555: #f1f5f9;
+  --g444: #f8fafc;
+
+  /* Positions */
+  --QB: #ff2a6d; 
+  --WR: #58a7ff; 
+  --RB: #00ceb8; 
+  --TE: #ffae58; 
+  --K: #bd66ff; 
+  --Budget: #7947d4; 
+  --DEF: #eee45e; 
+  --DL: #ff795a; 
+  --LB: #6d7df5; 
+  --DB: #ff7cb6; 
+  --BN: #b6d0eb;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  /* The original Svelte sleek background gradient */
+  background: radial-gradient(circle at top right, #1a2332 0%, #0b0e14 80%) !important;
+  background-attachment: fixed !important;
+  color: #f8fafc;
+  font-family: 'Montserrat', 'Inter', sans-serif;
+  overflow-x: hidden;
+}
+
+.app-wrapper {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Base elements */
+a { color: var(--accent-secondary); text-decoration: none; }
+a:hover { color: #fff; }
+
+button {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Global Glassmorphism Cards */
+.modern-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+  transition: all 0.3s ease;
+}
+
+.modern-card:hover {
+  transform: translateY(-8px);
+  border-color: var(--accent-secondary);
+  box-shadow: var(--neon-glow);
+}
+
+text-shadow: 1px 0px 0px rgba(255, 0, 0, 0.7), -1px 0px 0px rgba(0, 255, 255, 0.7);

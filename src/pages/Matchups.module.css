@@ -1,0 +1,47 @@
+.viewToggles { 
+    display: flex; 
+    justify-content: center; 
+    gap: 15px; 
+    margin: 20px 0 30px; 
+}
+
+.toggleBtn { 
+    padding: 10px 25px; 
+    border-radius: 20px; 
+    background: rgba(255, 255, 255, 0.05); 
+    border: 1px solid rgba(255, 255, 255, 0.1); 
+    color: #94a3b8; 
+    font-weight: 700; 
+    text-transform: uppercase; 
+    letter-spacing: 1px; 
+    cursor: pointer; 
+    transition: 0.2s; 
+}
+
+.toggleBtn.active { 
+    background: #eebf1c; 
+    color: #0b0e14; 
+    border-color: #eebf1c; 
+}
+
+.claimBox { 
+    background: rgba(11, 14, 20, 0.8); 
+    border: 1px solid rgba(238, 191, 28, 0.4); 
+    border-radius: 12px; 
+    padding: 30px; 
+    text-align: center; 
+    max-width: 500px; 
+    margin: 40px auto; 
+}
+
+.claimBox select { 
+    width: 100%; 
+    padding: 12px; 
+    background: #000; 
+    border: 1px solid #333; 
+    border-radius: 8px; 
+    color: #fff; 
+    font-size: 1em; 
+    margin-top: 15px; 
+    outline: none; 
+}

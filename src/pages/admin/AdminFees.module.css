@@ -1,0 +1,297 @@
+.container {
+    padding: 30px 20px;
+    max-width: 900px;
+    margin: 0 auto;
+    font-family: 'Montserrat', sans-serif;
+}
+
+.loading {
+    text-align: center;
+    color: #ffaa00;
+    font-size: 1.2em;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-top: 100px;
+    letter-spacing: 2px;
+}
+
+.header {
+    margin-bottom: 40px;
+}
+
+/* SLEEK WHITE HEADERS */
+.title {
+    color: #f8fafc;
+    text-transform: uppercase;
+    font-size: 1.8em;
+    letter-spacing: 2px;
+    margin: 0 0 5px 0;
+    font-weight: 500; /* Removed heavy bolding */
+}
+
+.subtitle {
+    color: #94a3b8;
+    font-size: 1.1em;
+    margin: 0;
+    font-weight: 400; /* Sleek contrast */
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.ledgerCard {
+    background: #1e2530;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 170, 0, 0.2);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.cardHeader {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 15px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    color: #f8fafc;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.1em;
+}
+
+.cardHeader i {
+    color: #22c55e;
+}
+
+.editorBody {
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+.globalSettings {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.15);
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.inputGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.inputGroup label {
+    color: #94a3b8;
+    font-size: 0.85em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.duesInput {
+    background: #0b0e14;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #f8fafc;
+    padding: 12px 15px;
+    border-radius: 6px;
+    font-size: 1.1em;
+    font-weight: 700;
+    width: 150px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.duesInput:focus {
+    border-color: #ffaa00;
+}
+
+.potSummary {
+    text-align: right;
+}
+
+.potLabel {
+    color: #94a3b8;
+    font-size: 0.85em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 5px;
+}
+
+.potValue {
+    font-size: 2em;
+    font-weight: 900;
+    color: #22c55e;
+}
+
+.potTarget {
+    font-size: 0.5em;
+    color: #64748b;
+}
+
+.managerList {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.managerRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 15px 20px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.2s;
+}
+
+.paidRow {
+    border-color: rgba(34, 197, 94, 0.3);
+    background: rgba(34, 197, 94, 0.05);
+}
+
+.teamInfo {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.avatar {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #334155;
+    background: #111;
+}
+
+.nameStack {
+    display: flex;
+    flex-direction: column;
+}
+
+.teamName {
+    color: #f8fafc;
+    font-weight: 700;
+    font-size: 1.05em;
+}
+
+.handle {
+    color: #94a3b8;
+    font-size: 0.8em;
+    font-style: italic;
+}
+
+.actionGroup {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.amountInput {
+    background: #0b0e14;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #eebf1c;
+    padding: 8px 10px;
+    border-radius: 6px;
+    width: 80px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.amountInput:focus {
+    border-color: #ffaa00;
+}
+
+.statusToggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 120px;
+    padding: 10px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 0.85em;
+    cursor: pointer;
+    border: none;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+}
+
+.unpaidBtn {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.unpaidBtn:hover {
+    background: rgba(239, 68, 68, 0.2);
+}
+
+.paidBtn {
+    background: #22c55e;
+    color: #0b0e14;
+}
+
+.paidBtn:hover {
+    background: #16a34a;
+}
+
+.cardFooter {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 20px;
+}
+
+.message {
+    font-weight: 600;
+    font-size: 0.9em;
+    animation: fadeIn 0.3s ease;
+}
+
+.success { color: #22c55e; }
+.error { color: #ef4444; }
+
+.saveBtn {
+    background: #ffaa00;
+    color: #0b0e14;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 8px;
+    font-weight: 800;
+    font-size: 1em;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.2s ease;
+}
+
+.saveBtn:hover:not(:disabled) {
+    background: #eebf1c;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(255, 170, 0, 0.3);
+}
+
+.saveBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}

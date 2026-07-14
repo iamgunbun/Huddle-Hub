@@ -1,0 +1,66 @@
+.header {
+    height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 30px;
+    background: #0b0e14;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    position: relative;
+    z-index: 999;
+}
+
+.hamburger {
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 10px;
+    margin-left: -10px;
+}
+
+.bar {
+    width: 22px;
+    height: 2px;
+    background: #94a3b8;
+    transition: 0.2s;
+}
+
+.hamburger:hover .bar {
+    background: #eebf1c;
+}
+
+.leagueTitleContainer {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: 60%;
+}
+
+.leagueLogo {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid #334155;
+    object-fit: cover;
+}
+
+.leagueTitle {
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    font-size: 1.1em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.spacer {
+    width: 42px;
+}

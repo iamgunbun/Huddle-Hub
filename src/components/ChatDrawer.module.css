@@ -1,0 +1,427 @@
+/* --- FLOATING BOTTOM BAR --- */
+.floatingChatBtn {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    background: #eebf1c;
+    color: #0b0e14;
+    border: none;
+    border-radius: 30px;
+    padding: 15px 25px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 800;
+    font-size: 0.95em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    z-index: 10001;
+    box-shadow: 0 4px 20px rgba(238, 191, 28, 0.4);
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.floatingChatBtn:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(238, 191, 28, 0.6);
+}
+
+/* --- CHAT POP-UP WIDGET --- */
+.chatWidget {
+    position: fixed;
+    bottom: 100px;
+    right: 30px;
+    width: 380px;
+    height: 600px;
+    max-height: calc(100vh - 140px);
+    background: #0b0e14;
+    border: 1px solid rgba(238, 191, 28, 0.4);
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    z-index: 10000;
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.chatWidget.open {
+    visibility: visible;
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+
+.header {
+    padding: 15px 20px;
+    background: rgba(238, 191, 28, 0.05);
+    border-bottom: 1px solid rgba(238, 191, 28, 0.2);
+}
+
+.title {
+    color: #f8fafc;
+    margin: 0 0 2px 0;
+    font-size: 1.1em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.subtitle {
+    color: #eebf1c;
+    font-size: 0.75em;
+    font-weight: 700;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* --- MESSAGE AREA & AVATARS --- */
+.messageArea {
+    flex-grow: 1;
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.messageArea::-webkit-scrollbar { width: 4px; }
+.messageArea::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
+
+.messageRow {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+}
+
+.rowMe { justify-content: flex-end; }
+.rowThem { justify-content: flex-start; }
+
+.chatAvatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid #334155;
+    background: #111;
+    flex-shrink: 0;
+}
+
+.messageWrapper {
+    display: flex;
+    flex-direction: column;
+    max-width: 75%;
+}
+
+.myMessage { align-items: flex-end; }
+.theirMessage { align-items: flex-start; }
+
+.author {
+    color: #94a3b8;
+    font-size: 0.75em;
+    margin-bottom: 4px;
+    margin-left: 5px;
+    font-weight: 600;
+}
+
+.bubble {
+    padding: 10px 14px;
+    border-radius: 16px;
+    font-size: 0.95em;
+    line-height: 1.4;
+    word-wrap: break-word;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.myMessage .bubble {
+    background: #eebf1c;
+    color: #0b0e14;
+    border-bottom-right-radius: 4px;
+    font-weight: 500;
+}
+
+.theirMessage .bubble {
+    background: #1e2530;
+    color: #e2e8f0;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom-left-radius: 4px;
+}
+
+.mediaAttachment {
+    max-width: 100%;
+    border-radius: 8px;
+    max-height: 200px;
+    object-fit: cover;
+}
+
+.textContent {
+    display: block;
+}
+
+/* --- FIX: INPUT CONTAINER LOGIC --- */
+.inputContainer {
+    position: relative;
+    background: rgba(0, 0, 0, 0.3);
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    flex-direction: column;
+    padding: 10px 15px 15px 15px;
+}
+
+.pickerOverlay {
+    position: absolute;
+    bottom: 100%; /* Anchors exactly to the top border of the inputContainer */
+    left: 0;
+    width: 100%;
+    background: #1e2530;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 15px;
+    box-sizing: border-box;
+    box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.5);
+    z-index: 10;
+}
+
+/* Add this right below your .pickerOverlay styles */
+
+.gifSearchRow {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    width: 100%;
+}
+
+.gifSearchInput {
+    flex-grow: 1;
+    padding: 12px;
+    background: #000;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    border-radius: 8px;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.gifSearchInput:focus {
+    border-color: #eebf1c;
+}
+
+.gifSearchExecuteBtn {
+    background: #334155;
+    color: #f8fafc;
+    border: none;
+    border-radius: 8px;
+    width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.gifSearchExecuteBtn:hover:not(:disabled) {
+    background: #eebf1c;
+    color: #0b0e14;
+}
+
+.gifSearchExecuteBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.gifSearchForm {
+    width: 100%;
+    margin-bottom: 15px;
+}
+
+.gifSearchInput {
+    width: 100%;
+    padding: 12px;
+    background: #000;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    border-radius: 8px;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.gifSearchInput:focus {
+    border-color: #eebf1c;
+}
+
+.gifGrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.gifThumb {
+    width: 100%;
+    height: 90px;
+    object-fit: cover;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.gifThumb:hover { transform: scale(1.05); }
+
+/* --- TOOLBAR & TEXT INPUT --- */
+.actionTools {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 10px;
+    padding-left: 5px;
+}
+
+.toolBtn {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 0;
+    transition: 0.2s;
+}
+
+.toolBtn:hover { color: #eebf1c; }
+.activeTool { color: #eebf1c; }
+
+.inputWrapper {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.inputField {
+    flex-grow: 1;
+    background: #000;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    padding: 12px 15px;
+    border-radius: 20px;
+    font-size: 0.95em;
+    outline: none;
+}
+
+.inputField:focus { border-color: #eebf1c; }
+
+.sendBtn {
+    background: #eebf1c;
+    color: #000;
+    border: none;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: 0.2s;
+    flex-shrink: 0;
+}
+
+.sendBtn:disabled {
+    background: #334155;
+    color: #64748b;
+    cursor: not-allowed;
+}
+
+@media (max-width: 500px) {
+    .floatingChatBtn { bottom: 20px; right: 20px; }
+    .chatWidget {
+        bottom: 0; right: 0; width: 100%; height: 100%;
+        max-height: 100vh; border-radius: 0; border: none;
+    }
+}
+
+/* Update the button to position relative so the badge attaches to it properly */
+.floatingChatBtn {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    background: #eebf1c;
+    color: #0b0e14;
+    border: none;
+    border-radius: 30px;
+    padding: 15px 25px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 800;
+    font-size: 0.95em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    z-index: 10001;
+    box-shadow: 0 4px 20px rgba(238, 191, 28, 0.4);
+    transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* NEW: The red notification bubble */
+.unreadBadge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: #ef4444;
+    color: #ffffff;
+    font-size: 0.8em;
+    font-weight: 900;
+    height: 24px;
+    min-width: 24px;
+    padding: 0 6px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid #0b0e14;
+    box-sizing: border-box;
+    box-shadow: 0 2px 10px rgba(239, 68, 68, 0.5);
+    animation: popIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes popIn {
+    0% { transform: scale(0); }
+    80% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+/* NEW: The Notification Bell inside the header */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: rgba(238, 191, 28, 0.05);
+    border-bottom: 1px solid rgba(238, 191, 28, 0.2);
+}
+
+.notifyBtn {
+    background: transparent;
+    border: none;
+    padding: 5px;
+    cursor: pointer;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.notifyBtn:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.notifyBtn i {
+    font-size: 22px;
+}

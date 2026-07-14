@@ -1,0 +1,248 @@
+.container {
+    padding: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.loading {
+    text-align: center;
+    color: #eebf1c;
+    font-size: 1.2em;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-top: 100px;
+    letter-spacing: 2px;
+}
+
+/* Toggles & Claiming */
+.viewToggles {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin: 10px 0 30px;
+}
+
+.toggleBtn {
+    padding: 10px 25px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.toggleBtn.active {
+    background: #eebf1c;
+    color: #0b0e14;
+    border-color: #eebf1c;
+}
+
+.claimBox {
+    background: rgba(11, 14, 20, 0.8);
+    border: 1px solid rgba(238, 191, 28, 0.4);
+    border-radius: 12px;
+    padding: 30px;
+    text-align: center;
+    max-width: 500px;
+    margin: 40px auto;
+}
+
+.claimBox select {
+    width: 100%;
+    padding: 12px;
+    background: #000;
+    border: 1px solid #333;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 1em;
+    margin-top: 15px;
+    outline: none;
+    cursor: pointer;
+}
+
+/* Grids */
+.allTeamsGrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 30px;
+    align-items: start;
+}
+
+.rosterCard {
+    background: #1e2530;
+    border-radius: 12px;
+    padding: 25px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+.teamHeader {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 20px;
+    margin-bottom: 20px;
+}
+
+.teamAvatar {
+    width: 85px;
+    height: 85px;
+    border-radius: 50%;
+    border: 3px solid #eebf1c;
+    object-fit: cover;
+    background: #111;
+}
+
+.teamDetails {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.teamName {
+    margin: 0 0 6px 0;
+    color: #f8fafc;
+    font-size: 1.6em;
+    font-weight: 800;
+}
+
+.teamStats {
+    color: #94a3b8;
+    font-weight: 600;
+    font-size: 0.95em;
+    letter-spacing: 0.5px;
+}
+
+/* Roster Layouts */
+.rosterGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+}
+
+.rosterGridConsolidated {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.sectionTitle {
+    color: #cbd5e1;
+    text-transform: uppercase;
+    font-size: 0.85em;
+    font-weight: 700;
+    letter-spacing: 1px;
+    border-bottom: 1px solid rgba(238, 191, 28, 0.3);
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+    margin-top: 0;
+}
+
+.playerList {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.playerRow {
+    display: flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 8px 12px;
+    gap: 12px;
+}
+
+.posBadge {
+    font-size: 0.7em;
+    padding: 5px 0;
+    border-radius: 6px;
+    width: 55px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+
+.playerInfoGroup {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    overflow: hidden;
+}
+
+.playerImg {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-size: cover;
+    background-position: center;
+    background-color: #111;
+    border: 1px solid #334155;
+    flex-shrink: 0;
+}
+
+.playerText {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.pName {
+    color: #f8fafc;
+    font-size: 0.9em;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pMeta {
+    color: #94a3b8;
+    font-size: 0.7em;
+    text-transform: uppercase;
+    margin-top: 2px;
+}
+
+.toggleBenchBtn {
+    width: 100%;
+    margin-top: 10px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+    padding: 10px;
+    border-radius: 8px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.toggleBenchBtn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #f8fafc;
+    border-color: #eebf1c;
+}
+
+/* Responsive Rules */
+@media (max-width: 1200px) {
+    .allTeamsGrid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 800px) {
+    .allTeamsGrid {
+        grid-template-columns: 1fr;
+    }
+    .rosterGrid {
+        grid-template-columns: 1fr;
+    }
+}

@@ -1,0 +1,30 @@
+.container { 
+    padding: 20px; 
+    color: #f8fafc; 
+}
+
+.card { 
+    background: rgba(255, 255, 255, 0.02); 
+    border: 1px solid rgba(238, 191, 28, 0.15); 
+    padding: 20px; 
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+h1 {
+    color: #eebf1c;
+    font-size: 1.5em;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+}
+
+ul {
+    list-style: none;
+    padding: 0;
+}
+
+li {
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 0.95em;
+}
