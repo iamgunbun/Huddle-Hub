@@ -238,6 +238,32 @@
     }
 }
 
+@media (max-width: 1100px) {
+    .mobileClickable {
+        flex-direction: row;
+        text-align: left;
+        justify-content: flex-start;
+        cursor: pointer;
+        padding-bottom: 15px;
+        margin-bottom: 10px;
+    }
+    .mobileClickable .teamAvatar {
+        width: 50px;
+        height: 50px;
+        border-width: 2px;
+    }
+    .mobileClickable .teamDetails {
+        align-items: flex-start;
+    }
+    .mobileClickable .teamName {
+        font-size: 1.2em;
+        margin-bottom: 0px;
+    }
+    .mobileClickable .teamStats {
+        font-size: 0.8em;
+    }
+}
+
 @media (max-width: 800px) {
     .allTeamsGrid {
         grid-template-columns: 1fr;

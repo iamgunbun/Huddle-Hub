@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { getTeamFromTeamManagers } from '../../utils/helperFunctions/universalFunctions';
 import styles from './Matchup.module.css';
 
@@ -9,8 +9,12 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
     const metaA = getTeamFromTeamManagers(leagueTeamManagers, teamA.roster_id, year);
     const metaB = getTeamFromTeamManagers(leagueTeamManagers, teamB.roster_id, year);
 
-    // Toggle expansion state locally
-    const [isExpanded, setIsExpanded] = useState(initialExpanded);
+    // Toggle expansion state locally, collapsing by default if on mobile
+    const [isExpanded, setIsExpanded] = useState(false);
+    
+    useEffect(() => {
+        setIsExpanded(window.innerWidth > 1100 ? initialExpanded : false);
+    }, [initialExpanded]);
 
     // Calculate Actual Scores
     const scoreA = teamA.points?.reduce((acc, val) => acc + val, 0) || 0;

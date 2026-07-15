@@ -213,7 +213,7 @@ export default function MatchupsAndBrackets({ matchupsData, leagueTeamManagers, 
                         </select>
                     </div>
                     <div className={styles.scheduleGrid}>
-                        {matchesArray.map((m, i) => <Matchup key={i} matchup={m} players={playersInfo.players} leagueTeamManagers={leagueTeamManagers} year={matchupsData.year} week={selectedWeek} leagueData={leagueData} />)}
+                        {matchesArray.map((m, i) => <Matchup key={i} matchup={m} players={playersInfo.players} leagueTeamManagers={leagueTeamManagers} year={matchupsData.year} week={selectedWeek} leagueData={leagueData} initialExpanded={false} />)}
                     </div>
                 </>
             )}

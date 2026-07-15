@@ -43,6 +43,7 @@ export default function Rivalry() {
                 // Populate current managers list for the dropdowns
                 const currentSeason = tmData.currentSeason;
                 const activeRosters = tmData.teamManagersMap[currentSeason] || {};
+
                 const mList = Object.entries(activeRosters)
                     .map(([rId, rData]) => ({
                         managerId: rData.managers?.[0],
@@ -173,7 +174,6 @@ export default function Rivalry() {
         });
 
         return { history, winsA, winsB, ties, pointsA, pointsB, biggestBlowout, closestMatch };
-
     }, [managerA, managerB, recordsData, teamManagersData]);
 
     if (loading) return <div className={styles.loading}>Loading Rivalry Histories...</div>;
@@ -289,7 +289,7 @@ export default function Rivalry() {
                                 <div className={styles.highlightData}>
                                     <span className={styles.highlightDiff}>{rivalryStats.biggestBlowout.diff.toFixed(2)} pts</span>
                                     <span className={styles.highlightContext}>
-                                        {rivalryStats.biggestBlowout.year}   Week {rivalryStats.biggestBlowout.week} ({rivalryStats.biggestBlowout.type})
+                                        {rivalryStats.biggestBlowout.year} | Week {rivalryStats.biggestBlowout.week} ({rivalryStats.biggestBlowout.type})
                                     </span>
                                 </div>
                             </div>
@@ -301,7 +301,7 @@ export default function Rivalry() {
                                 <div className={styles.highlightData}>
                                     <span className={styles.highlightDiff}>{rivalryStats.closestMatch.diff.toFixed(2)} pts</span>
                                     <span className={styles.highlightContext}>
-                                        {rivalryStats.closestMatch.year}   Week {rivalryStats.closestMatch.week} ({rivalryStats.closestMatch.type})
+                                        {rivalryStats.closestMatch.year} | Week {rivalryStats.closestMatch.week} ({rivalryStats.closestMatch.type})
                                     </span>
                                 </div>
                             </div>
@@ -334,7 +334,6 @@ export default function Rivalry() {
                                             <img src={metaB.avatar} alt="B" className={styles.hAvatar} />
                                         </div>
                                     </div>
-
                                 </div>
                             ))}
                         </div>

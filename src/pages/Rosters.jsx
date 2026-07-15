@@ -17,11 +17,18 @@ export default function Rosters() {
     const [myRosterId, setMyRosterId] = useState(null);
     const [selectingTeam, setSelectingTeam] = useState(false);
     const [expandedBenches, setExpandedBenches] = useState({});
+    
+    // Mobile Check & Collapse States
+    const [isMobile, setIsMobile] = useState(window.innerWidth <= 1100);
+    const [mobileExpandedTeam, setMobileExpandedTeam] = useState({});
 
     // Strips all casing, spaces, and special characters for a perfect comparison
     const normalizeStr = (str) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
     useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth <= 1100);
+        window.addEventListener('resize', handleResize);
+
         let isMounted = true;
         const load = async () => {
             if (!activeLeague?.sleeper_league_id) return;
@@ -81,8 +88,12 @@ export default function Rosters() {
                 if (isMounted) setLoading(false);
             }
         };
+
         load();
-        return () => { isMounted = false; };
+        return () => { 
+            isMounted = false; 
+            window.removeEventListener('resize', handleResize);
+        };
     }, [activeLeague]);
 
     const handleSetMyTeam = async (e) => {
@@ -99,6 +110,7 @@ export default function Rosters() {
                 .eq('user_id', sessionData.session.user.id)
                 .eq('league_id', activeLeague.id);
         }
+
         setSelectingTeam(false);
     };
 
@@ -109,7 +121,15 @@ export default function Rosters() {
         }));
     };
 
+    const toggleMobileTeam = (rosterId) => {
+        setMobileExpandedTeam(prev => ({
+            ...prev,
+            [rosterId]: !prev[rosterId]
+        }));
+    };
+
     if (loading) return <div className={styles.loading}>Loading Teams...</div>;
+
     if (!leagueData || !teamManagers || Object.keys(rosters).length === 0) {
         return <div className={styles.loading}>No roster data available for this league.</div>;
     }
@@ -174,13 +194,20 @@ export default function Rosters() {
         const allPlayers = roster.players || [];
         const reserve = roster.reserve || [];
         const taxi = roster.taxi || [];
+
         const bench = allPlayers.filter(p => !starters.includes(p) && !reserve.includes(p) && !taxi.includes(p));
 
-        const isExpanded = expandedBenches[rosterId];
+        const isBenchExpanded = expandedBenches[rosterId];
+        
+        // Always expanded on desktop. If on mobile, expand based on toggle.
+        const isTeamExpanded = !isMobile || mobileExpandedTeam[rosterId];
 
         return (
             <div key={rosterId} className={styles.rosterCard}>
-                <div className={styles.teamHeader}>
+                <div 
+                    className={`${styles.teamHeader} ${isMobile ? styles.mobileClickable : ''}`}
+                    onClick={() => isMobile && toggleMobileTeam(rosterId)}
+                >
                     <img src={teamMeta.avatar} alt="Avatar" className={styles.teamAvatar} />
                     <div className={styles.teamDetails}>
                         <h3 className={styles.teamName}>{teamMeta.name}</h3>
@@ -188,60 +215,71 @@ export default function Rosters() {
                             Record: {teamStandings.wins}-{teamStandings.losses}{teamStandings.ties > 0 ? `-${teamStandings.ties}` : ''} | PF: {parseFloat(teamStandings.fpts).toFixed(2)}
                         </div>
                     </div>
-                </div>
-
-                <div className={isConsolidated ? styles.rosterGridConsolidated : styles.rosterGrid}>
-                    <div className={styles.rosterColumn}>
-                        <h4 className={styles.sectionTitle}>Starting Lineup</h4>
-                        <div className={styles.playerList}>
-                            {starters.map((pId, idx) => renderPlayerRow(pId, rosterPositions[idx] || 'BN'))}
-                        </div>
-                    </div>
-
-                    {isConsolidated ? (
-                        <>
-                            <button className={styles.toggleBenchBtn} onClick={() => toggleBench(rosterId)}>
-                                {isExpanded ? 'Hide Bench' : 'Show Bench'}
-                            </button>
-                            
-                            {isExpanded && (
-                                <div className={styles.rosterColumn}>
-                                    <h4 className={styles.sectionTitle}>Bench</h4>
-                                    <div className={styles.playerList}>{bench.map(pId => renderPlayerRow(pId, 'BN'))}</div>
-                                    {reserve.length > 0 && (
-                                        <>
-                                            <h4 className={styles.sectionTitle} style={{ marginTop: '20px' }}>Injured Reserve</h4>
-                                            <div className={styles.playerList}>{reserve.map(pId => renderPlayerRow(pId, 'IR'))}</div>
-                                        </>
-                                    )}
-                                    {taxi.length > 0 && (
-                                        <>
-                                            <h4 className={styles.sectionTitle} style={{ marginTop: '20px' }}>Taxi Squad</h4>
-                                            <div className={styles.playerList}>{taxi.map(pId => renderPlayerRow(pId, 'TAXI'))}</div>
-                                        </>
-                                    )}
-                                </div>
-                            )}
-                        </>
-                    ) : (
-                        <div className={styles.rosterColumn}>
-                            <h4 className={styles.sectionTitle}>Bench</h4>
-                            <div className={styles.playerList}>{bench.map(pId => renderPlayerRow(pId, 'BN'))}</div>
-                            {reserve.length > 0 && (
-                                <>
-                                    <h4 className={styles.sectionTitle} style={{ marginTop: '20px' }}>Injured Reserve</h4>
-                                    <div className={styles.playerList}>{reserve.map(pId => renderPlayerRow(pId, 'IR'))}</div>
-                                </>
-                            )}
-                            {taxi.length > 0 && (
-                                <>
-                                    <h4 className={styles.sectionTitle} style={{ marginTop: '20px' }}>Taxi Squad</h4>
-                                    <div className={styles.playerList}>{taxi.map(pId => renderPlayerRow(pId, 'TAXI'))}</div>
-                                </>
-                            )}
-                        </div>
+                    {isMobile && (
+                        <i className="material-icons" style={{ marginLeft: 'auto', color: '#94a3b8' }}>
+                            {mobileExpandedTeam[rosterId] ? 'expand_less' : 'expand_more'}
+                        </i>
                     )}
                 </div>
+
+                {isTeamExpanded && (
+                    <div className={isConsolidated ? styles.rosterGridConsolidated : styles.rosterGrid}>
+                        <div className={styles.rosterColumn}>
+                            <h4 className={styles.sectionTitle}>Starting Lineup</h4>
+                            <div className={styles.playerList}>
+                                {starters.map((pId, idx) => renderPlayerRow(pId, rosterPositions[idx] || 'BN'))}
+                            </div>
+                        </div>
+
+                        {isConsolidated ? (
+                            <>
+                                <button className={styles.toggleBenchBtn} onClick={() => toggleBench(rosterId)}>
+                                    {isBenchExpanded ? 'Hide Bench' : 'Show Bench'}
+                                </button>
+                                
+                                {isBenchExpanded && (
+                                    <div className={styles.rosterColumn}>
+                                        <h4 className={styles.sectionTitle}>Bench</h4>
+                                        <div className={styles.playerList}>{bench.map(pId => renderPlayerRow(pId, 'BN'))}</div>
+
+                                        {reserve.length > 0 && (
+                                            <>
+                                                <h4 className={styles.sectionTitle} style={{ marginTop: '20px' }}>Injured Reserve</h4>
+                                                <div className={styles.playerList}>{reserve.map(pId => renderPlayerRow(pId, 'IR'))}</div>
+                                            </>
+                                        )}
+
+                                        {taxi.length > 0 && (
+                                            <>
+                                                <h4 className={styles.sectionTitle} style={{ marginTop: '20px' }}>Taxi Squad</h4>
+                                                <div className={styles.playerList}>{taxi.map(pId => renderPlayerRow(pId, 'TAXI'))}</div>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            <div className={styles.rosterColumn}>
+                                <h4 className={styles.sectionTitle}>Bench</h4>
+                                <div className={styles.playerList}>{bench.map(pId => renderPlayerRow(pId, 'BN'))}</div>
+
+                                {reserve.length > 0 && (
+                                    <>
+                                        <h4 className={styles.sectionTitle} style={{ marginTop: '20px' }}>Injured Reserve</h4>
+                                        <div className={styles.playerList}>{reserve.map(pId => renderPlayerRow(pId, 'IR'))}</div>
+                                    </>
+                                )}
+
+                                {taxi.length > 0 && (
+                                    <>
+                                        <h4 className={styles.sectionTitle} style={{ marginTop: '20px' }}>Taxi Squad</h4>
+                                        <div className={styles.playerList}>{taxi.map(pId => renderPlayerRow(pId, 'TAXI'))}</div>
+                                    </>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         );
     };
@@ -262,6 +300,7 @@ export default function Rosters() {
                     <div className={styles.claimBox}>
                         <h3 style={{ color: '#f8fafc', marginTop: 0 }}>Which team is yours?</h3>
                         <p style={{ color: '#94a3b8', fontSize: '0.9em' }}>Select your team to view your roster.</p>
+
                         <select onChange={handleSetMyTeam} defaultValue="">
                             <option value="" disabled>-- Select Your Team --</option>
                             {Object.entries(teamManagers.teamManagersMap[currentSeason] || {}).map(([rId, rData]) => (

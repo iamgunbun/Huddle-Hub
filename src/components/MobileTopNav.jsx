@@ -31,7 +31,7 @@ export default function MobileTopNav({ toggleSidebar }) {
             </button>
             
             <div className={styles.navGrid}>
-                {tabs.map((tab) => {
+                {tabs.filter(tab => tab.key !== 'resources').map((tab) => {
                     if (tab.nest) {
                         return (
                             <div key={tab.key} className={styles.dropdownContainer} ref={dropdownRef}>

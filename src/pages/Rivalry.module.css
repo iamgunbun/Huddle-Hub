@@ -16,13 +16,12 @@
 
 .headerTitle {
     color: #f8fafc;
-text-transform: uppercase;
-font-size: 2em;
-letter-spacing: 2px;
-margin-bottom: 30px;
-font-weight: 500;
-text-align: center;
-
+    text-transform: uppercase;
+    font-size: 2em;
+    letter-spacing: 2px;
+    margin-bottom: 30px;
+    font-weight: 500;
+    text-align: center;
 }
 
 /* Selectors Area */
@@ -342,13 +341,31 @@ text-align: center;
     }
     
     .selectorWrapper {
-        flex-direction: column;
-        gap: 15px;
+        flex-direction: row;
+        gap: 10px;
+        padding: 15px;
+        justify-content: space-between;
     }
-
+    
+    .teamSelector {
+        width: 45%;
+        gap: 10px;
+    }
+    
+    .teamSelector .teamAvatar {
+        width: 60px;
+        height: 60px;
+        border-width: 2px;
+    }
+    
+    .dropdown {
+        padding: 8px;
+        font-size: 0.8em;
+    }
+    
     .vsBadge {
-        padding: 5px 15px;
-        font-size: 1em;
+        padding: 5px 10px;
+        font-size: 0.9em;
     }
     
     .historyScores {

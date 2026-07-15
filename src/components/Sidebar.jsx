@@ -28,34 +28,36 @@ export default function Sidebar({ isOpen, onClose }) {
                 </div>
 
                 <div className={styles.menuContainer}>
-                    <div className={styles.section}>
-                        <h4>Menu</h4>
-                        <div className={styles.link} onClick={() => {navigate('/'); onClose();}}>
-                            <i className="material-icons">home</i> Home
-                        </div>
-                        <div className={styles.link} onClick={() => {navigate('/matchups'); onClose();}}>
-                            <i className="material-icons">sports_football</i> Matchups
-                        </div>
-                        <div className={styles.link} onClick={() => {navigate('/transactions'); onClose();}}>
-                            <i className="material-icons">swap_horiz</i> Trades & Waivers
-                        </div>
-                        
-                        <div className={`${styles.dropdown} ${infoOpen ? styles.activeDropdown : ''}`} onClick={() => setInfoOpen(!infoOpen)}>
-                            <div className={styles.dropdownLabel}>
-                                <i className="material-icons">view_comfy</i> League Info
+                    <div className="desktopNavOnly">
+                        <div className={styles.section}>
+                            <h4>Menu</h4>
+                            <div className={styles.link} onClick={() => {navigate('/'); onClose();}}>
+                                <i className="material-icons">home</i> Home
                             </div>
-                            <i className={`material-icons ${styles.chevron} ${infoOpen ? styles.chevronOpen : ''}`}>expand_more</i>
-                        </div>
-                        
-                        <div className={`${styles.nested} ${infoOpen ? styles.nestedOpen : ''}`}>
-                            <div onClick={() => {navigate('/rosters'); onClose();}}><i className="material-icons">storage</i> Teams</div>
-                            <div onClick={() => {navigate('/managers'); onClose();}}><i className="material-icons">people</i> Managers</div>
-                            <div onClick={() => {navigate('/rivalry'); onClose();}}><i className="material-icons">local_fire_department</i> Rivalry</div>
-                            <div onClick={() => {navigate('/standings'); onClose();}}><i className="material-icons">leaderboard</i> Standings</div>
-                            <div onClick={() => {navigate('/drafts'); onClose();}}><i className="material-icons">event_note</i> Drafts</div>
-                            <div onClick={() => {navigate('/awards'); onClose();}}><i className="material-icons">emoji_events</i> Trophy Room</div>
-                            <div onClick={() => {navigate('/records'); onClose();}}><i className="material-icons">military_tech</i> Records</div>
-                            <div onClick={() => {navigate('/constitution'); onClose();}}><i className="material-icons">history_edu</i> Constitution</div>
+                            <div className={styles.link} onClick={() => {navigate('/matchups'); onClose();}}>
+                                <i className="material-icons">sports_football</i> Matchups
+                            </div>
+                            <div className={styles.link} onClick={() => {navigate('/transactions'); onClose();}}>
+                                <i className="material-icons">swap_horiz</i> Trades & Waivers
+                            </div>
+                            
+                            <div className={`${styles.dropdown} ${infoOpen ? styles.activeDropdown : ''}`} onClick={() => setInfoOpen(!infoOpen)}>
+                                <div className={styles.dropdownLabel}>
+                                    <i className="material-icons">view_comfy</i> League Info
+                                </div>
+                                <i className={`material-icons ${styles.chevron} ${infoOpen ? styles.chevronOpen : ''}`}>expand_more</i>
+                            </div>
+                            
+                            <div className={`${styles.nested} ${infoOpen ? styles.nestedOpen : ''}`}>
+                                <div onClick={() => {navigate('/rosters'); onClose();}}><i className="material-icons">storage</i> Teams</div>
+                                <div onClick={() => {navigate('/managers'); onClose();}}><i className="material-icons">people</i> Managers</div>
+                                <div onClick={() => {navigate('/rivalry'); onClose();}}><i className="material-icons">local_fire_department</i> Rivalry</div>
+                                <div onClick={() => {navigate('/standings'); onClose();}}><i className="material-icons">leaderboard</i> Standings</div>
+                                <div onClick={() => {navigate('/drafts'); onClose();}}><i className="material-icons">event_note</i> Drafts</div>
+                                <div onClick={() => {navigate('/awards'); onClose();}}><i className="material-icons">emoji_events</i> Trophy Room</div>
+                                <div onClick={() => {navigate('/records'); onClose();}}><i className="material-icons">military_tech</i> Records</div>
+                                <div onClick={() => {navigate('/constitution'); onClose();}}><i className="material-icons">history_edu</i> Constitution</div>
+                            </div>
                         </div>
                     </div>
 
