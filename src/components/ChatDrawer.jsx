@@ -37,7 +37,7 @@ export default function ChatDrawer() {
     const currentUserRef = useRef(null);
     const processedMessagesRef = useRef(new Set()); // The Memory Bank!
 
-    const GIPHY_API_KEY = "Uc7v3mjehbCz4pCMtEgT2ii78xLOyKg9"; // Remember to paste your key back here!
+    const GIPHY_API_KEY = "Uc7v3mjehbCz4pCMtEgT2ii78xLOyKg9";
 
     useEffect(() => {
         isOpenRef.current = isOpen;

@@ -24,13 +24,13 @@
 }
 
 .headerTitle {
-    color: #f8fafc;
-text-transform: uppercase;
-font-size: 2em;
-letter-spacing: 2px;
-margin-bottom: 30px;
-font-weight: 500;
-text-align: center;
+    color: #f8fafc; 
+    text-transform: uppercase; 
+    font-size: 2em; 
+    letter-spacing: 2px; 
+    margin-bottom: 30px; 
+    font-weight: 500; 
+    text-align: center;
 }
 
 .dropdown {
@@ -64,13 +64,12 @@ text-align: center;
     letter-spacing: 1px;
 }
 
-/* Kanban Board Layout */
 .boardWrapper {
     background: rgba(11, 14, 20, 0.5);
     border-radius: 12px;
     padding: 20px 20px 5px 20px;
     border: 1px solid rgba(255, 255, 255, 0.05);
-    overflow-x: auto; 
+    overflow-x: auto;
 }
 
 .rowLayout {
@@ -78,11 +77,10 @@ text-align: center;
     flex-wrap: nowrap;
     gap: 12px;
     margin-bottom: 15px;
-    width: max-content; 
-    align-items: stretch; /* Forces all cards in a row to match heights */
+    width: max-content;
+    align-items: stretch;
 }
 
-/* Left Align Column */
 .roundLabelPlaceholder, .roundLabel {
     width: 45px;
     flex-shrink: 0;
@@ -94,9 +92,8 @@ text-align: center;
     font-size: 1.2em;
 }
 
-/* Owner Header Column Card */
 .headerCard {
-    width: 165px; /* Bumped up slightly for comfort */
+    width: 165px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
@@ -127,11 +124,10 @@ text-align: center;
     width: 100%;
 }
 
-/* Player Pick Card */
 .pickCard, .emptyPick {
-    width: 165px; 
-    min-height: 80px; /* Allows the card to organically expand vertically */
-    height: auto; 
+    width: 165px;
+    min-height: 80px;
+    height: auto;
     flex-shrink: 0;
     border-radius: 6px;
     box-sizing: border-box;
@@ -184,14 +180,14 @@ text-align: center;
 .pText {
     display: flex;
     flex-direction: column;
-    flex: 1; 
+    flex: 1;
 }
 
 .pName {
     color: #f8fafc;
     font-weight: 700;
     font-size: 0.85em;
-    white-space: normal; /* Removes the dot dot dot clipping so names wrap instead */
+    white-space: normal;
     line-height: 1.1;
     width: 100%;
 }
@@ -213,6 +209,73 @@ text-align: center;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    display: block; 
+    display: block;
     width: 100%;
+}
+
+@media (max-width: 1100px) {
+    .container {
+        padding: 10px;
+    }
+    
+    .boardWrapper {
+        padding: 10px 5px;
+    }
+    
+    .rowLayout {
+        gap: 6px;
+        margin-bottom: 8px;
+    }
+
+    .roundLabelPlaceholder, .roundLabel {
+        width: 30px;
+        font-size: 0.9em;
+    }
+
+    .headerCard {
+        width: 105px;
+        gap: 4px;
+    }
+
+    .ownerAvatar {
+        width: 30px;
+        height: 30px;
+    }
+
+    .ownerName {
+        font-size: 0.65em;
+    }
+
+    .pickCard, .emptyPick {
+        width: 105px;
+        min-height: 65px;
+        padding: 6px;
+    }
+
+    .pickHeader {
+        font-size: 0.55em;
+        margin-bottom: 2px;
+    }
+
+    .pInfo {
+        gap: 5px;
+    }
+
+    .pIcon {
+        width: 22px;
+        height: 22px;
+    }
+
+    .pName {
+        font-size: 0.65em;
+    }
+
+    .pMeta {
+        font-size: 0.55em;
+    }
+
+    .tradeTag {
+        font-size: 0.5em;
+        margin-top: 4px;
+    }
 }
