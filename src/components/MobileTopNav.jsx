@@ -8,8 +8,12 @@ export default function MobileTopNav({ toggleSidebar, activeLeague }) {
     const dropdownRef = useRef(null);
     const location = useLocation();
 
-    useEffect(() => { setDropdownOpen(false); }, [location.pathname]);
+    // Close dropdown when navigating
+    useEffect(() => {
+        setDropdownOpen(false);
+    }, [location.pathname]);
 
+    // Close dropdown if clicking outside of it
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -23,11 +27,19 @@ export default function MobileTopNav({ toggleSidebar, activeLeague }) {
     return (
         <div className={styles.mobileNavContainer}>
             <div className={styles.topBar}>
-                {activeLeague?.avatar && <img src={activeLeague.avatar} alt="League" className={styles.leagueAvatar} />}
-                <span className={styles.leagueName}>{activeLeague?.league_name || 'Huddle'}</span>
+                {/* Left side: Hamburger */}
                 <button className={styles.hamburgerBtn} onClick={toggleSidebar}>
                     <i className="material-icons">menu</i>
                 </button>
+                
+                {/* Center: Branding */}
+                <div className={styles.leagueBranding}>
+                    {activeLeague?.avatar && <img src={activeLeague.avatar} alt="League" className={styles.leagueAvatar} />}
+                    <span className={styles.leagueName}>{activeLeague?.league_name || 'Huddle'}</span>
+                </div>
+                
+                {/* Right side: invisible spacer to keep flex center perfectly balanced */}
+                <div className={styles.spacer}></div>
             </div>
             
             <div className={styles.navGrid}>
@@ -42,11 +54,17 @@ export default function MobileTopNav({ toggleSidebar, activeLeague }) {
                                     <i className="material-icons">{tab.icon}</i>
                                     <span>{tab.label}</span>
                                 </button>
+                                
                                 {dropdownOpen && (
                                     <div className={styles.dropdownMenu}>
                                         {tab.children.map(child => (
-                                            <NavLink key={child.label} to={child.dest} className={({ isActive }) => isActive ? `${styles.dropdownItem} ${styles.activeDropdown}` : styles.dropdownItem}>
-                                                <i className="material-icons">{child.icon}</i>{child.label}
+                                            <NavLink 
+                                                key={child.label} 
+                                                to={child.dest}
+                                                className={({ isActive }) => isActive ? `${styles.dropdownItem} ${styles.activeDropdown}` : styles.dropdownItem}
+                                            >
+                                                <i className="material-icons">{child.icon}</i>
+                                                {child.label}
                                             </NavLink>
                                         ))}
                                     </div>
@@ -54,10 +72,16 @@ export default function MobileTopNav({ toggleSidebar, activeLeague }) {
                             </div>
                         );
                     }
+                    
                     return (
-                        <NavLink key={tab.key} to={tab.dest} className={({ isActive }) => isActive ? `${styles.navItem} ${styles.active}` : styles.navItem}>
+                        <NavLink 
+                            key={tab.key} 
+                            to={tab.dest} 
+                            className={({ isActive }) => isActive ? `${styles.navItem} ${styles.active}` : styles.navItem}
+                        >
                             <i className="material-icons">{tab.icon}</i>
-                            <span>{tab.label === 'Trades & Waivers' ? 'Trades' : tab.label}</span>
+                            {/* Updated Label override here */}
+                            <span>{tab.label === 'Trades & Waivers' ? 'Transactions' : tab.label}</span>
                         </NavLink>
                     );
                 })}

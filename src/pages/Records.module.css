@@ -16,13 +16,7 @@
 }
 
 .headerTitle {
-    color: #f8fafc;
-text-transform: uppercase;
-font-size: 2em;
-letter-spacing: 2px;
-margin-bottom: 30px;
-font-weight: 500;
-text-align: center;
+    color: #f8fafc; text-transform: uppercase; font-size: 2em; letter-spacing: 2px; margin-bottom: 30px; font-weight: 500; text-align: center;
 }
 
 .controlsRow {
@@ -97,17 +91,10 @@ text-align: center;
     margin-bottom: 25px;
 }
 
-/* Dual Column Season Records Layout Wrapper */
 .seasonLeaderboardsGrid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(550px, 1fr));
     gap: 30px;
-}
-
-@media (max-width: 1200px) {
-    .seasonLeaderboardsGrid {
-        grid-template-columns: 1fr;
-    }
 }
 
 .tableCardFull {
@@ -118,7 +105,6 @@ text-align: center;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
 }
 
-/* Table Card Layout System */
 .tableWrapper {
     background: rgba(0, 0, 0, 0.15);
     border-radius: 8px;
@@ -170,7 +156,6 @@ text-align: center;
     text-align: left;
 }
 
-/* Mixed Identity Complex Table Cells */
 .managerCellLayout {
     display: flex;
     align-items: center;
@@ -224,7 +209,6 @@ text-align: center;
     font-weight: 700;
 }
 
-/* Card Leaderboard Grid Layout for Weekly Blocks */
 .recordsGrid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
@@ -235,12 +219,6 @@ text-align: center;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
     gap: 25px;
-}
-
-@media (max-width: 1100px) {
-    .extremesGrid {
-        grid-template-columns: 1fr;
-    }
 }
 
 .recordCard {
@@ -279,7 +257,6 @@ text-align: center;
     gap: 12px;
 }
 
-/* Metric Alignment Nodes */
 .recordRowItem, .extremeRowItem {
     display: flex;
     align-items: center;
@@ -336,7 +313,6 @@ text-align: center;
     gap: 6px;
 }
 
-/* Head to Head Extremes Layout Row Items */
 .extremeMeta {
     color: #64748b;
     font-size: 0.7em;
@@ -354,21 +330,9 @@ text-align: center;
     line-height: 1.2;
 }
 
-.winnerName {
-    color: #f8fafc;
-    font-weight: 700;
-}
-
-.vsText {
-    color: #64748b;
-    font-style: italic;
-    font-size: 0.8em;
-}
-
-.loserName {
-    color: #94a3b8;
-    font-weight: 500;
-}
+.winnerName { color: #f8fafc; font-weight: 700; }
+.vsText { color: #64748b; font-style: italic; font-size: 0.8em; }
+.loserName { color: #94a3b8; font-weight: 500; }
 
 .diffValue {
     position: absolute;
@@ -381,7 +345,6 @@ text-align: center;
     gap: 6px;
 }
 
-/* Tie Status Indicator Tag */
 .tieBadge {
     background: rgba(238, 191, 28, 0.12);
     color: #eebf1c;
@@ -398,10 +361,27 @@ text-align: center;
     vertical-align: middle;
 }
 
-.noData {
-    text-align: center;
-    color: #64748b;
-    font-size: 0.9em;
-    font-style: italic;
-    padding: 20px 0;
+/* MOBILE OPTIMIZATIONS FOR RECORDS */
+@media (max-width: 1100px) {
+    .seasonLeaderboardsGrid, .extremesGrid, .recordsGrid {
+        grid-template-columns: 1fr;
+    }
+    
+    .controlsRow { flex-direction: column; align-items: stretch; gap: 15px; }
+    .viewToggles { justify-content: center; }
+    
+    .tableWrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .table th, .table td { white-space: nowrap; padding: 10px; font-size: 0.85em; }
+    
+    /* Prevent cutoffs by flowing into a column on mobile */
+    .recordRowItem, .extremeRowItem {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        padding-bottom: 15px;
+    }
+    .textGroup { padding-right: 0; width: 100%; }
+    .scoreMetric, .diffValue {
+        position: relative; right: 0; align-self: flex-start; margin-top: 5px; margin-left: 32px;
+    }
 }

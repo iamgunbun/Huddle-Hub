@@ -9,18 +9,15 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
     const metaA = getTeamFromTeamManagers(leagueTeamManagers, teamA.roster_id, year);
     const metaB = getTeamFromTeamManagers(leagueTeamManagers, teamB.roster_id, year);
 
-    // Toggle expansion state locally, collapsing by default if on mobile
     const [isExpanded, setIsExpanded] = useState(false);
     
     useEffect(() => {
         setIsExpanded(window.innerWidth > 1100 ? initialExpanded : false);
     }, [initialExpanded]);
 
-    // Calculate Actual Scores
     const scoreA = teamA.points?.reduce((acc, val) => acc + val, 0) || 0;
     const scoreB = teamB.points?.reduce((acc, val) => acc + val, 0) || 0;
 
-    // Calculate Projected Scores
     let projA = 0;
     let projB = 0;
     const startersA = teamA.starters || [];
@@ -29,16 +26,10 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
     startersA.forEach(pId => { projA += parseFloat(players[pId]?.wi?.[week]?.p || 0); });
     startersB.forEach(pId => { projB += parseFloat(players[pId]?.wi?.[week]?.p || 0); });
 
-    /* 
-      Advanced Fantasy Win Probability Math (Logistic CDF Approximation)
-      Bypasses simple ratios to mirror Sleeper's actual platform probabilities.
-      Accounts for variance and standard deviation of fantasy football head-to-head match spreads.
-    */
     const projectionDifference = projA - projB;
-    const varianceScaleKey = 0.045; // Calibration factor matching standard platform distributions
+    const varianceScaleKey = 0.045;
     const calculatedOddsA = Math.round(100 / (1 + Math.exp(-varianceScaleKey * projectionDifference)));
     
-    // Clamp values between 1% and 99% unless a blowout projection dictates extreme odds
     const oddsA = Math.max(1, Math.min(99, calculatedOddsA));
     const oddsB = 100 - oddsA;
 
@@ -50,35 +41,32 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
         return `https://sleepercdn.com/content/nfl/players/thumb/${playerId}.jpg`;
     };
 
-    // Dynamically match platform colors using global root variables
     const getPositionStyle = (slotName, playerA, playerB) => {
         const rawPos = playerA?.pos || playerB?.pos || slotName || 'BN';
         const cleanPos = rawPos.toUpperCase();
-        
-        // Allowed CSS theme variables inside index.css
         const validPositions = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF', 'DL', 'LB', 'DB', 'BN'];
         const basePos = validPositions.includes(cleanPos) ? cleanPos : 'BN';
-        
-        return {
-            backgroundColor: `var(--${basePos})`,
-            color: '#0b0e14',
-            fontWeight: '800'
-        };
+        return { backgroundColor: `var(--${basePos})`, color: '#0b0e14', fontWeight: '800' };
     };
 
     return (
         <div className={`${styles.matchupCard} ${isExpanded ? styles.expanded : ''}`}>
             <div className={styles.scoreboardWrapper} onClick={() => setIsExpanded(!isExpanded)} style={{ cursor: 'pointer' }}>
                 <div className={styles.scoreboard}>
+                    
+                    {/* Native Sleeper Layout: Team A Row */}
                     <div className={styles.teamHeader}>
-                        <img src={metaA.avatar} alt="Team A" className={styles.teamAvatar} />
-                        <div className={styles.teamNameContainer}>
-                            <div className={styles.teamName}>{metaA.name}</div>
-                            <div className={styles.projTotal}>Proj: {projA.toFixed(2)}</div>
+                        <div className={styles.teamIdentity}>
+                            <img src={metaA.avatar} alt="Team A" className={styles.teamAvatar} />
+                            <div className={styles.teamNameContainer}>
+                                <div className={styles.teamName}>{metaA.name}</div>
+                                <div className={styles.projTotal}>Proj: {projA.toFixed(2)}</div>
+                            </div>
                         </div>
                         <div className={`${styles.teamScore} ${styles.scoreGreen}`}>{scoreA.toFixed(2)}</div>
                     </div>
                     
+                    {/* VS Badge Pushed to Right Middle on Mobile */}
                     <div className={styles.vsBadge}>
                         VS
                         <i className="material-icons" style={{ fontSize: '12px', display: 'block', marginTop: '2px' }}>
@@ -86,17 +74,19 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                         </i>
                     </div>
                     
+                    {/* Native Sleeper Layout: Team B Row */}
                     <div className={styles.teamHeader}>
-                        <div className={`${styles.teamScore} ${styles.scoreRed}`}>{scoreB.toFixed(2)}</div>
-                        <div className={`${styles.teamNameContainer} ${styles.alignRight}`}>
-                            <div className={styles.teamName}>{metaB.name}</div>
-                            <div className={styles.projTotal}>Proj: {projB.toFixed(2)}</div>
+                        <div className={styles.teamIdentity}>
+                            <img src={metaB.avatar} alt="Team B" className={styles.teamAvatar} />
+                            <div className={styles.teamNameContainer}>
+                                <div className={styles.teamName}>{metaB.name}</div>
+                                <div className={styles.projTotal}>Proj: {projB.toFixed(2)}</div>
+                            </div>
                         </div>
-                        <img src={metaB.avatar} alt="Team B" className={styles.teamAvatar} />
+                        <div className={`${styles.teamScore} ${styles.scoreRed}`}>{scoreB.toFixed(2)}</div>
                     </div>
                 </div>
 
-                {/* The Odds Bar */}
                 <div className={styles.oddsContainer}>
                     <div className={styles.oddsBar}>
                         <div className={styles.oddsGreen} style={{ width: `${oddsA}%` }}></div>
@@ -110,7 +100,6 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                 </div>
             </div>
 
-            {/* Dropdown collapsible roster block */}
             {isExpanded && (
                 <div className={styles.playerBreakdown}>
                     {startersA.map((playerIdA, idx) => {
@@ -126,7 +115,6 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
 
                         return (
                             <div key={idx} className={styles.playerRow}>
-                                {/* Team A Player */}
                                 <div className={styles.playerSide}>
                                     {playerA ? (
                                         <>
@@ -143,15 +131,10 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                                     ) : <div className={styles.emptySlot}>Empty Roster Slot</div>}
                                 </div>
                                 
-                                {/* Platform Matched Position Slot Badge */}
-                                <div 
-                                    className={styles.posBadge} 
-                                    style={getPositionStyle(slotName, playerA, playerB)}
-                                >
+                                <div className={styles.posBadge} style={getPositionStyle(slotName, playerA, playerB)}>
                                     {slotName.replace('WRRB_FLEX', 'FLEX').replace('SUPER_FLEX', 'S/FLEX')}
                                 </div>
                                 
-                                {/* Team B Player */}
                                 <div className={`${styles.playerSide} ${styles.rightSide}`}>
                                     {playerB ? (
                                         <>

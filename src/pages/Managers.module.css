@@ -20,13 +20,7 @@
 }
 
 .title {
-    color: #f8fafc;
-text-transform: uppercase;
-font-size: 2em;
-letter-spacing: 2px;
-margin-bottom: 30px;
-font-weight: 500;
-text-align: center;
+    color: #f8fafc; text-transform: uppercase; font-size: 2em; letter-spacing: 2px; margin-bottom: 30px; font-weight: 500; text-align: center;
 }
 
 /* Grid View */
@@ -291,8 +285,17 @@ text-align: center;
     font-style: italic;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
+    .managersGrid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 15px;
+    }
+    .avatar { width: 50px; height: 50px; border-width: 2px;}
+    .teamName { font-size: 1.1em; }
+    .managerCard { padding: 15px; }
     .detailBody {
         grid-template-columns: 1fr;
     }
+    .detailAvatar { width: 70px; height: 70px; }
+    .detailTitle h1 { font-size: 1.5em; }
 }
