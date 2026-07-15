@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
-import { getLeagueTeamManagers, getAwards, getLeagueRecords } from '../utils/helper';
+import { getLeagueTeamManagers, getAwards, getLeagueRecords, loadPlayers, getLeagueRosters } from '../utils/helper';
 import { syncActiveLeague } from '../utils/leagueInfo';
 import styles from './Managers.module.css';
 
@@ -125,7 +125,7 @@ export default function Managers() {
             const currentYear = new Date().getFullYear();
             
             // 1. Query Cache Table
-            const { data: existing, error: fetchCacheError } = await supabase
+            const { data: existing } = await supabase
                 .from('ai_evaluations')
                 .select('*')
                 .eq('manager_id', manager.managerId)
@@ -148,30 +148,48 @@ export default function Managers() {
                 return;
             }
 
-            // 2. Fetch from API Route
-            console.log("Hitting API route '/api/evaluate-manager' for manager:", manager.teamName);
+            // 2. Resolve Player IDs to Actual Names/Positions
+            const pData = await loadPlayers();
+            const rData = await getLeagueRosters(activeLeague.sleeper_league_id);
+            const playersMap = pData?.players || {};
+            
+            const targetRoster = Object.values(rData?.rosters || {}).find(
+                r => r.owner_id === manager.managerId || r.co_owners?.includes(manager.managerId)
+            );
+            
+            const mappedPlayerStrings = (targetRoster?.players || []).map(pId => {
+                const player = playersMap[pId];
+                return player ? `${player.fn} ${player.ln} (${player.pos} - ${player.t})` : 'Unknown Player';
+            });
+
+            // 3. Fetch from API Route
             const response = await fetch('/api/evaluate-manager', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ managerId: manager.managerId, leagueId: activeLeague.sleeper_league_id, teamName: manager.teamName }),
+                body: JSON.stringify({ 
+                    managerId: manager.managerId, 
+                    leagueId: activeLeague.sleeper_league_id, 
+                    teamName: manager.teamName,
+                    currentRosterPlayers: mappedPlayerStrings // Sent resolved data explicitly
+                }),
             });
 
             if (!response.ok) {
                 const errText = await response.text();
-                throw new Error(`Server API responded with status ${response.status}: ${errText}`);
+                throw new Error(`Server API error ${response.status}: ${errText}`);
             }
 
             const data = await response.json();
-            if (!data.evaluation) throw new Error("API executed completely but returned an empty evaluation field.");
+            if (!data.evaluation) throw new Error("API completely executed but returned an empty response block.");
             
             let newEvalParsed = { strategy: "Parsing failed", profile: "Parsing failed", philosophy: "Parsing failed" };
             try { 
                 newEvalParsed = JSON.parse(data.evaluation.replace(/```json/gi, '').replace(/```/g, '').trim()); 
             } catch (e) { 
-                console.error("AI Payload string format cannot clear JSON boundaries:", data.evaluation); 
+                console.error("AI Payload format boundary mismatch:", data.evaluation); 
             }
 
-            // 3. Save Cache Data Block
+            // 4. Save Cache Data Block
             if (existing && forceRegenerate) {
                 await supabase.from('ai_evaluations').update({ evaluation_text: data.evaluation, regenerated: true }).eq('id', existing.id);
                 setRegenStatus(prev => ({ ...prev, [manager.managerId]: true }));
