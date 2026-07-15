@@ -8,12 +8,10 @@ export default function MobileTopNav({ toggleSidebar, activeLeague }) {
     const dropdownRef = useRef(null);
     const location = useLocation();
 
-    // Close dropdown when navigating
     useEffect(() => {
         setDropdownOpen(false);
     }, [location.pathname]);
 
-    // Close dropdown if clicking outside of it
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -24,21 +22,24 @@ export default function MobileTopNav({ toggleSidebar, activeLeague }) {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    // Format Sleeper Avatar safely
+    const leagueName = activeLeague?.league_name || activeLeague?.name || 'Huddle';
+    const leagueAvatarUrl = activeLeague?.avatar 
+        ? (activeLeague.avatar.includes('http') ? activeLeague.avatar : `https://sleepercdn.com/avatars/thumbs/${activeLeague.avatar}`) 
+        : null;
+
     return (
         <div className={styles.mobileNavContainer}>
             <div className={styles.topBar}>
-                {/* Left side: Hamburger */}
                 <button className={styles.hamburgerBtn} onClick={toggleSidebar}>
                     <i className="material-icons">menu</i>
                 </button>
                 
-                {/* Center: Branding */}
                 <div className={styles.leagueBranding}>
-                    {activeLeague?.avatar && <img src={activeLeague.avatar} alt="League" className={styles.leagueAvatar} />}
-                    <span className={styles.leagueName}>{activeLeague?.league_name || 'Huddle'}</span>
+                    {leagueAvatarUrl && <img src={leagueAvatarUrl} alt="League" className={styles.leagueAvatar} />}
+                    <span className={styles.leagueName}>{leagueName}</span>
                 </div>
                 
-                {/* Right side: invisible spacer to keep flex center perfectly balanced */}
                 <div className={styles.spacer}></div>
             </div>
             
@@ -80,7 +81,6 @@ export default function MobileTopNav({ toggleSidebar, activeLeague }) {
                             className={({ isActive }) => isActive ? `${styles.navItem} ${styles.active}` : styles.navItem}
                         >
                             <i className="material-icons">{tab.icon}</i>
-                            {/* Updated Label override here */}
                             <span>{tab.label === 'Trades & Waivers' ? 'Transactions' : tab.label}</span>
                         </NavLink>
                     );

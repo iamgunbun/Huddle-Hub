@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import Header from './Header';
 import Sidebar from './Sidebar';
@@ -9,12 +9,19 @@ import { useLeague } from '../context/LeagueContext';
 export default function Layout() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const { activeLeague } = useLeague();
+    const [isMobile, setIsMobile] = useState(window.innerWidth <= 1100);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth <= 1100);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     return (
-        <div className="app-wrapper">
-            <MobileTopNav toggleSidebar={() => setSidebarOpen(true)} />
+        <div className="app-wrapper" style={{ overflowX: 'hidden', width: '100%' }}>
+            <MobileTopNav toggleSidebar={() => setSidebarOpen(true)} activeLeague={activeLeague} />
             
-            <div className="desktopNavOnly">
+            <div className="desktopNavOnly" style={{ display: isMobile ? 'none' : 'block' }}>
                 <Header 
                     toggleSidebar={() => setSidebarOpen(true)} 
                     leagueName={activeLeague?.league_name} 
@@ -24,10 +31,15 @@ export default function Layout() {
 
             <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
             
-            {/* The Chat Component now runs independently */}
             <ChatDrawer />
             
-            <main className="layout-main">
+            <main className="layout-main" style={{ 
+                paddingTop: isMobile ? '75px' : '0', 
+                boxSizing: 'border-box', 
+                overflowX: 'hidden', 
+                width: '100%', 
+                minHeight: '100vh' 
+            }}>
                 <Outlet />
             </main>
         </div>

@@ -84,55 +84,43 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                     </div>
                 </div>
 
-                {/* 2. MOBILE NATIVE APP LAYOUT */}
+                {/* 2. MOBILE NATIVE APP LAYOUT (Mirroring Sleeper) */}
                 <div className={styles.mobileScoreboard}>
-                    <div className={styles.mGridTop}>
-                        {/* Team A Profile */}
-                        <div className={styles.mProfileLeft}>
-                            <img src={metaA.avatar} className={styles.mAvatar} alt="A" />
-                            <div className={styles.mNameStack}>
-                                <span className={styles.mTeamNameText}>{metaA.name}</span>
-                            </div>
+                    <div className={styles.mHeaderRow1}>
+                        <img src={metaA.avatar} className={styles.mAvatar} alt="A" />
+                        
+                        <div className={styles.mOddsWrapper}>
+                            <div className={styles.mOddsLabel}><span className={styles.mWinPct}>{oddsA}%</span> WIN</div>
+                            <div className={styles.mOddsBar}><div className={styles.mOddsFillGreen} style={{width: `${oddsA}%`}}></div></div>
                         </div>
-
-                        {/* VS Center */}
+                        
+                        <div className={styles.mScoreWrapperLeft}>
+                            <div className={styles.mActual}>{scoreA > 0 ? scoreA.toFixed(2) : '-'}</div>
+                        </div>
+                        
                         <div className={styles.mVsBadge}>
                             VS
                             <i className="material-icons">{isExpanded ? 'expand_less' : 'expand_more'}</i>
                         </div>
-
-                        {/* Team B Profile */}
-                        <div className={styles.mProfileRight}>
-                            <div className={`${styles.mNameStack} ${styles.mRightAlign}`}>
-                                <span className={styles.mTeamNameText}>{metaB.name}</span>
-                            </div>
-                            <img src={metaB.avatar} className={styles.mAvatar} alt="B" />
-                        </div>
-                    </div>
-
-                    <div className={styles.mGridBottom}>
-                        {/* Team A Stats */}
-                        <div className={styles.mStatBoxLeft}>
-                            <div className={styles.mOddsLabel}><span className={styles.mWinPct}>{oddsA}%</span> WIN</div>
-                            <div className={styles.mOddsBar}><div className={styles.mOddsFillGreen} style={{width: `${oddsA}%`}}></div></div>
-                        </div>
-                        <div className={styles.mScoreBoxLeft}>
-                            <div className={styles.mActual}>{scoreA > 0 ? scoreA.toFixed(2) : '-'}</div>
-                            <div className={styles.mProj}>Proj: {projA.toFixed(2)}</div>
-                        </div>
-
-                        {/* Spacer */}
-                        <div className={styles.mSpacer}></div>
-
-                        {/* Team B Stats */}
-                        <div className={styles.mScoreBoxRight}>
+                        
+                        <div className={styles.mScoreWrapperRight}>
                             <div className={styles.mActual}>{scoreB > 0 ? scoreB.toFixed(2) : '-'}</div>
-                            <div className={styles.mProj}>Proj: {projB.toFixed(2)}</div>
                         </div>
-                        <div className={styles.mStatBoxRight}>
+                        
+                        <div className={`${styles.mOddsWrapper} ${styles.mRightAlign}`}>
                             <div className={`${styles.mOddsLabel} ${styles.mRightAlign}`}><span className={styles.mWinPctRed}>{oddsB}%</span> WIN</div>
                             <div className={`${styles.mOddsBar} ${styles.mOddsBarRight}`}><div className={styles.mOddsFillRed} style={{width: `${oddsB}%`}}></div></div>
                         </div>
+                        
+                        <img src={metaB.avatar} className={styles.mAvatar} alt="B" />
+                    </div>
+
+                    <div className={styles.mHeaderRow2}>
+                        <div className={styles.mTeamNameText}>{metaA.name}</div>
+                        <div className={styles.mProjText}>Proj {projA.toFixed(2)}</div>
+                        <div className={styles.mSpacerCenter}></div>
+                        <div className={`${styles.mProjText} ${styles.mRightAlign}`}>Proj {projB.toFixed(2)}</div>
+                        <div className={`${styles.mTeamNameText} ${styles.mRightAlign}`}>{metaB.name}</div>
                     </div>
                 </div>
 

@@ -1,158 +1,146 @@
-.mobileNavContainer { 
-    display: none; 
+.matchupCard {
+    background: #1e2530; 
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px; 
+    margin-bottom: 20px; 
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); 
+    overflow: hidden;
 }
 
+.scoreboardWrapper { cursor: pointer; }
+
+/* DESKTOP SCOREBOARD */
+.desktopScoreboard { 
+    display: flex; flex-direction: row; justify-content: space-between; 
+    align-items: center; padding: 20px; position: relative; 
+}
+
+.mobileScoreboard { display: none; }
+
+.teamHeader { display: flex; align-items: center; justify-content: space-between; flex-direction: row; }
+.teamIdentity { display: flex; align-items: center; }
+.teamAvatar { width: 50px; height: 50px; border-radius: 50%; border: 2px solid #334155; object-fit: cover; }
+.teamNameContainer { display: flex; flex-direction: column; margin: 0 15px; text-align: left; }
+.teamName { color: #f8fafc; font-size: 1.1em; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; }
+.projTotal { color: #94a3b8; font-size: 0.8em; font-weight: 600; text-transform: uppercase; margin-top: 4px; }
+.teamScore { font-size: 1.8em; font-weight: 900; }
+.scoreGreen { color: #00ceb8; }
+.scoreRed { color: #ff2a6d; }
+
+.vsBadge { 
+    position: absolute; right: auto; left: 50%; transform: translate(-50%, -50%); top: 50%; 
+    background: #111; border: 1px solid #eebf1c; color: #eebf1c; padding: 5px 10px; 
+    border-radius: 8px; font-weight: 900; font-size: 0.7em; text-align: center; 
+}
+.alignRight { text-align: right; align-items: center; justify-content: flex-end; }
+
+.oddsContainer { padding: 15px 20px; background: rgba(0, 0, 0, 0.2); border-top: 1px solid rgba(255, 255, 255, 0.05); }
+.oddsBar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 10px; background: #334155; }
+.oddsGreen { background: #00ceb8; }
+.oddsRed { background: #ff2a6d; }
+.oddsText { display: flex; justify-content: space-between; align-items: center; font-weight: 800; font-size: 0.9em; }
+
+/* UNIVERSAL GRID PLAYER ROWS */
+.playerBreakdown { 
+    border-top: 1px solid rgba(255,255,255,0.05); padding: 15px; 
+    background: rgba(0,0,0,0.15); display: flex; flex-direction: column; gap: 10px; 
+}
+
+.playerRow {
+    display: grid;
+    grid-template-columns: 1fr 50px 1fr; 
+    align-items: center;
+    background: rgba(255,255,255,0.02);
+    padding: 10px 15px;
+    border-radius: 8px;
+    gap: 15px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.playerSide {
+    display: flex; align-items: center; justify-content: space-between; width: 100%; overflow: hidden;
+}
+
+.pDetailsLeft { display: flex; flex-direction: column; text-align: left; overflow: hidden; }
+.pScoresLeft { display: flex; flex-direction: column; text-align: right; align-items: flex-end; }
+.pScoresRight { display: flex; flex-direction: column; text-align: left; align-items: flex-start; }
+.pDetailsRight { display: flex; flex-direction: column; text-align: right; overflow: hidden; }
+
+.pName { color: #f8fafc; font-size: 0.85em; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pMeta { color: #64748b; font-size: 0.65em; text-transform: uppercase; margin-top: 2px; font-weight: 600; }
+.pScore { color: #f8fafc; font-weight: 800; font-size: 0.9em; }
+.pProj { color: #64748b; font-size: 0.65em; font-weight: 600; }
+
+.posBadgeWrapper { display: flex; justify-content: center; width: 100%; }
+.posBadge { padding: 4px 0; border-radius: 6px; font-size: 0.65em; font-weight: 800; box-shadow: 0 2px 5px rgba(0,0,0,0.5); width: 100%; text-align: center; }
+.emptySlot { color: #64748b; font-size: 0.7em; font-style: italic; width: 100%; text-align: center; }
+
+
+/* MOBILE NATIVE SCOREBOARD OVERRIDES */
 @media (max-width: 1100px) {
-    .mobileNavContainer {
-        display: flex; 
-        flex-direction: column;
-        position: fixed; 
-        top: 0; 
-        left: 0; 
-        right: 0;
-        background: #0b0e14;
-        border-bottom: 1px solid rgba(238, 191, 28, 0.2);
-        z-index: 500; 
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    .desktopScoreboard, .oddsContainer { display: none; }
+    
+    .mobileScoreboard { 
+        display: flex; flex-direction: column; padding: 15px 10px; width: 100%; box-sizing: border-box;
     }
     
-    .topBar {
-        display: flex; 
-        align-items: center; 
-        justify-content: space-between; 
-        padding: 12px 15px; 
-        border-bottom: 1px solid rgba(255,255,255,0.05);
-        position: relative;
+    .mHeaderRow1 {
+        display: grid;
+        grid-template-columns: 40px 1fr auto 30px auto 1fr 40px;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        margin-bottom: 10px;
     }
     
-    .hamburgerBtn { 
-        background: none; 
-        border: none; 
-        color: #f8fafc; 
-        cursor: pointer; 
-        display: flex; 
-        padding: 0;
-        margin: 0;
-        z-index: 2;
-    }
+    .mAvatar { width: 36px; height: 36px; border-radius: 50%; border: 1px solid #475569; object-fit: cover; }
     
-    .hamburgerBtn i { 
-        font-size: 28px; 
-    }
+    .mOddsWrapper { display: flex; flex-direction: column; width: 100%; }
+    .mOddsLabel { font-size: 0.5em; color: #64748b; font-weight: 800; display: flex; gap: 3px; align-items: baseline; margin-bottom: 2px;}
+    .mWinPct { color: #00ceb8; font-size: 1.2em; }
+    .mWinPctRed { color: #ff2a6d; font-size: 1.2em; }
     
-    .leagueBranding {
-        position: absolute;
-        left: 50%;
-        transform: translateX(-50%);
-        display: flex; 
-        align-items: center; 
-        justify-content: center;
-        width: 60%;
-    }
+    .mOddsBar { width: 100%; height: 3px; background: #334155; border-radius: 2px; display: flex; }
+    .mOddsBarRight { justify-content: flex-end; }
+    .mOddsFillGreen { background: #00ceb8; height: 100%; border-radius: 2px; }
+    .mOddsFillRed { background: #ff2a6d; height: 100%; border-radius: 2px; }
+
+    .mScoreWrapperLeft { text-align: right; padding-right: 5px; }
+    .mScoreWrapperRight { text-align: left; padding-left: 5px; border-left: 1px solid rgba(255,255,255,0.1); }
     
-    .leagueAvatar { 
-        width: 26px; 
-        height: 26px; 
-        border-radius: 50%; 
-        margin-right: 8px; 
-        object-fit: cover; 
-        border: 1px solid rgba(255,255,255,0.2);
-    }
+    .mActual { color: #f8fafc; font-size: 1.1em; font-weight: 800; }
     
-    .leagueName { 
-        color: #f8fafc; 
-        font-weight: 800; 
-        font-size: 1em; 
-        white-space: nowrap; 
-        overflow: hidden; 
-        text-overflow: ellipsis; 
+    .mVsBadge { 
+        display: flex; flex-direction: column; align-items: center; 
+        color: #eebf1c; font-weight: 900; font-size: 0.6em; background: #111; 
+        padding: 4px; border: 1px solid #eebf1c; border-radius: 6px; 
     }
-    
-    .spacer { 
-        width: 28px; 
+    .mVsBadge i { font-size: 12px; margin-top: -2px; }
+
+    .mHeaderRow2 {
+        display: grid;
+        grid-template-columns: 1fr auto 30px auto 1fr;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
     }
 
-    .navGrid { 
-        display: flex; 
-        justify-content: space-around; 
-        padding: 8px 0; 
-        width: 100%; 
-    }
-    
-    .navItem {
-        display: flex; 
-        flex-direction: column; 
-        align-items: center; 
-        justify-content: center;
-        color: #64748b; 
-        text-decoration: none; 
-        font-size: 0.65em; 
-        font-weight: 800;
-        text-transform: uppercase; 
-        gap: 4px; 
-        background: transparent; 
-        border: none; 
-        cursor: pointer;
-        transition: color 0.2s; 
-        width: 25%; 
-        text-align: center;
-    }
-    
-    .navItem i { 
-        font-size: 22px; 
-        margin-bottom: 2px; 
-    }
+    .mTeamNameText { color: #f8fafc; font-size: 0.8em; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mProjText { color: #64748b; font-size: 0.6em; font-weight: 600; }
+    .mSpacerCenter { width: 30px; }
 
-    .navItem.active { 
-        color: #eebf1c; 
+    /* Fix Player Rows on Mobile so they don't push off edge */
+    .playerRow { 
+        padding: 10px 5px; 
+        gap: 5px; 
+        grid-template-columns: 1fr 35px 1fr; 
     }
     
-    .dropdownContainer { 
-        position: relative; 
-        flex: 1; 
-        display: flex; 
-        justify-content: center; 
-        width: 25%; 
-    }
-    
-    .dropdownMenu {
-        position: absolute; 
-        top: 100%; 
-        right: 0; 
-        width: 220px;
-        background: #1e2530; 
-        border: 1px solid rgba(238, 191, 28, 0.3);
-        border-radius: 12px; 
-        box-shadow: 0 10px 30px rgba(0,0,0,0.8);
-        display: flex; 
-        flex-direction: column; 
-        overflow: hidden; 
-        margin-top: 10px;
-    }
-    
-    .dropdownItem {
-        padding: 15px; 
-        color: #cbd5e1; 
-        text-decoration: none;
-        font-size: 1em; 
-        font-weight: 600; 
-        display: flex; 
-        align-items: center; 
-        gap: 12px;
-        border-bottom: 1px solid rgba(255,255,255,0.05);
-    }
-    
-    .dropdownItem i { 
-        color: #64748b; 
-        font-size: 22px; 
-    }
-
-    .activeDropdown { 
-        background: rgba(238, 191, 28, 0.05); 
-        color: #eebf1c; 
-    }
-
-    .activeDropdown i { 
-        color: #eebf1c; 
-    }
+    .pName { font-size: 0.7em; }
+    .pMeta { font-size: 0.55em; }
+    .pScore { font-size: 0.8em; }
+    .pProj { font-size: 0.6em; }
+    .posBadge { padding: 3px 0; font-size: 0.55em; }
+    .emptySlot { font-size: 0.6em; }
 }
