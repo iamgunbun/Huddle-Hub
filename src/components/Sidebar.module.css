@@ -280,3 +280,9 @@
 .logoutLink:hover i {
     color: #ff2a6d;
 }
+
+@media (max-width: 1100px) {
+    .desktopNavOnly {
+        display: none !important;
+    }
+}

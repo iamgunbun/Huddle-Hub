@@ -1,0 +1,73 @@
+/* Completely hidden on desktop */
+.mobileNavContainer {
+    display: none; 
+}
+
+/* Activate exclusively for mobile/tablets */
+@media (max-width: 1100px) {
+    .mobileNavContainer {
+        display: flex;
+        align-items: center;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 65px;
+        background: rgba(11, 14, 20, 0.95);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid rgba(238, 191, 28, 0.2);
+        z-index: 9000;
+        padding: 0 10px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .hamburgerBtn {
+        background: none;
+        border: none;
+        color: #f8fafc;
+        padding: 10px;
+        margin-right: 5px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+    }
+
+    .scrollableTabs {
+        display: flex;
+        flex-grow: 1;
+        overflow-x: auto;
+        gap: 12px;
+        padding-right: 20px;
+        scrollbar-width: none; /* Hides scrollbar in Firefox */
+    }
+    
+    .scrollableTabs::-webkit-scrollbar {
+        display: none; /* Hides scrollbar in Safari/Chrome */
+    }
+
+    .tab {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #94a3b8;
+        text-decoration: none;
+        font-size: 0.8em;
+        font-weight: 700;
+        text-transform: uppercase;
+        white-space: nowrap;
+        padding: 8px 16px;
+        border-radius: 24px;
+        transition: all 0.2s;
+        border: 1px solid transparent;
+    }
+
+    .tab i {
+        font-size: 1.2em;
+    }
+
+    .activeTab {
+        color: #0b0e14;
+        background: #eebf1c;
+        border-color: #eebf1c;
+    }
+}
