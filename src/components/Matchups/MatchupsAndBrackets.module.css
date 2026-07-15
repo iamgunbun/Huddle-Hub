@@ -1,124 +1,395 @@
 .container { 
-    padding: 20px 0; 
+    padding: 20px; 
+    max-width: 1400px; 
+    margin: 0 auto; 
+    box-sizing: border-box; 
+    width: 100%;
 }
 
 .subNavigation { 
-    display: flex; justify-content: center; 
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08); 
-    margin-bottom: 40px; gap: 30px; padding-bottom: 15px;
+    display: flex; 
+    justify-content: center; 
+    gap: 10px; 
+    margin-bottom: 30px; 
+    flex-wrap: wrap; 
 }
+
 .subToggleBtn { 
-    background: transparent; border: none; color: #64748b; 
-    padding: 10px 15px; font-weight: 700; font-size: 0.9em; text-transform: uppercase; cursor: pointer; transition: 0.2s;
+    padding: 10px 20px; 
+    border-radius: 20px; 
+    background: rgba(255, 255, 255, 0.05); 
+    border: 1px solid rgba(255, 255, 255, 0.1); 
+    color: #94a3b8; 
+    font-weight: 700; 
+    text-transform: uppercase; 
+    letter-spacing: 1px; 
+    cursor: pointer; 
+    transition: 0.2s; 
+    white-space: nowrap; 
+    font-size: 0.85em; 
 }
-.subToggleBtn:hover { color: #f8fafc; }
-.subToggleBtn.activeSub { color: #eebf1c; border-bottom: 2px solid #eebf1c; }
 
-.headerControls { display: flex; justify-content: space-between; margin-bottom: 30px; align-items: center; }
-.title { color: #f8fafc; text-transform: uppercase; font-size: 1.4em; margin: 0; }
-.weekSelect { background: #0b0e14; border: 1px solid #eebf1c; color: #eebf1c; padding: 10px 20px; border-radius: 8px; font-weight: 700; outline: none;}
-.scheduleGrid { display: flex; flex-direction: column; gap: 20px; }
-.emptyState { text-align: center; color: #94a3b8; padding: 40px; border: 1px dashed rgba(255,255,255,0.1); border-radius: 12px; }
+.subToggleBtn:hover {
+    color: #f8fafc;
+    background: rgba(255, 255, 255, 0.08);
+}
 
-/* The Bracket Tree Layout Magic */
+.subToggleBtn.activeSub { 
+    background: #eebf1c; 
+    color: #0b0e14; 
+    border-color: #eebf1c; 
+    box-shadow: 0 0 10px rgba(238, 191, 28, 0.4); 
+}
+
+.headerControls { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    margin-bottom: 20px; 
+    flex-wrap: wrap; 
+    gap: 15px;
+}
+
+.title { 
+    color: #f8fafc; 
+    text-transform: uppercase; 
+    font-size: 1.5em; 
+    letter-spacing: 1px; 
+    margin: 0; 
+    font-weight: 800; 
+}
+
+.weekSelect { 
+    padding: 10px 20px; 
+    background: #1e2530; 
+    border: 1px solid rgba(255, 255, 255, 0.1); 
+    color: #f8fafc; 
+    border-radius: 8px; 
+    font-weight: 700; 
+    outline: none; 
+    cursor: pointer; 
+}
+
+.weekSelect:focus { border-color: #eebf1c; }
+
+.scheduleGrid { display: grid; grid-template-columns: 1fr; gap: 20px; width: 100%;}
+.emptyState { text-align: center; color: #94a3b8; background: rgba(255, 255, 255, 0.02); border: 1px dashed rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 50px 20px; font-style: italic; width: 100%; box-sizing: border-box;}
+
+/* --- TRADITIONAL WEB PLAYOFF TREE STRUCTURE --- */
 .bracketContainer {
     width: 100%;
-    overflow-x: auto;
-    padding-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 60px;
 }
 
-.bracketWrapper {
+.bracketTreeWrapper {
     display: flex;
-    justify-content: center;
-    align-items: stretch; /* Forces all columns to be strictly equal height */
-    gap: 30px;
-    padding: 10px;
-    min-height: 850px; 
-    min-width: max-content;
+    justify-content: flex-start;
+    gap: 50px; 
+    width: 100%;
+    padding: 20px 0;
 }
 
 .bracketColumn {
     display: flex;
     flex-direction: column;
-    width: 310px;
-    height: 100%;
+    width: 280px;
 }
 
 .roundHeader {
-    color: #f8fafc;
     text-align: center;
-    margin-bottom: 25px;
-    font-weight: 700;
-    font-size: 0.85em;
+    color: #f8fafc;
+    font-weight: 900;
+    text-transform: uppercase;
+    margin-bottom: 30px;
+    font-size: 1.1em;
+    letter-spacing: 1px;
+}
+
+.roundWeekSub {
+    font-size: 0.8em;
+    color: #94a3b8;
+    font-weight: 600;
+    margin-top: 6px;
 }
 
 .roundColumnLayout {
     display: flex;
     flex-direction: column;
-    flex-grow: 1; /* Pushes the flexbox logic through the column */
+    justify-content: space-around;
+    height: 620px; /* Clamps desktop round maps into synchronized vertical grid lanes */
 }
 
 .mainMatchesSection {
     display: flex;
     flex-direction: column;
     justify-content: space-around;
-    height: 600px; /* Fixed height mathematically forces symmetry across varying columns */
-}
-
-.consolationMatchesSection {
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    margin-top: auto; /* Shoves the 3rd/5th/8th place matches aggressively to the bottom */
-    padding-top: 60px;
-    gap: 30px;
+    height: 100%;
 }
 
 .matchCard {
-    background: #1e2530; 
-    border-radius: 12px;
-    padding: 18px 20px;
+    background: #111622;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 5px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    gap: 15px;
-    min-height: 110px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+    gap: 3px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .matchLabel {
     text-align: center;
+    font-size: 0.75em;
     color: #eebf1c;
-    font-weight: 700;
-    font-size: 0.85em;
-    margin-bottom: 2px;
     text-transform: uppercase;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    padding: 6px 0;
+    background: rgba(238, 191, 28, 0.03);
+    border-radius: 6px 6px 0 0;
 }
 
 .teamRow {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    min-height: 34px;
+    padding: 12px 14px;
+    background: #1e2530;
+    border-radius: 6px;
+    border: 1px solid transparent;
 }
 
-.teamInfo { display: flex; align-items: center; gap: 15px; }
-.avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; border: 1px solid #444; background: #111; }
-.avatarPlaceholder { width: 34px; height: 34px; border-radius: 50%; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); }
-
-.teamName { 
-    color: #cbd5e1; font-size: 0.9em; font-weight: 500; 
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; 
+.winnerRow {
+    border-color: rgba(0, 206, 184, 0.15);
+    background: linear-gradient(90deg, #1e2530 0%, rgba(0, 206, 184, 0.03) 100%);
 }
 
-.score { color: #94a3b8; font-weight: 600; font-size: 0.9em; }
+.winnerRow .score {
+    color: #00ceb8;
+    font-weight: 900;
+}
 
-.byeBlockText {
-    text-align: center;
-    color: #94a3b8;
+.byeRow {
+    opacity: 0.5;
+}
+
+.teamInfo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    overflow: hidden;
+}
+
+.avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid #475569;
+    flex-shrink: 0;
+}
+
+.avatarPlaceholder {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #2d3748;
+    flex-shrink: 0;
+}
+
+.teamName {
+    color: #f8fafc;
+    font-size: 0.9em;
     font-weight: 700;
-    font-size: 0.8em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.score {
+    color: #cbd5e1;
+    font-weight: 700;
+    font-size: 0.9em;
+    flex-shrink: 0;
+}
+
+/* --- BOTTOM ISOLATED CONSOLATION GRID ROWS --- */
+.consolationSection {
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding-top: 40px;
+    width: 100%;
+}
+
+.consolationHeading {
+    color: #94a3b8;
+    text-transform: uppercase;
+    font-size: 1.1em;
     letter-spacing: 1px;
-    padding-top: 10px;
-    padding-bottom: 5px;
+    margin-bottom: 25px;
+    font-weight: 800;
+}
+
+.consolationGrid {
+    display: flex;
+    gap: 40px;
+    flex-wrap: wrap;
+    width: 100%;
+}
+
+.consRoundColumn {
+    display: flex;
+    flex-direction: column;
+    width: 280px;
+    gap: 15px;
+}
+
+.consRoundTitle {
+    color: #64748b;
+    font-size: 0.85em;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.consCardStack {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+/* --- COMPRESSED NATIVE SQUISHED MOBILE VIEWPORTS --- */
+@media (max-width: 1100px) {
+    .container {
+        padding: 15px 5px !important;
+    }
+
+    .subNavigation {
+        gap: 5px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        justify-content: flex-start;
+        padding-bottom: 8px;
+        margin-bottom: 15px;
+    }
+    
+    .subToggleBtn {
+        padding: 8px 14px;
+        font-size: 0.7em;
+        flex-shrink: 0;
+    }
+
+    .bracketContainer {
+        gap: 25px;
+    }
+
+    /* Packs all rounds side-by-side inside exactly 100% viewport screen width */
+    .bracketTreeWrapper {
+        display: flex;
+        flex-direction: row;
+        gap: 4px;
+        padding: 0;
+        width: 100%;
+        box-sizing: border-box;
+        justify-content: space-between;
+    }
+
+    .bracketColumn {
+        width: calc(33.33% - 4px);
+        flex-shrink: 0;
+    }
+
+    .roundHeader {
+        font-size: 0.55em;
+        margin-bottom: 12px;
+    }
+    
+    .roundWeekSub {
+        font-size: 0.9em;
+        margin-top: 2px;
+    }
+
+    .roundColumnLayout {
+        height: 330px; /* Contracts tracking bounds layout vertically on mobile */
+        gap: 0;
+        justify-content: space-around;
+    }
+    
+    .mainMatchesSection {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-around;
+    }
+
+    /* Scales matching typography and asset profiles down to match native app density */
+    .matchCard {
+        padding: 2px;
+        border-radius: 6px;
+        gap: 2px;
+    }
+
+    .matchLabel {
+        font-size: 0.5em;
+        padding: 4px 0;
+    }
+
+    .teamRow {
+        padding: 6px;
+        border-radius: 4px;
+    }
+
+    .teamInfo {
+        gap: 5px;
+    }
+
+    .avatar, .avatarPlaceholder {
+        width: 14px;
+        height: 14px;
+    }
+
+    .teamName {
+        font-size: 0.55em;
+        max-width: 50px; /* Clamped length handles to protect cell bounding box fields */
+    }
+
+    .score {
+        font-size: 0.55em;
+    }
+
+    /* Consolation bottom rows mobile alignments */
+    .consolationSection {
+        padding-top: 20px;
+    }
+    
+    .consolationHeading {
+        font-size: 0.8em;
+        margin-bottom: 15px;
+        text-align: center;
+    }
+
+    .consolationGrid {
+        display: flex;
+        flex-direction: row;
+        gap: 4px;
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .consRoundColumn {
+        width: calc(33.33% - 4px);
+        gap: 8px;
+    }
+
+    .consRoundTitle {
+        font-size: 0.55em;
+        text-align: center;
+    }
+
+    .consCardStack {
+        gap: 6px;
+    }
 }

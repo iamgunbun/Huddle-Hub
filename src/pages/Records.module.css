@@ -61,7 +61,6 @@
 .loserName { color: #94a3b8; font-weight: 500; }
 
 .diffValue { position: absolute; right: 16px; color: #ef4444; font-weight: 900; font-size: 1.15em; display: flex; align-items: center; gap: 6px; }
-.tieBadge { background: rgba(238, 191, 28, 0.12); color: #eebf1c; font-size: 0.55em; padding: 3px 6px; border-radius: 4px; font-weight: 900; border: 1px solid rgba(238, 191, 28, 0.25); line-height: 1; text-transform: uppercase; letter-spacing: 0.5px; margin-left: 5px; display: inline-block; vertical-align: middle; }
 
 @media (max-width: 1100px) {
     .container { padding: 15px 10px; }
@@ -86,70 +85,33 @@
     .statNum { padding: 6px 2px; }
     .rankNum { width: 20px; padding: 6px 2px; }
     
-    /* Milestones single line alignment */
     .recordRowItem {
-        display: flex;
-        flex-direction: row !important;
-        align-items: center !important;
-        justify-content: space-between !important;
-        padding: 10px 12px !important;
-        gap: 5px !important;
-        min-height: auto;
+        display: flex; flex-direction: row !important; align-items: center !important;
+        justify-content: space-between !important; padding: 10px 12px !important;
+        gap: 5px !important; min-height: auto;
     }
     
     .textGroup { 
-        flex-direction: row !important;
-        align-items: center !important;
-        justify-content: flex-start !important;
-        gap: 8px !important;
-        padding: 0 !important;
+        flex-direction: row !important; align-items: center !important;
+        justify-content: flex-start !important; gap: 8px !important; padding: 0 !important;
         flex: 1;
     }
 
-    .metaLabel {
-        margin: 0 !important;
-        font-size: 0.7em !important;
-    }
+    .metaLabel { margin: 0 !important; font-size: 0.7em !important; }
+    .holderTitle { font-size: 0.8em !important; text-overflow: ellipsis; overflow: hidden; }
+    .scoreMetric { position: static !important; font-size: 0.9em !important; margin-left: auto; }
 
-    .holderTitle {
-        font-size: 0.8em !important;
-        text-overflow: ellipsis;
-        overflow: hidden;
-    }
-    
-    .scoreMetric {
-        position: static !important; 
-        font-size: 0.9em !important; 
-        margin-left: auto;
-    }
-
-    /* Extremes single line alignment */
+    /* Forces Head to Head Extreme Tags side by side */
     .extremeRowItem {
-        flex-direction: row !important;
-        align-items: center !important;
-        justify-content: space-between !important;
-        padding: 10px !important;
-        min-height: auto;
+        flex-direction: row !important; align-items: center !important;
+        justify-content: space-between !important; padding: 10px !important; min-height: auto;
     }
 
     .extremeMeta {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        gap: 6px;
-        margin: 0 !important;
-        font-size: 0.65em !important;
+        display: flex; flex-direction: row; align-items: center; gap: 6px;
+        margin: 0 !important; font-size: 0.65em !important;
     }
 
-    .matchupDetails {
-        flex-direction: row !important;
-        font-size: 0.7em !important;
-        gap: 4px !important;
-    }
-
-    .diffValue {
-        position: static !important;
-        font-size: 0.9em !important;
-        margin-left: auto;
-    }
+    .matchupDetails { flex-direction: row !important; font-size: 0.7em !important; gap: 4px !important; }
+    .diffValue { position: static !important; font-size: 0.9em !important; margin-left: auto; }
 }

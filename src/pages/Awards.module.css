@@ -1,70 +1,532 @@
-.container { padding: 20px; max-width: 1400px; margin: 0 auto; font-family: 'Montserrat', sans-serif; box-sizing: border-box; }
-.loading { text-align: center; color: #eebf1c; font-size: 1.2em; font-weight: bold; text-transform: uppercase; margin-top: 100px; letter-spacing: 2px; }
+.container {
+    padding: 30px 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+    font-family: 'Montserrat', sans-serif;
+    box-sizing: border-box;
+}
 
-.headerTitle { display: flex; align-items: center; justify-content: center; gap: 15px; color: #f8fafc; text-transform: uppercase; font-size: 2.2em; letter-spacing: 2px; margin-bottom: 50px; font-weight: 500; text-align: center; }
-.headerIcon { font-size: 1.2em; color: #eebf1c; filter: drop-shadow(0 0 10px rgba(238, 191, 28, 0.5)); }
+.loading {
+    text-align: center;
+    color: #eebf1c;
+    font-size: 1.2em;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-top: 100px;
+    letter-spacing: 2px;
+}
 
-.section { margin-bottom: 60px; }
-.sectionTitle { display: flex; align-items: center; justify-content: center; gap: 15px; color: #eebf1c; font-size: 1.8em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 30px; font-weight: 800; border-bottom: 1px solid rgba(238, 191, 28, 0.2); padding-bottom: 15px; }
-.shameTitle { color: #ef4444; border-color: rgba(239, 68, 68, 0.2); }
-.shameIcon { font-size: 1.2em; filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.5)); }
+.divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(238, 191, 28, 0.3), transparent);
+    margin: 50px 0;
+}
 
-.championsGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 30px; }
-.shameGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
+/* --- HERO SECTION --- */
+.heroSection {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
 
-.awardCard { background: #1e2530; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 30px 20px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3); display: flex; flex-direction: column; align-items: center; text-align: center; transition: transform 0.2s, box-shadow 0.2s; position: relative; overflow: hidden; box-sizing: border-box; }
-.awardCard:hover { transform: translateY(-5px); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4); }
+.mainTitle {
+    color: #f8fafc;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    font-size: 2em;
+    margin: 0 0 20px 0;
+    font-weight: 900;
+}
 
-.champCard { border-color: rgba(238, 191, 28, 0.3); background: linear-gradient(180deg, rgba(30, 37, 48, 1) 0%, rgba(20, 25, 33, 1) 100%); }
-.champCard:hover { border-color: #eebf1c; box-shadow: 0 10px 40px rgba(238, 191, 28, 0.15); }
+.heroTrophy {
+    margin: 10px 0 20px;
+}
 
-.shameCard { border-color: rgba(239, 68, 68, 0.2); background: linear-gradient(180deg, rgba(30, 37, 48, 1) 0%, rgba(20, 25, 33, 1) 100%); }
-.shameCard:hover { border-color: #ef4444; box-shadow: 0 10px 40px rgba(239, 68, 68, 0.15); }
+.champGrid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 25px;
+    width: 100%;
+}
 
-.awardYear { color: #eebf1c; font-size: 1.2em; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 20px; }
-.shameCard .awardYear { color: #ef4444; }
+.champCard {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 20px;
+    border-radius: 16px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    min-width: 200px;
+    transition: transform 0.2s;
+    box-sizing: border-box;
+}
 
-.awardAvatarWrapper { position: relative; margin-bottom: 20px; }
-.awardAvatar { width: 120px; height: 120px; border-radius: 50%; object-fit: cover; background: #111; border: 4px solid #334155; position: relative; z-index: 2; }
-.champCard .awardAvatar { border-color: #eebf1c; box-shadow: 0 0 25px rgba(238, 191, 28, 0.4); }
-.shameCard .awardAvatar { border-color: #ef4444; box-shadow: 0 0 25px rgba(239, 68, 68, 0.3); opacity: 0.8; filter: grayscale(50%); }
+.champCard:hover {
+    transform: translateY(-5px);
+    border-color: rgba(238, 191, 28, 0.4);
+}
 
-.awardTeamName { color: #f8fafc; font-size: 1.3em; font-weight: 800; line-height: 1.2; margin-bottom: 5px; width: 100%;}
-.awardManager { color: #94a3b8; font-size: 0.85em; font-style: italic; }
+.latestChamp {
+    border-color: rgba(238, 191, 28, 0.6);
+    box-shadow: 0 0 25px rgba(238, 191, 28, 0.2);
+    transform: scale(1.05);
+    background: rgba(238, 191, 28, 0.03);
+}
 
-.emptyState { text-align: center; color: #94a3b8; background: rgba(255, 255, 255, 0.02); border: 1px dashed rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 60px 20px; font-style: italic; }
+.latestChamp:hover {
+    transform: scale(1.05) translateY(-5px);
+}
 
+.heroAvatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 3px solid #334155;
+    object-fit: cover;
+    margin: 15px 0;
+}
+
+.latestChamp .heroAvatar {
+    width: 110px;
+    height: 110px;
+    border-color: #eebf1c;
+    box-shadow: 0 0 20px rgba(238, 191, 28, 0.4);
+}
+
+.heroYear {
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-size: 1em;
+    margin: 0;
+    font-weight: 800;
+}
+
+.latestChamp .heroYear {
+    color: #eebf1c;
+    font-size: 1.2em;
+}
+
+.heroName {
+    color: #cbd5e1;
+    font-size: 1.1em;
+    font-weight: 700;
+    text-align: center;
+}
+
+.latestChamp .heroName {
+    color: #f8fafc;
+    font-size: 1.4em;
+    font-weight: 800;
+}
+
+/* --- CHAMPIONS WING --- */
+.wingSection {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.wingTitle {
+    color: #f8fafc;
+    font-size: 1.5em;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin: 0 0 30px 0;
+    text-align: center;
+}
+
+.yearTabs {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 50px;
+}
+
+.yearTab {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 0.9em;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.yearTab:hover {
+    color: #f8fafc;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.activeTab {
+    background: #eebf1c;
+    color: #0b0e14;
+    border-color: #eebf1c;
+}
+
+.activeTab:hover {
+    color: #0b0e14;
+    background: #eebf1c;
+}
+
+/* PODIUM */
+.podiumContainer {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 15px;
+    height: 350px;
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+
+.podiumBlock {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    max-width: 200px;
+    box-sizing: border-box;
+}
+
+.podiumAvatar {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    border: 3px solid #334155;
+    object-fit: cover;
+    margin-bottom: 10px;
+    z-index: 2;
+    background: #111;
+}
+
+.podiumName {
+    color: #f8fafc;
+    font-weight: 700;
+    font-size: 0.9em;
+    text-align: center;
+    margin-bottom: 15px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+    padding: 0 10px;
+    box-sizing: border-box;
+}
+
+.podiumPedestal {
+    width: 100%;
+    background: linear-gradient(180deg, rgba(30, 37, 48, 0.8), rgba(11, 14, 20, 0.9));
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: none;
+    border-radius: 12px 12px 0 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding-top: 15px;
+    box-shadow: inset 0 5px 15px rgba(0, 0, 0, 0.5);
+    box-sizing: border-box;
+}
+
+.medal {
+    font-size: 2em;
+    margin-bottom: 5px;
+}
+
+.placeText {
+    color: #94a3b8;
+    font-size: 0.8em;
+    text-transform: uppercase;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+
+.firstPlace .podiumPedestal {
+    height: 200px;
+    border-color: rgba(238, 191, 28, 0.4);
+    background: linear-gradient(180deg, rgba(238, 191, 28, 0.15), rgba(11, 14, 20, 0.9));
+}
+
+.firstPlace .podiumAvatar {
+    width: 90px;
+    height: 90px;
+    border-color: #eebf1c;
+}
+
+.secondPlace .podiumPedestal { height: 150px; }
+.thirdPlace .podiumPedestal { height: 110px; }
+
+/* --- HALL OF SHAME --- */
+.shameSection {
+    text-align: center;
+}
+
+.shameSubtitle {
+    color: #64748b;
+    font-size: 1em;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin: -20px 0 30px 0;
+}
+
+.shameGrid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+    width: 100%;
+}
+
+.shameCard {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 20px;
+    width: 140px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    transition: transform 0.2s;
+    box-sizing: border-box;
+}
+
+.shameCard:hover {
+    transform: translateY(-5px);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.shameYear {
+    color: #94a3b8;
+    font-weight: 800;
+    font-size: 1.1em;
+}
+
+.shameAvatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 2px solid #475569;
+    object-fit: cover;
+    filter: grayscale(80%);
+}
+
+.shameName {
+    color: #cbd5e1;
+    font-size: 0.85em;
+    font-weight: 600;
+    text-align: center;
+    width: 100%;
+}
+
+/* --- LEAGUE RECORDS --- */
+.recordsGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    width: 100%;
+}
+
+.recordCard {
+    background: rgba(11, 14, 20, 0.5);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(238, 191, 28, 0.15);
+    border-radius: 12px;
+    padding: 25px 15px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+}
+
+.recordTitle {
+    color: #94a3b8;
+    font-size: 0.85em;
+    text-transform: uppercase;
+    font-weight: 800;
+    letter-spacing: 1px;
+    margin-bottom: 15px;
+}
+
+.recordValue {
+    color: #eebf1c;
+    font-size: 2.2em;
+    font-weight: 900;
+    margin-bottom: 10px;
+    line-height: 1;
+}
+
+.recordHolder {
+    color: #f8fafc;
+    font-size: 1em;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.recordSub {
+    color: #64748b;
+    font-size: 0.75em;
+    text-transform: uppercase;
+}
+
+/* --- RESPONSIVE MOBILE OVERRIDES --- */
 @media (max-width: 1100px) {
-    .championsGrid, .shameGrid {
-        display: grid !important;
-        grid-template-columns: repeat(3, 1fr) !important;
-        gap: 8px !important;
+    .container {
+        padding: 15px 10px;
+    }
+
+    /* Force 3 Columns for Champions and Shame Grids */
+    .champGrid, .shameGrid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        width: 100%;
+    }
+
+    .champCard, .shameCard {
+        min-width: 0;
+        width: auto;
+        padding: 10px 5px;
+        border-radius: 8px;
+        transform: none !important; /* Stop scaling to fit evenly */
     }
     
-    .awardCard { 
-        padding: 12px 6px !important; 
+    .latestChamp {
+        transform: none; 
+        box-shadow: 0 0 10px rgba(238, 191, 28, 0.2);
+    }
+    .latestChamp:hover { transform: none; }
+    
+    .heroAvatar {
+        width: 35px;
+        height: 35px;
+        border-width: 2px;
+        margin: 5px 0;
+    }
+
+    .latestChamp .heroAvatar {
+        width: 45px;
+        height: 45px;
+        box-shadow: none;
+    }
+
+    .heroYear { font-size: 0.6em; letter-spacing: 1px; }
+    .latestChamp .heroYear { font-size: 0.75em; }
+
+    .heroName, .shameName {
+        font-size: 0.55em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        width: 100%;
+        max-width: 80px;
     }
     
-    .awardAvatar { 
-        width: 50px !important; 
-        height: 50px !important; 
-        border-width: 2px !important; 
+    .latestChamp .heroName {
+        font-size: 0.65em;
+    }
+
+    .shameAvatar {
+        width: 35px;
+        height: 35px;
+        border-width: 2px;
+    }
+
+    .shameYear { font-size: 0.7em; }
+
+    /* Force 2 Columns for Records Grid to save space */
+    .recordsGrid {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+
+    .recordCard {
+        padding: 15px 10px;
+    }
+
+    .recordValue { font-size: 1.4em; }
+    .recordTitle { font-size: 0.6em; }
+    .recordHolder { font-size: 0.7em; }
+    .recordSub { font-size: 0.55em; }
+
+    /* MOBILE LEADERBOARD FORMAT - STRICT LIST VIEW */
+    .podiumContainer {
+        height: auto;
+        align-items: stretch;
+        flex-direction: column;
+        gap: 10px;
+        width: 100%;
     }
     
-    .awardYear { 
-        font-size: 0.7em !important; 
-        margin-bottom: 10px !important; 
-    }
-    
-    .awardTeamName { 
-        font-size: 0.65em !important; 
-        white-space: normal !important; 
-        word-wrap: break-word; 
-        line-height: 1.2 !important; 
+    .podiumBlock {
         max-width: 100%;
+        width: 100%;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        padding: 12px 15px;
+        gap: 15px;
+        box-sizing: border-box;
+        overflow: hidden; /* Prevents text pushing the medal off screen */
     }
     
-    .awardManager { 
-        display: none; 
+    .podiumPedestal {
+        display: none;
     }
+
+    .firstPlace {
+        border-color: rgba(238, 191, 28, 0.4);
+        order: -1;
+    }
+    
+    .podiumAvatar {
+        width: 45px;
+        height: 45px;
+        margin: 0;
+        border-width: 2px;
+        flex-shrink: 0;
+    }
+
+    .firstPlace .podiumAvatar {
+        width: 55px;
+        height: 55px;
+    }
+    
+    .podiumName {
+        text-align: left;
+        padding: 0;
+        margin: 0;
+        font-size: 0.85em;
+        flex: 1; /* Takes exactly the remaining space */
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .podiumBlock::after {
+        margin-left: 10px;
+        font-size: 1.5em;
+        flex-shrink: 0; /* Ensures the medal is never pushed off screen */
+    }
+    
+    .firstPlace::after { content: '🥇'; }
+    .secondPlace::after { content: '🥈'; }
+    .thirdPlace::after { content: '🥉'; }
 }
