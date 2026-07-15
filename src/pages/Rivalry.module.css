@@ -78,9 +78,10 @@
     .dropdown { padding: 8px 5px; font-size: 0.75em; }
     .vsBadge { padding: 5px 10px; font-size: 0.9em; }
     
+    /* Reverted to 1-column stack to prevent screen cutoff */
     .historyList {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
+        display: flex;
+        flex-direction: column;
         gap: 12px;
         padding-right: 0;
         width: 100%;

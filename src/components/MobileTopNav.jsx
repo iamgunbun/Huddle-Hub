@@ -22,8 +22,9 @@ export default function MobileTopNav({ toggleSidebar, activeLeague }) {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Format Sleeper Avatar safely
     const leagueName = activeLeague?.league_name || activeLeague?.name || 'Huddle';
+    
+    // Safely parse the Sleeper CDN avatar URL
     const leagueAvatarUrl = activeLeague?.avatar 
         ? (activeLeague.avatar.includes('http') ? activeLeague.avatar : `https://sleepercdn.com/avatars/thumbs/${activeLeague.avatar}`) 
         : null;

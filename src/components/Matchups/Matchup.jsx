@@ -34,12 +34,6 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
 
     const rosterPositions = leagueData?.roster_positions || [];
 
-    const getAvatar = (playerId, playerMeta) => {
-        if (!playerMeta) return 'https://sleepercdn.com/images/v2/icons/player_default.webp';
-        if (playerMeta.pos === 'DEF') return `https://sleepercdn.com/images/team_logos/nfl/${playerId.toLowerCase()}.png`;
-        return `https://sleepercdn.com/content/nfl/players/thumb/${playerId}.jpg`;
-    };
-
     const getPositionStyle = (slotName, playerA, playerB) => {
         const rawPos = playerA?.pos || playerB?.pos || slotName || 'BN';
         const cleanPos = rawPos.toUpperCase();
@@ -52,7 +46,7 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
         <div className={`${styles.matchupCard} ${isExpanded ? styles.expanded : ''}`}>
             <div className={styles.scoreboardWrapper} onClick={() => setIsExpanded(!isExpanded)}>
                 
-                {/* 1. DESKTOP LAYOUT */}
+                {/* 1. DESKTOP SCOREBOARD */}
                 <div className={styles.desktopScoreboard}>
                     <div className={styles.teamHeader}>
                         <div className={styles.teamIdentity}>
@@ -62,7 +56,7 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                                 <div className={styles.projTotal}>Proj: {projA.toFixed(2)}</div>
                             </div>
                         </div>
-                        <div className={`${styles.teamScore} ${styles.scoreGreen}`}>{scoreA.toFixed(2)}</div>
+                        <div className={`${styles.teamScore} ${styles.scoreGreen}`}>{scoreA > 0 ? scoreA.toFixed(2) : '-'}</div>
                     </div>
                     
                     <div className={styles.vsBadge}>
@@ -73,7 +67,7 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                     </div>
                     
                     <div className={styles.teamHeader}>
-                        <div className={`${styles.teamScore} ${styles.scoreRed}`}>{scoreB.toFixed(2)}</div>
+                        <div className={`${styles.teamScore} ${styles.scoreRed}`}>{scoreB > 0 ? scoreB.toFixed(2) : '-'}</div>
                         <div className={`${styles.teamIdentity} ${styles.alignRight}`}>
                             <div className={`${styles.teamNameContainer} ${styles.alignRight}`}>
                                 <div className={styles.teamName}>{metaB.name}</div>
@@ -84,18 +78,12 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                     </div>
                 </div>
 
-                {/* 2. MOBILE NATIVE APP LAYOUT (Mirroring Sleeper) */}
+                {/* 2. MOBILE NATIVE APP SCOREBOARD */}
                 <div className={styles.mobileScoreboard}>
-                    <div className={styles.mHeaderRow1}>
-                        <img src={metaA.avatar} className={styles.mAvatar} alt="A" />
-                        
-                        <div className={styles.mOddsWrapper}>
-                            <div className={styles.mOddsLabel}><span className={styles.mWinPct}>{oddsA}%</span> WIN</div>
-                            <div className={styles.mOddsBar}><div className={styles.mOddsFillGreen} style={{width: `${oddsA}%`}}></div></div>
-                        </div>
-                        
-                        <div className={styles.mScoreWrapperLeft}>
-                            <div className={styles.mActual}>{scoreA > 0 ? scoreA.toFixed(2) : '-'}</div>
+                    <div className={styles.mTeamsRow}>
+                        <div className={styles.mTeamBlock}>
+                            <img src={metaA.avatar} className={styles.mAvatar} alt="A" />
+                            <span className={styles.mTeamNameText}>{metaA.name}</span>
                         </div>
                         
                         <div className={styles.mVsBadge}>
@@ -103,42 +91,38 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                             <i className="material-icons">{isExpanded ? 'expand_less' : 'expand_more'}</i>
                         </div>
                         
-                        <div className={styles.mScoreWrapperRight}>
-                            <div className={styles.mActual}>{scoreB > 0 ? scoreB.toFixed(2) : '-'}</div>
+                        <div className={`${styles.mTeamBlock} ${styles.mRightAlign}`}>
+                            <img src={metaB.avatar} className={styles.mAvatar} alt="B" />
+                            <span className={styles.mTeamNameText}>{metaB.name}</span>
                         </div>
-                        
-                        <div className={`${styles.mOddsWrapper} ${styles.mRightAlign}`}>
-                            <div className={`${styles.mOddsLabel} ${styles.mRightAlign}`}><span className={styles.mWinPctRed}>{oddsB}%</span> WIN</div>
-                            <div className={`${styles.mOddsBar} ${styles.mOddsBarRight}`}><div className={styles.mOddsFillRed} style={{width: `${oddsB}%`}}></div></div>
-                        </div>
-                        
-                        <img src={metaB.avatar} className={styles.mAvatar} alt="B" />
                     </div>
 
-                    <div className={styles.mHeaderRow2}>
-                        <div className={styles.mTeamNameText}>{metaA.name}</div>
-                        <div className={styles.mProjText}>Proj {projA.toFixed(2)}</div>
-                        <div className={styles.mSpacerCenter}></div>
-                        <div className={`${styles.mProjText} ${styles.mRightAlign}`}>Proj {projB.toFixed(2)}</div>
-                        <div className={`${styles.mTeamNameText} ${styles.mRightAlign}`}>{metaB.name}</div>
+                    <div className={styles.mStatsRow}>
+                        <div className={styles.mStatLeft}>
+                            <div className={styles.mActual}>{scoreA > 0 ? scoreA.toFixed(2) : '-'}</div>
+                            <div className={styles.mProj}>Proj: {projA.toFixed(2)}</div>
+                        </div>
+                        
+                        <div className={styles.mStatRight}>
+                            <div className={styles.mActual}>{scoreB > 0 ? scoreB.toFixed(2) : '-'}</div>
+                            <div className={styles.mProj}>Proj: {projB.toFixed(2)}</div>
+                        </div>
                     </div>
                 </div>
 
-                {/* Desktop Odds Bar */}
+                {/* Shared Odds Bar */}
                 <div className={styles.oddsContainer}>
-                    <div className={styles.oddsBar}>
-                        <div className={styles.oddsGreen} style={{ width: `${oddsA}%` }}></div>
-                        <div className={styles.oddsRed} style={{ width: `${oddsB}%` }}></div>
-                    </div>
                     <div className={styles.oddsText}>
-                        <span style={{ color: '#00ceb8' }}>{oddsA}%</span>
-                        <span style={{ color: '#94a3b8', fontSize: '0.85em', textTransform: 'uppercase', fontWeight: '600' }}>Win Probability</span>
-                        <span style={{ color: '#ff2a6d' }}>{oddsB}%</span>
+                        <span className={styles.oddsLabelGreen}>{oddsA}% WIN</span>
+                        <span className={styles.oddsLabelRed}>{oddsB}% WIN</span>
+                    </div>
+                    <div className={styles.oddsBarBg}>
+                        <div className={styles.oddsFillGreen} style={{ width: `${oddsA}%` }}></div>
                     </div>
                 </div>
             </div>
 
-            {/* Expanded Rosters */}
+            {/* Expanded Rosters - Perfectly Centered CSS Grid */}
             {isExpanded && (
                 <div className={styles.playerBreakdown}>
                     {startersA.map((playerIdA, idx) => {
@@ -158,16 +142,16 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                                 <div className={styles.playerSide}>
                                     {playerA ? (
                                         <>
-                                            <div className={styles.pDetailsLeft}>
-                                                <span className={styles.pName}>{playerA.fn} {playerA.ln}</span>
-                                                <span className={styles.pMeta}>{playerA.pos} - {playerA.t}</span>
+                                            <div className={styles.pInfoLeft}>
+                                                <span className={styles.pName}>{playerA.fn ? playerA.fn.charAt(0) + '.' : ''} {playerA.ln || 'Unknown'}</span>
+                                                <span className={styles.pMeta}>{playerA.pos} • {playerA.t || 'FA'}</span>
                                             </div>
                                             <div className={styles.pScoresLeft}>
                                                 <span className={styles.pScore}>{pA_Score > 0 ? pA_Score.toFixed(2) : '-'}</span>
                                                 <span className={styles.pProj}>Proj {pA_Proj.toFixed(2)}</span>
                                             </div>
                                         </>
-                                    ) : <div className={styles.emptySlot}>Empty Roster Slot</div>}
+                                    ) : <div className={styles.emptySlot}>Empty</div>}
                                 </div>
                                 
                                 {/* CENTER: Position Badge */}
@@ -178,19 +162,19 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                                 </div>
                                 
                                 {/* RIGHT SIDE: Team B */}
-                                <div className={styles.playerSide}>
+                                <div className={`${styles.playerSide} ${styles.rightSide}`}>
                                     {playerB ? (
                                         <>
                                             <div className={styles.pScoresRight}>
                                                 <span className={styles.pScore}>{pB_Score > 0 ? pB_Score.toFixed(2) : '-'}</span>
                                                 <span className={styles.pProj}>Proj {pB_Proj.toFixed(2)}</span>
                                             </div>
-                                            <div className={styles.pDetailsRight}>
-                                                <span className={styles.pName}>{playerB.fn} {playerB.ln}</span>
-                                                <span className={styles.pMeta}>{playerB.pos} - {playerB.t}</span>
+                                            <div className={styles.pInfoRight}>
+                                                <span className={styles.pName}>{playerB.fn ? playerB.fn.charAt(0) + '.' : ''} {playerB.ln || 'Unknown'}</span>
+                                                <span className={styles.pMeta}>{playerB.pos} • {playerB.t || 'FA'}</span>
                                             </div>
                                         </>
-                                    ) : <div className={styles.emptySlot}>Empty Roster Slot</div>}
+                                    ) : <div className={styles.emptySlot}>Empty</div>}
                                 </div>
                             </div>
                         );

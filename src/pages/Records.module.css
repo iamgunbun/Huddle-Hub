@@ -72,7 +72,17 @@
     
     .tableCardFull { padding: 15px 10px; }
     .tableWrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    .table th, .table td { white-space: nowrap; padding: 12px 10px; font-size: 0.85em; }
+    
+    /* Strict Mobile Table Sizing */
+    .table th, .table td { 
+        white-space: normal; 
+        padding: 6px 4px; 
+        font-size: 0.65em; 
+    }
+    .tableAvatar { width: 20px; height: 20px; }
+    .managerNameCell, .tableTeamName { font-size: 0.8em; }
+    .statNum { padding: 6px 2px; }
+    .rankNum { width: 20px; padding: 6px 2px; }
     
     .recordRowItem, .extremeRowItem {
         flex-direction: row; flex-wrap: wrap; padding: 15px; gap: 8px; min-height: auto;
