@@ -230,7 +230,7 @@
     display: block;
 }
 
-/* --- FIX: INPUT CONTAINER LOGIC --- */
+/* --- INPUT CONTAINER LOGIC --- */
 .inputContainer {
     position: relative;
     background: rgba(0, 0, 0, 0.3);
@@ -318,7 +318,6 @@
 
 .gifThumb:hover { transform: scale(1.05); }
 
-/* --- TOOLBAR & TEXT INPUT --- */
 .actionTools {
     display: flex;
     gap: 15px;
@@ -387,7 +386,7 @@
         bottom: 0;
         top: auto;
         width: 100%;
-        height: 70px;
+        height: 60px;
         border-radius: 0;
         margin: 0;
         background: #eebf1c;
@@ -404,7 +403,7 @@
     }
 
     .floatingChatBtn:hover {
-        transform: none; /* remove hover jump on mobile */
+        transform: none; 
     }
 
     .floatingChatBtn i {
@@ -413,18 +412,18 @@
     }
 
     .unreadBadge {
-        position: static; /* Set right next to the text label */
+        position: static; 
         margin-left: 5px;
         top: auto;
         right: auto;
     }
 
     .chatWidget {
-        bottom: 70px; /* Sits right on top of the footer */
+        bottom: 60px; 
         right: 0;
         width: 100%;
-        height: calc(100vh - 70px);
-        max-height: calc(100vh - 70px);
+        height: calc(100vh - 60px);
+        max-height: calc(100vh - 60px);
         border-radius: 0;
         border: none;
         transform: translateY(100%);

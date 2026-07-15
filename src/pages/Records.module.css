@@ -1,392 +1,70 @@
-.container {
-    padding: 30px 20px;
-    max-width: 1400px;
-    margin: 0 auto;
-    font-family: 'Montserrat', sans-serif;
-    box-sizing: border-box;
-}
+.container { padding: 30px 20px; max-width: 1400px; margin: 0 auto; font-family: 'Montserrat', sans-serif; box-sizing: border-box;}
 
-.loading {
-    text-align: center;
-    color: #eebf1c;
-    font-size: 1.2em;
-    font-weight: bold;
-    text-transform: uppercase;
-    margin-top: 100px;
-    letter-spacing: 2px;
-}
+.loading { text-align: center; color: #eebf1c; font-size: 1.2em; font-weight: bold; text-transform: uppercase; margin-top: 100px; letter-spacing: 2px; }
+.headerTitle { color: #f8fafc; text-transform: uppercase; font-size: 2em; letter-spacing: 2px; margin-bottom: 30px; font-weight: 500; text-align: center; }
+.controlsRow { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; flex-wrap: wrap; gap: 20px; }
+.viewToggles { display: flex; gap: 15px; }
 
-.headerTitle {
-    color: #f8fafc;
-    text-transform: uppercase;
-    font-size: 2em;
-    letter-spacing: 2px;
-    margin-bottom: 30px;
-    font-weight: 500;
-    text-align: center;
-}
+.toggleBtn { padding: 12px 30px; border-radius: 24px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; transition: all 0.2s ease; }
+.toggleBtn:hover { background: rgba(255, 255, 255, 0.08); color: #f8fafc; }
+.toggleBtn.active { background: #eebf1c; color: #0b0e14; border-color: #eebf1c; box-shadow: 0 0 15px rgba(238, 191, 28, 0.3); }
 
-.controlsRow {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 40px;
-    flex-wrap: wrap;
-    gap: 20px;
-}
+.limitDropdown { padding: 12px 24px; background: #1e2530; border: 1px solid rgba(255, 255, 255, 0.1); color: #f8fafc; border-radius: 8px; font-weight: 700; font-size: 0.9em; outline: none; cursor: pointer; transition: border-color 0.2s; }
+.limitDropdown:focus { border-color: #eebf1c; }
 
-.viewToggles {
-    display: flex;
-    gap: 15px;
-}
+.sectionBlock { margin-bottom: 50px; box-sizing: border-box; width: 100%;}
+.extremesSectionWrapper { margin-top: 50px; width: 100%; box-sizing: border-box;}
+.sectionHeading { color: #f8fafc; font-size: 1.4em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 25px; }
+.seasonLeaderboardsGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(550px, 1fr)); gap: 30px; }
 
-.toggleBtn {
-    padding: 12px 30px;
-    border-radius: 24px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: #94a3b8;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
+.tableCardFull { background: #1e2530; border-radius: 12px; padding: 20px; border: 1px solid rgba(255, 255, 255, 0.05); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); box-sizing: border-box;}
+.tableWrapper { background: rgba(0, 0, 0, 0.15); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.03); overflow-x: auto; box-sizing: border-box; width: 100%;}
 
-.toggleBtn:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #f8fafc;
-}
+.table { width: 100%; border-collapse: collapse; }
+.table th { background: rgba(0, 0, 0, 0.25); color: #94a3b8; text-transform: uppercase; font-size: 0.75em; font-weight: 700; letter-spacing: 1px; padding: 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); text-align: center; }
+.table th.textLeft { text-align: left; }
+.row { border-bottom: 1px solid rgba(255, 255, 255, 0.03); transition: background 0.15s; }
+.row:hover { background: rgba(255, 255, 255, 0.01); }
 
-.toggleBtn.active {
-    background: #eebf1c;
-    color: #0b0e14;
-    border-color: #eebf1c;
-    box-shadow: 0 0 15px rgba(238, 191, 28, 0.3);
-}
+.rankNum { padding: 16px; font-weight: 800; color: #64748b; text-align: left; width: 50px; }
+.managerNameCell { color: #f8fafc; font-weight: 700; text-align: left; }
+.managerCellLayout { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+.tableAvatar { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid #475569; object-fit: cover; background: #111; }
+.managerIdentityStack { display: flex; flex-direction: column; }
+.tableTeamName { color: #f8fafc; font-weight: 700; font-size: 0.9em; line-height: 1.2; }
+.tableHandle { color: #64748b; font-size: 0.75em; font-weight: 500; font-style: italic; margin-top: 1px; }
 
-.limitDropdown {
-    padding: 12px 24px;
-    background: #1e2530;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #f8fafc;
-    border-radius: 8px;
-    font-weight: 700;
-    font-size: 0.9em;
-    outline: none;
-    cursor: pointer;
-    transition: border-color 0.2s;
-}
+.statNum { color: #cbd5e1; font-weight: 600; text-align: center; padding: 14px; }
+.pctCol { color: #00ceb8; font-weight: 800; }
+.goldText { color: #eebf1c; font-weight: 700; }
 
-.limitDropdown:focus {
-    border-color: #eebf1c;
-}
+.recordsGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 25px; box-sizing: border-box; width: 100%;}
+.extremesGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 25px; box-sizing: border-box; width: 100%;}
 
-.sectionBlock {
-    margin-bottom: 50px;
-    box-sizing: border-box;
-    width: 100%;
-}
+.recordCard { background: #1e2530; border-radius: 12px; padding: 20px; border: 1px solid rgba(255, 255, 255, 0.05); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); box-sizing: border-box;}
+.cardHeader { color: #eebf1c; font-size: 1.05em; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 20px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding-bottom: 10px; font-weight: 700; display: flex; justify-content: space-between; align-items: flex-end; }
+.subHeaderLabel { font-size: 0.65em; color: #64748b; font-style: italic; text-transform: none; letter-spacing: 0.5px; }
 
-.extremesSectionWrapper {
-    margin-top: 50px;
-    width: 100%;
-    box-sizing: border-box;
-}
+.listContainer { display: flex; flex-direction: column; gap: 12px; width: 100%; box-sizing: border-box;}
+.recordRowItem, .extremeRowItem { display: flex; align-items: center; background: rgba(0, 0, 0, 0.18); padding: 12px 16px; border-radius: 8px; position: relative; box-sizing: border-box; min-height: 60px; width: 100%; }
 
-.sectionHeading {
-    color: #f8fafc;
-    font-size: 1.4em;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 25px;
-}
+.rowPlacement { font-size: 0.9em; font-weight: 900; color: #64748b; width: 32px; flex-shrink: 0; text-align: left; }
+.textGroup { display: flex; flex-direction: column; overflow: hidden; flex-grow: 1; padding-right: 90px; }
+.metaLabel { color: #64748b; font-size: 0.7em; font-weight: 800; text-transform: uppercase; margin-bottom: 2px; }
+.holderTitle { color: #cbd5e1; font-size: 0.9em; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scoreMetric { position: absolute; right: 16px; color: #00ceb8; font-weight: 800; font-size: 1.1em; display: flex; align-items: center; gap: 6px; }
 
-.seasonLeaderboardsGrid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(550px, 1fr));
-    gap: 30px;
-}
-
-.tableCardFull {
-    background: #1e2530;
-    border-radius: 12px;
-    padding: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-    box-sizing: border-box;
-}
-
-.tableWrapper {
-    background: rgba(0, 0, 0, 0.15);
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.03);
-    overflow-x: auto;
-    box-sizing: border-box;
-    width: 100%;
-}
-
-.table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.table th {
-    background: rgba(0, 0, 0, 0.25);
-    color: #94a3b8;
-    text-transform: uppercase;
-    font-size: 0.75em;
-    font-weight: 700;
-    letter-spacing: 1px;
-    padding: 14px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    text-align: center;
-}
-
-.table th.textLeft {
-    text-align: left;
-}
-
-.row {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-    transition: background 0.15s;
-}
-
-.row:hover {
-    background: rgba(255, 255, 255, 0.01);
-}
-
-.rankNum {
-    padding: 16px;
-    font-weight: 800;
-    color: #64748b;
-    text-align: left;
-    width: 50px;
-}
-
-.managerNameCell {
-    color: #f8fafc;
-    font-weight: 700;
-    text-align: left;
-}
-
-.managerCellLayout {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 8px 0;
-}
-
-.tableAvatar {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    border: 1.5px solid #475569;
-    object-fit: cover;
-    background: #111;
-}
-
-.managerIdentityStack {
-    display: flex;
-    flex-direction: column;
-}
-
-.tableTeamName {
-    color: #f8fafc;
-    font-weight: 700;
-    font-size: 0.9em;
-    line-height: 1.2;
-}
-
-.tableHandle {
-    color: #64748b;
-    font-size: 0.75em;
-    font-weight: 500;
-    font-style: italic;
-    margin-top: 1px;
-}
-
-.statNum {
-    color: #cbd5e1;
-    font-weight: 600;
-    text-align: center;
-    padding: 14px;
-}
-
-.pctCol {
-    color: #00ceb8;
-    font-weight: 800;
-}
-
-.goldText {
-    color: #eebf1c;
-    font-weight: 700;
-}
-
-.recordsGrid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
-    gap: 25px;
-    box-sizing: border-box;
-    width: 100%;
-}
-
-.extremesGrid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
-    gap: 25px;
-    box-sizing: border-box;
-    width: 100%;
-}
-
-.recordCard {
-    background: #1e2530;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 12px;
-    padding: 20px;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-    box-sizing: border-box;
-}
-
-.cardHeader {
-    color: #eebf1c;
-    font-size: 1.05em;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin: 0 0 20px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    padding-bottom: 10px;
-    font-weight: 700;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-}
-
-.subHeaderLabel {
-    font-size: 0.65em;
-    color: #64748b;
-    font-style: italic;
-    text-transform: none;
-    letter-spacing: 0.5px;
-}
-
-.listContainer {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    width: 100%;
-    box-sizing: border-box;
-}
-
-.recordRowItem, .extremeRowItem {
-    display: flex;
-    align-items: center;
-    background: rgba(0, 0, 0, 0.18);
-    padding: 12px 16px;
-    border-radius: 8px;
-    position: relative;
-    box-sizing: border-box;
-    min-height: 60px;
-    width: 100%;
-}
-
-.rowPlacement {
-    font-size: 0.9em;
-    font-weight: 900;
-    color: #64748b;
-    width: 32px;
-    flex-shrink: 0;
-    text-align: left;
-}
-
-.textGroup {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    flex-grow: 1;
-    padding-right: 90px;
-}
-
-.metaLabel {
-    color: #64748b;
-    font-size: 0.7em;
-    font-weight: 800;
-    text-transform: uppercase;
-    margin-bottom: 2px;
-}
-
-.holderTitle {
-    color: #cbd5e1;
-    font-size: 0.9em;
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.scoreMetric {
-    position: absolute;
-    right: 16px;
-    color: #00ceb8;
-    font-weight: 800;
-    font-size: 1.1em;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.extremeMeta {
-    color: #64748b;
-    font-size: 0.7em;
-    font-weight: 800;
-    text-transform: uppercase;
-    margin-bottom: 4px;
-}
-
-.matchupDetails {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.88em;
-    flex-wrap: wrap;
-    line-height: 1.2;
-}
-
+.extremeMeta { color: #64748b; font-size: 0.7em; font-weight: 800; text-transform: uppercase; margin-bottom: 4px; }
+.matchupDetails { display: flex; align-items: center; gap: 6px; font-size: 0.88em; flex-wrap: wrap; line-height: 1.2; }
 .winnerName { color: #f8fafc; font-weight: 700; }
 .vsText { color: #64748b; font-style: italic; font-size: 0.8em; }
 .loserName { color: #94a3b8; font-weight: 500; }
 
-.diffValue {
-    position: absolute;
-    right: 16px;
-    color: #ef4444;
-    font-weight: 900;
-    font-size: 1.15em;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.tieBadge {
-    background: rgba(238, 191, 28, 0.12);
-    color: #eebf1c;
-    font-size: 0.55em;
-    padding: 3px 6px;
-    border-radius: 4px;
-    font-weight: 900;
-    border: 1px solid rgba(238, 191, 28, 0.25);
-    line-height: 1;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-left: 5px;
-    display: inline-block;
-    vertical-align: middle;
-}
+.diffValue { position: absolute; right: 16px; color: #ef4444; font-weight: 900; font-size: 1.15em; display: flex; align-items: center; gap: 6px; }
+.tieBadge { background: rgba(238, 191, 28, 0.12); color: #eebf1c; font-size: 0.55em; padding: 3px 6px; border-radius: 4px; font-weight: 900; border: 1px solid rgba(238, 191, 28, 0.25); line-height: 1; text-transform: uppercase; letter-spacing: 0.5px; margin-left: 5px; display: inline-block; vertical-align: middle; }
 
 @media (max-width: 1100px) {
-    .container {
-        padding: 15px 10px; /* Centers cards inside view bounding box borders */
-    }
+    .container { padding: 15px 10px; }
     
     .seasonLeaderboardsGrid, .extremesGrid, .recordsGrid {
         grid-template-columns: 1fr;
@@ -408,43 +86,66 @@
     .statNum { padding: 6px 2px; }
     .rankNum { width: 20px; padding: 6px 2px; }
     
-    /* Forces single line inline layout structure for milestones */
-    .recordRowItem, .extremeRowItem {
+    /* Milestones single line alignment */
+    .recordRowItem {
         display: flex;
         flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        align-items: center;
-        justify-content: space-between;
-        padding: 10px 12px;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding: 10px 12px !important;
+        gap: 5px !important;
         min-height: auto;
-        gap: 10px;
     }
     
     .textGroup { 
-        padding-right: 0; 
-        width: 65%;
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        gap: 6px;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 8px !important;
+        width: auto !important;
+        padding: 0 !important;
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
     }
 
     .metaLabel {
-        margin-bottom: 0;
-        font-size: 0.65em;
-        white-space: nowrap;
+        margin: 0 !important;
+        font-size: 0.7em !important;
     }
 
     .holderTitle {
-        font-size: 0.75em;
+        font-size: 0.8em !important;
+        text-overflow: ellipsis;
+        overflow: hidden;
     }
     
-    .scoreMetric, .diffValue {
-        position: static; 
-        width: auto; 
-        text-align: right; 
-        justify-content: flex-end; 
-        font-size: 0.85em; 
-        margin-top: 0;
+    .scoreMetric {
+        position: static !important; 
+        font-size: 0.9em !important; 
+    }
+
+    /* Extremes single line alignment */
+    .extremeRowItem {
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        padding: 10px !important;
+        min-height: auto;
+    }
+
+    .extremeMeta {
+        margin: 0 !important;
+        font-size: 0.65em !important;
+    }
+
+    .matchupDetails {
+        flex-direction: row !important;
+        font-size: 0.7em !important;
+        gap: 4px !important;
+    }
+
+    .diffValue {
+        position: static !important;
+        font-size: 0.9em !important;
     }
 }

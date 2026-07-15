@@ -34,8 +34,8 @@ export default function Layout() {
             <ChatDrawer />
             
             <main className="layout-main" style={{ 
-                paddingTop: isMobile ? '115px' : '0', 
-                paddingBottom: isMobile ? '70px' : '0',
+                paddingTop: isMobile ? '130px' : '0', 
+                paddingBottom: isMobile ? '60px' : '0',
                 boxSizing: 'border-box', 
                 overflowX: 'hidden', 
                 width: '100%', 

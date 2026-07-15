@@ -26,15 +26,13 @@
 .vsBadge { position: absolute; right: auto; left: 50%; transform: translate(-50%, -50%); top: 50%; background: #111; border: 1px solid #eebf1c; color: #eebf1c; padding: 5px 10px; border-radius: 8px; font-weight: 900; font-size: 0.7em; text-align: center; }
 .alignRight { text-align: right; align-items: center; justify-content: flex-end; }
 
-/* ODDS BAR (Shared) */
 .oddsContainer { padding: 15px 20px; background: rgba(0, 0, 0, 0.2); border-top: 1px solid rgba(255, 255, 255, 0.05); }
-.oddsText { display: flex; justify-content: space-between; align-items: center; font-weight: 800; font-size: 0.8em; margin-bottom: 8px; }
-.oddsLabelGreen { color: #00ceb8; }
-.oddsLabelRed { color: #ff2a6d; }
-.oddsBarBg { display: flex; width: 100%; height: 6px; border-radius: 3px; background: #ff2a6d; overflow: hidden; }
-.oddsFillGreen { background: #00ceb8; height: 100%; border-radius: 3px 0 0 3px; }
+.oddsBar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 10px; background: #334155; }
+.oddsGreen { background: #00ceb8; }
+.oddsRed { background: #ff2a6d; }
+.oddsText { display: flex; justify-content: space-between; align-items: center; font-weight: 800; font-size: 0.9em; }
 
-/* STRICT 3-COLUMN CSS GRID FOR PLAYER ROWS (Fixes Desktop & Mobile) */
+/* PLAYER ROWS (Fixes desktop and mobile wrapping) */
 .playerBreakdown { 
     border-top: 1px solid rgba(255,255,255,0.05); padding: 15px; 
     background: rgba(0,0,0,0.15); display: flex; flex-direction: column; gap: 8px; 
@@ -52,16 +50,15 @@
     box-sizing: border-box;
 }
 
-.playerSide {
-    display: flex; align-items: center; justify-content: space-between; width: 100%; overflow: hidden;
-}
+.playerSideLeft { display: flex; align-items: center; justify-content: space-between; width: 100%; overflow: hidden; gap: 5px; }
+.playerSideRight { display: flex; align-items: center; justify-content: space-between; width: 100%; overflow: hidden; gap: 5px; }
 
-.pInfoLeft { display: flex; flex-direction: column; text-align: left; overflow: hidden; }
-.pScoresLeft { display: flex; flex-direction: column; text-align: right; align-items: flex-end; }
-.pInfoRight { display: flex; flex-direction: column; text-align: right; overflow: hidden; }
-.pScoresRight { display: flex; flex-direction: column; text-align: left; align-items: flex-start; }
+.pInfoLeft { display: flex; flex-direction: column; text-align: left; overflow: hidden; flex-grow: 1; }
+.pScoresLeft { display: flex; flex-direction: column; text-align: right; flex-shrink: 0; min-width: 45px;}
+.pInfoRight { display: flex; flex-direction: column; text-align: right; overflow: hidden; flex-grow: 1;}
+.pScoresRight { display: flex; flex-direction: column; text-align: left; flex-shrink: 0; min-width: 45px;}
 
-.pName { color: #f8fafc; font-size: 0.9em; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pName { color: #f8fafc; font-size: 0.85em; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pMeta { color: #64748b; font-size: 0.65em; margin-top: 2px; font-weight: 600; }
 .pScore { color: #f8fafc; font-weight: 800; font-size: 0.9em; }
 .pProj { color: #64748b; font-size: 0.65em; font-weight: 600; }
@@ -70,49 +67,55 @@
 .posBadge { padding: 4px 0; border-radius: 6px; font-size: 0.65em; font-weight: 800; box-shadow: 0 2px 5px rgba(0,0,0,0.5); width: 100%; text-align: center; }
 .emptySlot { color: #64748b; font-size: 0.7em; font-style: italic; width: 100%; text-align: center; }
 
-/* MOBILE NATIVE APP OVERRIDES */
+/* MOBILE NATIVE SCOREBOARD OVERRIDES */
 @media (max-width: 1100px) {
-    .desktopScoreboard { display: none; }
+    .desktopScoreboard, .oddsContainer { display: none; }
     
-    .mobileScoreboard { 
-        display: flex; flex-direction: column; padding: 20px 15px 10px; width: 100%; box-sizing: border-box; background: transparent;
-    }
+    .mobileScoreboard { display: flex; flex-direction: column; padding: 20px 15px 10px; width: 100%; box-sizing: border-box; background: transparent; }
     
-    .mTeamsRow { 
-        display: flex; justify-content: space-between; align-items: flex-start; position: relative; margin-bottom: 25px; 
-    }
+    .mGridTop { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 25px; position: relative; }
+    .mProfileLeft, .mProfileRight { display: flex; align-items: center; gap: 10px; width: 45%; }
+    .mProfileRight { justify-content: flex-end; }
     
-    .mTeamBlock { display: flex; flex-direction: column; align-items: center; width: 40%; text-align: center; gap: 8px;}
+    .mAvatar { width: 50px; height: 50px; border-radius: 50%; border: 2px solid #334155; object-fit: cover; }
     
-    .mAvatar { width: 55px; height: 55px; border-radius: 50%; border: 2px solid #334155; object-fit: cover; }
+    .mNameStack { display: flex; flex-direction: column; overflow: hidden; }
+    .mRightAlign { text-align: right; align-items: flex-end; }
     
-    .mTeamNameText { color: #f8fafc; font-weight: 700; font-size: 0.85em; white-space: normal; line-height: 1.2;}
+    .mTeamNameText { color: #f8fafc; font-weight: 800; font-size: 0.8em; white-space: normal; line-height: 1.2; word-wrap: break-word;}
     
-    .mVsBadge { 
-        position: absolute; left: 50%; transform: translateX(-50%); top: 15px; 
-        display: flex; flex-direction: column; align-items: center; 
-        color: #eebf1c; font-weight: 900; font-size: 0.6em; background: #111; 
-        padding: 4px 8px; border: 1px solid #eebf1c; border-radius: 6px; 
-    }
+    .mVsBadge { position: absolute; left: 50%; transform: translate(-50%, -50%); top: 50%; display: flex; flex-direction: column; align-items: center; color: #eebf1c; font-weight: 900; font-size: 0.6em; background: #111; padding: 4px 8px; border: 1px solid #eebf1c; border-radius: 6px; }
     .mVsBadge i { font-size: 14px; margin-top: -2px; }
 
-    .mStatsRow { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 15px;}
+    .mGridBottom { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 15px;}
     
-    .mStatLeft { text-align: left; width: 45%; }
-    .mStatRight { text-align: right; width: 45%; }
+    .mStatBoxLeft { width: 45%; display: flex; flex-direction: column; }
+    .mStatBoxRight { width: 45%; display: flex; flex-direction: column; }
     
-    .mActual { color: #f8fafc; font-size: 1.6em; font-weight: 900; line-height: 1; margin-bottom: 4px; }
-    .mProj { color: #64748b; font-size: 0.7em; font-weight: 600; text-transform: uppercase; }
+    .mOddsLabel { font-size: 0.6em; color: #64748b; font-weight: 800; display: flex; gap: 4px; margin-bottom: 4px; }
+    .mWinPct { color: #00ceb8; font-size: 1.1em; }
+    .mWinPctRed { color: #ff2a6d; font-size: 1.1em; }
+    
+    .mOddsBar { width: 100%; height: 4px; background: #334155; border-radius: 2px; overflow: hidden; display: flex; }
+    .mOddsBarRight { justify-content: flex-end; }
+    .mOddsFillGreen { background: #00ceb8; height: 100%; }
+    .mOddsFillRed { background: #ff2a6d; height: 100%; }
 
-    .oddsContainer { padding: 12px 15px; }
+    .mScoreBoxLeft { width: 25%; text-align: right; display: flex; flex-direction: column; padding-right: 10px; }
+    .mScoreBoxRight { width: 25%; text-align: left; display: flex; flex-direction: column; padding-left: 10px; border-left: 1px solid rgba(255,255,255,0.1); }
+    
+    .mSpacer { width: 1px; }
+
+    .mActual { color: #f8fafc; font-size: 1.5em; font-weight: 900; line-height: 1; margin-bottom: 4px; }
+    .mProj { color: #64748b; font-size: 0.65em; font-weight: 600; text-transform: uppercase; }
 
     .playerRow { 
-        padding: 10px 5px; 
+        padding: 8px 5px; 
         gap: 5px; 
         grid-template-columns: 1fr 35px 1fr; 
     }
     
-    .pName { font-size: 0.75em; max-width: 80px; }
+    .pName { font-size: 0.7em; }
     .pMeta { font-size: 0.55em; }
     .pScore { font-size: 0.8em; }
     .pProj { font-size: 0.55em; }

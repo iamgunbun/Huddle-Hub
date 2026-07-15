@@ -54,10 +54,10 @@
 .historyRow { background: rgba(0, 0, 0, 0.2); border-radius: 8px; padding: 15px 20px; display: flex; align-items: center; justify-content: space-between; transition: transform 0.2s; box-sizing: border-box; }
 .historyRow:hover { transform: translateX(5px); background: rgba(255, 255, 255, 0.02); }
 
-.historyMeta { display: flex; flex-direction: column; gap: 4px; width: 120px; }
+.historyMeta { display: flex; flex-direction: column; gap: 4px; width: 120px; text-align: left; }
 .hYear { color: #f8fafc; font-weight: 800; font-size: 1.1em; }
 .hWeek { color: #cbd5e1; font-size: 0.85em; font-weight: 600; text-transform: uppercase; }
-.hType { color: #64748b; font-size: 0.7em; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
+.hType { color: #64748b; font-size: 0.7em; font-weight: 700; letter-spacing: 0.5px; }
 
 .historyScores { display: flex; align-items: center; gap: 15px; flex-grow: 1; justify-content: flex-end; }
 .hScoreBlock { display: flex; align-items: center; gap: 12px; padding: 8px 15px; border-radius: 8px; }
@@ -78,7 +78,7 @@
     .dropdown { padding: 8px 5px; font-size: 0.75em; }
     .vsBadge { padding: 5px 10px; font-size: 0.9em; }
     
-    /* Reverted to 1-column stack to prevent screen cutoff */
+    /* REVERTED TO STACKED 1 COLUMN */
     .historyList {
         display: flex;
         flex-direction: column;
@@ -100,6 +100,7 @@
         width: 100%;
         flex-direction: row;
         justify-content: space-between;
+        align-items: center;
         margin-bottom: 12px;
         border-bottom: 1px solid rgba(255,255,255,0.05);
         padding-bottom: 5px;

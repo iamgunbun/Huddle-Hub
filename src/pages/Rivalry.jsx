@@ -9,12 +9,10 @@ export default function Rivalry() {
     const { activeLeague } = useLeague();
     const [loading, setLoading] = useState(true);
     
-    // Data State
     const [recordsData, setRecordsData] = useState(null);
     const [teamManagersData, setTeamManagersData] = useState(null);
     const [managersList, setManagersList] = useState([]);
 
-    // Selection State
     const [managerA, setManagerA] = useState('');
     const [managerB, setManagerB] = useState('');
 
@@ -40,7 +38,6 @@ export default function Rivalry() {
                 setRecordsData(rData);
                 setTeamManagersData(tmData);
 
-                // Populate current managers list for the dropdowns
                 const currentSeason = tmData.currentSeason;
                 const activeRosters = tmData.teamManagersMap[currentSeason] || {};
 
@@ -54,7 +51,6 @@ export default function Rivalry() {
                 
                 setManagersList(mList);
 
-                // Find logged-in user's team to auto-select them as Manager A
                 let myManagerId = null;
                 const { data: sessionData } = await supabase.auth.getSession();
                 
@@ -69,12 +65,10 @@ export default function Rivalry() {
                     const searchName = normalizeStr(ulData?.team_name);
                     
                     if (searchName && searchName !== normalizeStr('commissioner team')) {
-                        // Check team name match
                         const matchedManager = mList.find(m => normalizeStr(m.teamName) === searchName);
                         if (matchedManager) {
                             myManagerId = matchedManager.managerId;
                         } else {
-                            // Check Sleeper username match just in case
                             const matchedByDisplay = mList.find(m => {
                                 const sUser = tmData.users[m.managerId];
                                 return normalizeStr(sUser?.display_name) === searchName || normalizeStr(sUser?.username) === searchName;
@@ -84,7 +78,6 @@ export default function Rivalry() {
                     }
                 }
 
-                // Auto-select teams
                 if (mList.length > 1) {
                     if (myManagerId) {
                         setManagerA(myManagerId);
@@ -106,13 +99,12 @@ export default function Rivalry() {
         load();
     }, [activeLeague]);
 
-    // Process all historical matches between Manager A and Manager B
     const rivalryStats = useMemo(() => {
         if (!managerA || !managerB || !recordsData || !teamManagersData) return null;
 
         const allMatches = [
-            ...(recordsData.regularSeasonData?.allTimeMatchupDifferentials || []).map(m => ({ ...m, type: 'Regular Season' })),
-            ...(recordsData.playoffData?.allTimeMatchupDifferentials || []).map(m => ({ ...m, type: 'Playoffs' }))
+            ...(recordsData.regularSeasonData?.allTimeMatchupDifferentials || []).map(m => ({ ...m, type: 'REG SEASON' })),
+            ...(recordsData.playoffData?.allTimeMatchupDifferentials || []).map(m => ({ ...m, type: 'PLAYOFFS' }))
         ];
 
         const history = [];
@@ -164,10 +156,8 @@ export default function Rivalry() {
             }
         });
 
-        // Sort history newest to oldest
         history.sort((a, b) => {
             if (a.year !== b.year) return b.year - a.year;
-            // Parse weeks safely, pushing strings (like 'Finals') appropriately
             const weekA = parseInt(a.week) || 99;
             const weekB = parseInt(b.week) || 99;
             return weekB - weekA;
@@ -231,8 +221,6 @@ export default function Rivalry() {
                 </div>
             ) : (
                 <div className={styles.contentGrid}>
-                    
-                    {/* Left Column: Top Level Stats */}
                     <div className={styles.statsColumn}>
                         
                         <div className={styles.statCard}>
@@ -244,18 +232,14 @@ export default function Rivalry() {
                                         {rivalryStats.winsA}
                                     </div>
                                 </div>
-                                
                                 <div className={styles.recordDivider}>-</div>
-                                
                                 <div className={styles.recordCol}>
                                     <span className={styles.recordLabel}>L</span>
                                     <div className={`${styles.recordSide} ${rivalryStats.winsB > rivalryStats.winsA ? styles.winner : ''}`}>
                                         {rivalryStats.winsB}
                                     </div>
                                 </div>
-                                
                                 <div className={styles.recordDivider}>-</div>
-                                
                                 <div className={styles.recordCol}>
                                     <span className={styles.recordLabel}>T</span>
                                     <div className={styles.recordSide} style={{ color: '#64748b' }}>
@@ -263,7 +247,6 @@ export default function Rivalry() {
                                     </div>
                                 </div>
                             </div>
-                            
                             <div className={styles.barContainer}>
                                 <div className={styles.barFillA} style={{ width: `${winPctA}%` }}></div>
                                 <div className={styles.barFillB} style={{ width: `${winPctB}%` }}></div>
@@ -308,13 +291,11 @@ export default function Rivalry() {
                         )}
                     </div>
 
-                    {/* Right Column: Historical Logs */}
                     <div className={styles.historyColumn}>
                         <h3 className={styles.historyHeader}>Match History ({totalGames} Games)</h3>
                         <div className={styles.historyList}>
                             {rivalryStats.history.map((match, idx) => (
                                 <div key={idx} className={styles.historyRow}>
-                                    
                                     <div className={styles.historyMeta}>
                                         <span className={styles.hYear}>{match.year}</span>
                                         <span className={styles.hWeek}>Week {match.week}</span>

@@ -46,7 +46,7 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
         <div className={`${styles.matchupCard} ${isExpanded ? styles.expanded : ''}`}>
             <div className={styles.scoreboardWrapper} onClick={() => setIsExpanded(!isExpanded)}>
                 
-                {/* 1. DESKTOP SCOREBOARD */}
+                {/* 1. DESKTOP LAYOUT */}
                 <div className={styles.desktopScoreboard}>
                     <div className={styles.teamHeader}>
                         <div className={styles.teamIdentity}>
@@ -78,51 +78,65 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                     </div>
                 </div>
 
-                {/* 2. MOBILE NATIVE APP SCOREBOARD */}
+                {/* 2. MOBILE NATIVE APP LAYOUT */}
                 <div className={styles.mobileScoreboard}>
-                    <div className={styles.mTeamsRow}>
-                        <div className={styles.mTeamBlock}>
+                    <div className={styles.mGridTop}>
+                        <div className={styles.mProfileLeft}>
                             <img src={metaA.avatar} className={styles.mAvatar} alt="A" />
-                            <span className={styles.mTeamNameText}>{metaA.name}</span>
+                            <div className={styles.mNameStack}>
+                                <span className={styles.mTeamNameText}>{metaA.name}</span>
+                            </div>
                         </div>
-                        
+
                         <div className={styles.mVsBadge}>
                             VS
                             <i className="material-icons">{isExpanded ? 'expand_less' : 'expand_more'}</i>
                         </div>
-                        
-                        <div className={`${styles.mTeamBlock} ${styles.mRightAlign}`}>
+
+                        <div className={styles.mProfileRight}>
+                            <div className={`${styles.mNameStack} ${styles.mRightAlign}`}>
+                                <span className={styles.mTeamNameText}>{metaB.name}</span>
+                            </div>
                             <img src={metaB.avatar} className={styles.mAvatar} alt="B" />
-                            <span className={styles.mTeamNameText}>{metaB.name}</span>
                         </div>
                     </div>
 
-                    <div className={styles.mStatsRow}>
-                        <div className={styles.mStatLeft}>
+                    <div className={styles.mGridBottom}>
+                        <div className={styles.mStatBoxLeft}>
+                            <div className={styles.mOddsLabel}><span className={styles.mWinPct}>{oddsA}%</span> WIN</div>
+                            <div className={styles.mOddsBar}><div className={styles.mOddsFillGreen} style={{width: `${oddsA}%`}}></div></div>
+                        </div>
+                        <div className={styles.mScoreBoxLeft}>
                             <div className={styles.mActual}>{scoreA > 0 ? scoreA.toFixed(2) : '-'}</div>
                             <div className={styles.mProj}>Proj: {projA.toFixed(2)}</div>
                         </div>
-                        
-                        <div className={styles.mStatRight}>
+
+                        <div className={styles.mSpacer}></div>
+
+                        <div className={styles.mScoreBoxRight}>
                             <div className={styles.mActual}>{scoreB > 0 ? scoreB.toFixed(2) : '-'}</div>
                             <div className={styles.mProj}>Proj: {projB.toFixed(2)}</div>
+                        </div>
+                        <div className={styles.mStatBoxRight}>
+                            <div className={`${styles.mOddsLabel} ${styles.mRightAlign}`}><span className={styles.mWinPctRed}>{oddsB}%</span> WIN</div>
+                            <div className={`${styles.mOddsBar} ${styles.mOddsBarRight}`}><div className={styles.mOddsFillRed} style={{width: `${oddsB}%`}}></div></div>
                         </div>
                     </div>
                 </div>
 
-                {/* Shared Odds Bar */}
                 <div className={styles.oddsContainer}>
-                    <div className={styles.oddsText}>
-                        <span className={styles.oddsLabelGreen}>{oddsA}% WIN</span>
-                        <span className={styles.oddsLabelRed}>{oddsB}% WIN</span>
+                    <div className={styles.oddsBar}>
+                        <div className={styles.oddsGreen} style={{ width: `${oddsA}%` }}></div>
+                        <div className={styles.oddsRed} style={{ width: `${oddsB}%` }}></div>
                     </div>
-                    <div className={styles.oddsBarBg}>
-                        <div className={styles.oddsFillGreen} style={{ width: `${oddsA}%` }}></div>
+                    <div className={styles.oddsText}>
+                        <span style={{ color: '#00ceb8' }}>{oddsA}%</span>
+                        <span style={{ color: '#94a3b8', fontSize: '0.85em', textTransform: 'uppercase', fontWeight: '600' }}>Win Probability</span>
+                        <span style={{ color: '#ff2a6d' }}>{oddsB}%</span>
                     </div>
                 </div>
             </div>
 
-            {/* Expanded Rosters - Perfectly Centered CSS Grid */}
             {isExpanded && (
                 <div className={styles.playerBreakdown}>
                     {startersA.map((playerIdA, idx) => {
@@ -138,8 +152,7 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
 
                         return (
                             <div key={idx} className={styles.playerRow}>
-                                {/* LEFT SIDE: Team A */}
-                                <div className={styles.playerSide}>
+                                <div className={styles.playerSideLeft}>
                                     {playerA ? (
                                         <>
                                             <div className={styles.pInfoLeft}>
@@ -154,15 +167,13 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                                     ) : <div className={styles.emptySlot}>Empty</div>}
                                 </div>
                                 
-                                {/* CENTER: Position Badge */}
                                 <div className={styles.posBadgeWrapper}>
                                     <div className={styles.posBadge} style={getPositionStyle(slotName, playerA, playerB)}>
                                         {slotName.replace('WRRB_FLEX', 'FLEX').replace('SUPER_FLEX', 'S/FLEX')}
                                     </div>
                                 </div>
                                 
-                                {/* RIGHT SIDE: Team B */}
-                                <div className={`${styles.playerSide} ${styles.rightSide}`}>
+                                <div className={styles.playerSideRight}>
                                     {playerB ? (
                                         <>
                                             <div className={styles.pScoresRight}>

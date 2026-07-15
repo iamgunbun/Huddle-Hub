@@ -1,281 +1,53 @@
-.container {
-    padding: 20px;
-    max-width: 1750px;
-    margin: 0 auto;
-    font-family: 'Montserrat', sans-serif;
-}
+.container { padding: 20px; max-width: 1750px; margin: 0 auto; font-family: 'Montserrat', sans-serif; box-sizing: border-box; }
 
-.loading {
-    text-align: center;
-    color: #eebf1c;
-    font-size: 1.2em;
-    font-weight: bold;
-    text-transform: uppercase;
-    margin-top: 100px;
-    letter-spacing: 2px;
-}
+.loading { text-align: center; color: #eebf1c; font-size: 1.2em; font-weight: bold; text-transform: uppercase; margin-top: 100px; letter-spacing: 2px; }
+.headerControls { display: flex; flex-direction: column; align-items: center; gap: 15px; margin-bottom: 40px; }
+.headerTitle { color: #f8fafc; text-transform: uppercase; font-size: 2em; letter-spacing: 2px; margin-bottom: 30px; font-weight: 500; text-align: center; }
 
-.headerControls {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 15px;
-    margin-bottom: 40px;
-}
-
-.headerTitle {
-    color: #f8fafc; 
-    text-transform: uppercase; 
-    font-size: 2em; 
-    letter-spacing: 2px; 
-    margin-bottom: 30px; 
-    font-weight: 500; 
-    text-align: center;
-}
-
+/* FIX DRAFT DROPDOWN WIDE OVERFLOW */
 .dropdown {
-    padding: 12px 30px;
-    background: #1e2530;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #f8fafc;
-    border-radius: 8px;
-    font-weight: 700;
-    font-size: 0.95em;
-    cursor: pointer;
-    min-width: 200px;
-    outline: none;
+    padding: 12px 30px; background: #1e2530; border: 1px solid rgba(255, 255, 255, 0.1); color: #f8fafc;
+    border-radius: 8px; font-weight: 700; font-size: 0.95em; cursor: pointer;
+    min-width: 0; width: 100%; max-width: 100%; box-sizing: border-box; outline: none;
 }
+.dropdown:focus { border-color: #eebf1c; }
 
-.dropdown:focus {
-    border-color: #eebf1c;
-}
+.draftSection { margin-bottom: 60px; }
+.sectionHeader { color: #f8fafc; font-size: 1.5em; margin-bottom: 20px; border-bottom: 2px solid #eebf1c; padding-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
 
-.draftSection {
-    margin-bottom: 60px;
-}
+.boardWrapper { background: rgba(11, 14, 20, 0.5); border-radius: 12px; padding: 20px 20px 5px 20px; border: 1px solid rgba(255, 255, 255, 0.05); overflow-x: auto; }
+.rowLayout { display: flex; flex-wrap: nowrap; gap: 12px; margin-bottom: 15px; width: max-content; align-items: stretch; }
+.roundLabelPlaceholder, .roundLabel { width: 45px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #eebf1c; font-size: 1.2em; }
+.headerCard { width: 165px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); box-sizing: border-box; }
+.ownerAvatar { width: 45px; height: 45px; border-radius: 50%; object-fit: cover; border: 2px solid #334155; background: #111; }
+.ownerName { font-size: 0.8em; font-weight: 700; color: #94a3b8; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
 
-.sectionHeader {
-    color: #f8fafc;
-    font-size: 1.5em;
-    margin-bottom: 20px;
-    border-bottom: 2px solid #eebf1c;
-    padding-bottom: 10px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
+.pickCard, .emptyPick { width: 165px; min-height: 80px; height: auto; flex-shrink: 0; border-radius: 6px; box-sizing: border-box; }
+.pickCard { background: #1e2530; padding: 10px; border-left: 4px solid #64748b; display: flex; flex-direction: column; justify-content: flex-start; transition: transform 0.1s; }
+.emptyPick { background: rgba(30, 37, 48, 0.3); }
+.pickCard:hover { transform: translateY(-2px); background: #252e3d; }
+.pickHeader { font-size: 0.65em; color: #94a3b8; font-weight: 800; margin-bottom: 4px; letter-spacing: 0.5px; }
 
-.boardWrapper {
-    background: rgba(11, 14, 20, 0.5);
-    border-radius: 12px;
-    padding: 20px 20px 5px 20px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    overflow-x: auto;
-}
-
-.rowLayout {
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 12px;
-    margin-bottom: 15px;
-    width: max-content;
-    align-items: stretch;
-}
-
-.roundLabelPlaceholder, .roundLabel {
-    width: 45px;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 900;
-    color: #eebf1c;
-    font-size: 1.2em;
-}
-
-.headerCard {
-    width: 165px;
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    box-sizing: border-box;
-}
-
-.ownerAvatar {
-    width: 45px;
-    height: 45px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 2px solid #334155;
-    background: #111;
-}
-
-.ownerName {
-    font-size: 0.8em;
-    font-weight: 700;
-    color: #94a3b8;
-    text-align: center;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    width: 100%;
-}
-
-.pickCard, .emptyPick {
-    width: 165px;
-    min-height: 80px;
-    height: auto;
-    flex-shrink: 0;
-    border-radius: 6px;
-    box-sizing: border-box;
-}
-
-.pickCard {
-    background: #1e2530;
-    padding: 10px;
-    border-left: 4px solid #64748b;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    transition: transform 0.1s;
-}
-
-.emptyPick {
-    background: rgba(30, 37, 48, 0.3);
-}
-
-.pickCard:hover {
-    transform: translateY(-2px);
-    background: #252e3d;
-}
-
-.pickHeader {
-    font-size: 0.65em;
-    color: #94a3b8;
-    font-weight: 800;
-    margin-bottom: 4px;
-    letter-spacing: 0.5px;
-}
-
-.pInfo {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-}
-
-.pIcon {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background-size: cover;
-    background-position: center;
-    background-color: #111;
-    flex-shrink: 0;
-}
-
-.pText {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-}
-
-.pName {
-    color: #f8fafc;
-    font-weight: 700;
-    font-size: 0.85em;
-    white-space: normal;
-    line-height: 1.1;
-    width: 100%;
-}
-
-.pMeta {
-    color: #94a3b8;
-    font-size: 0.7em;
-    margin-top: 2px;
-}
-
-.tradeTag {
-    font-size: 0.6em;
-    color: #f59e0b;
-    margin-top: 6px;
-    text-transform: uppercase;
-    font-weight: 800;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
-    padding-top: 4px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: block;
-    width: 100%;
-}
+.pInfo { display: flex; align-items: center; gap: 10px; width: 100%; }
+.pIcon { width: 32px; height: 32px; border-radius: 50%; background-size: cover; background-position: center; background-color: #111; flex-shrink: 0; }
+.pText { display: flex; flex-direction: column; flex: 1; }
+.pName { color: #f8fafc; font-weight: 700; font-size: 0.85em; white-space: normal; line-height: 1.1; width: 100%; }
+.pMeta { color: #94a3b8; font-size: 0.7em; margin-top: 2px; }
+.tradeTag { font-size: 0.6em; color: #f59e0b; margin-top: 6px; text-transform: uppercase; font-weight: 800; border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; width: 100%; }
 
 @media (max-width: 1100px) {
-    .container {
-        padding: 10px;
-    }
-    
-    .boardWrapper {
-        padding: 10px 5px;
-    }
-    
-    .rowLayout {
-        gap: 6px;
-        margin-bottom: 8px;
-    }
-
-    .roundLabelPlaceholder, .roundLabel {
-        width: 30px;
-        font-size: 0.9em;
-    }
-
-    .headerCard {
-        width: 105px;
-        gap: 4px;
-    }
-
-    .ownerAvatar {
-        width: 30px;
-        height: 30px;
-    }
-
-    .ownerName {
-        font-size: 0.65em;
-    }
-
-    .pickCard, .emptyPick {
-        width: 105px;
-        min-height: 65px;
-        padding: 6px;
-    }
-
-    .pickHeader {
-        font-size: 0.55em;
-        margin-bottom: 2px;
-    }
-
-    .pInfo {
-        gap: 5px;
-    }
-
-    .pIcon {
-        width: 22px;
-        height: 22px;
-    }
-
-    .pName {
-        font-size: 0.65em;
-    }
-
-    .pMeta {
-        font-size: 0.55em;
-    }
-
-    .tradeTag {
-        font-size: 0.5em;
-        margin-top: 4px;
-    }
+    .container { padding: 10px; }
+    .boardWrapper { padding: 10px 5px; }
+    .rowLayout { gap: 6px; margin-bottom: 8px; }
+    .roundLabelPlaceholder, .roundLabel { width: 30px; font-size: 0.9em; }
+    .headerCard { width: 105px; gap: 4px; }
+    .ownerAvatar { width: 30px; height: 30px; }
+    .ownerName { font-size: 0.65em; }
+    .pickCard, .emptyPick { width: 105px; min-height: 65px; padding: 6px; }
+    .pickHeader { font-size: 0.55em; margin-bottom: 2px; }
+    .pInfo { gap: 5px; }
+    .pIcon { width: 22px; height: 22px; }
+    .pName { font-size: 0.65em; }
+    .pMeta { font-size: 0.55em; }
+    .tradeTag { font-size: 0.5em; margin-top: 4px; }
 }
