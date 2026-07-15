@@ -10,32 +10,27 @@ export default function ChatDrawer() {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState([]);
     
-    // Message States
     const [newMessage, setNewMessage] = useState('');
     const [uploadingImage, setUploadingImage] = useState(false);
     
-    // Notification State
     const [unreadCount, setUnreadCount] = useState(0);
     const [pushEnabled, setPushEnabled] = useState(Notification.permission === 'granted');
     
-    // User Identity States
     const [currentUser, setCurrentUser] = useState(null);
     const [authorName, setAuthorName] = useState('Unknown Team');
     const [authorAvatar, setAuthorAvatar] = useState('https://sleepercdn.com/images/v2/icons/player_default.webp');
     
-    // Picker Menus
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [showGifPicker, setShowGifPicker] = useState(false);
     const [gifSearch, setGifSearch] = useState('');
     const [gifResults, setGifResults] = useState([]);
     const [isSearchingGif, setIsSearchingGif] = useState(false);
 
-    // Refs for Websocket context & Deduplication
     const messagesEndRef = useRef(null);
     const fileInputRef = useRef(null);
     const isOpenRef = useRef(isOpen);
     const currentUserRef = useRef(null);
-    const processedMessagesRef = useRef(new Set()); // The Memory Bank!
+    const processedMessagesRef = useRef(new Set());
 
     const GIPHY_API_KEY = "Uc7v3mjehbCz4pCMtEgT2ii78xLOyKg9";
 
@@ -100,7 +95,6 @@ export default function ChatDrawer() {
                 
                 if (!error && data) {
                     setMessages(data);
-                    // Add historical messages to memory bank so they don't accidentally trigger notifications
                     data.forEach(msg => processedMessagesRef.current.add(msg.id));
                 }
 
@@ -109,23 +103,16 @@ export default function ChatDrawer() {
                 channel = supabase.channel(uniqueChannelName)
                     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
                         if (payload.new.league_id === activeLeague.id) {
-                            
-                            // 1. THE SHIELD: Instantly kill duplicate payloads from React Strict Mode
                             if (processedMessagesRef.current.has(payload.new.id)) return;
                             processedMessagesRef.current.add(payload.new.id);
                             
-                            // 2. Append message to screen
                             setMessages(prev => [...prev, payload.new]);
 
-                            // 3. Trigger Notifications ONLY if the message isn't from you
                             if (payload.new.user_id !== currentUserRef.current?.id) {
-                                
-                                // Visual App Badge
                                 if (!isOpenRef.current) {
                                     setUnreadCount(prev => prev + 1);
                                 }
 
-                                // System Push Notification
                                 if (Notification.permission === 'granted') {
                                     if (document.visibilityState !== 'visible' || !isOpenRef.current) {
                                         new Notification(payload.new.author_name, {
@@ -244,7 +231,6 @@ export default function ChatDrawer() {
                 <i className="material-icons">{isOpen ? 'close' : 'forum'}</i>
                 {!isOpen && <span className={styles.chatLabel}>League Chat</span>}
                 
-                {/* UNREAD BADGE */}
                 {!isOpen && unreadCount > 0 && (
                     <div className={styles.unreadBadge}>
                         {unreadCount > 99 ? '99+' : unreadCount}
@@ -253,13 +239,19 @@ export default function ChatDrawer() {
             </button>
 
             <div className={`${styles.chatWidget} ${isOpen ? styles.open : ''}`}>
+                <div className={styles.dragHandleWrapper} onClick={() => setIsOpen(false)}>
+                    <div className={styles.dragHandle}></div>
+                </div>
+
                 <div className={styles.header}>
-                    <div>
-                        <h3 className={styles.title}>League Chat</h3>
-                        <div className={styles.subtitle}>{activeLeague?.league_name}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px'}}>
+                        <i className="material-icons" style={{ color: '#f8fafc' }}>shield</i>
+                        <div>
+                            <h3 className={styles.title}>Chat</h3>
+                            <div className={styles.subtitle}>{activeLeague?.league_name}</div>
+                        </div>
                     </div>
                     
-                    {/* NOTIFICATION TOGGLE */}
                     <button 
                         className={styles.notifyBtn} 
                         onClick={requestNotifications} 
@@ -361,7 +353,7 @@ export default function ChatDrawer() {
                         <input 
                             type="text" 
                             className={styles.inputField} 
-                            placeholder={uploadingImage ? "Uploading image..." : "Type a message..."} 
+                            placeholder={uploadingImage ? "Uploading image..." : "Start chatting..."} 
                             value={newMessage}
                             onChange={(e) => setNewMessage(e.target.value)}
                             disabled={uploadingImage}
