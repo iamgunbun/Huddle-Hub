@@ -13,6 +13,7 @@ export default function Home() {
     // UI State
     const [copyLinkText, setCopyLinkText] = useState('Copy Invite Link');
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 1100);
+    const [activeModal, setActiveModal] = useState(null);
     
     // Data State
     const [recentChamp, setRecentChamp] = useState(null);
@@ -26,6 +27,7 @@ export default function Home() {
         
         const fetchHubData = async () => {
             if (!activeLeague?.sleeper_league_id) return;
+
             const sleeperId = activeLeague.sleeper_league_id;
 
             try {
@@ -72,6 +74,7 @@ export default function Home() {
                                     break;
                                 }
                             }
+
                             if (!myManagerId) {
                                 for (const [uId, uData] of Object.entries(managersData.users)) {
                                     if (uData.display_name?.toLowerCase().trim() === searchName || 
@@ -125,6 +128,7 @@ export default function Home() {
                         }
                     }
                 }
+
             } catch (e) {
                 console.error("Dashboard data load failed:", e);
             }
@@ -211,10 +215,10 @@ export default function Home() {
                         {champTeam && (
                             <div className={styles.hubCard} style={{ textAlign: 'center' }}>
                                 <h3 className={styles.cardHeader} style={{ border: 'none', marginBottom: 0 }}>{recentChamp.year} Champion</h3>
-                                <img
-                                    src={champTeam.avatar}
-                                    alt="Champ"
-                                    style={{ width: '80px', height: '80px', borderRadius: '50%', border: '3px solid #eebf1c', margin: '15px auto', display: 'block', objectFit: 'cover' }}
+                                <img 
+                                    src={champTeam.avatar} 
+                                    alt="Champ" 
+                                    style={{ width: '80px', height: '80px', borderRadius: '50%', border: '3px solid #eebf1c', margin: '15px auto', display: 'block', objectFit: 'cover' }} 
                                 />
                                 <div style={{ color: '#eebf1c', fontSize: '1.3em', fontWeight: 800, textTransform: 'uppercase' }}>
                                     {champTeam.name}
@@ -225,41 +229,75 @@ export default function Home() {
                 </div>
             ) : (
                 <div className={styles.mobileLayout}>
+                    {/* Native App Style Pop-Out Actions */}
+                    <div className={styles.mobileActionGrid}>
+                        <button className={styles.mobileActionBtn} onClick={() => setActiveModal('projections')}>
+                            <i className="material-icons">query_stats</i>
+                            Live Projections
+                        </button>
+                        <button className={styles.mobileActionBtn} onClick={() => setActiveModal('hub')}>
+                            <i className="material-icons">info</i>
+                            League Hub
+                        </button>
+                    </div>
+
                     <div className={styles.commishNote}>
                         <h3 className={styles.cardHeader}>Commissioner's Note</h3>
                         <div style={{ color: '#f8fafc', whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
-                            {/* CORRECTED TO COMMISH_NOTE */}
                             {activeLeague.commish_note || 'Welcome to your dynasty hub. The commissioner has not set a message yet.'}
                         </div>
                     </div>
+                    
+                    <Transactions preview={true} />
 
-                    <div className={styles.hubCard}>
-                        <h3 className={styles.cardHeader}>League Hub Info</h3>
-                        <div className={styles.infoRow}>
-                            <span className={styles.infoLabel}>Platform</span>
-                            <span className={styles.infoValue} style={{ textTransform: 'capitalize' }}>{activeLeague.platform || 'Sleeper'}</span>
-                        </div>
-                        <div className={styles.infoRow}>
-                            <span className={styles.infoLabel}>Your Role</span>
-                            <span className={styles.infoValue} style={{ color: '#eebf1c' }}>{leagueRole}</span>
-                        </div>
-                        <div className={styles.infoRow} style={{ marginBottom: '20px' }}>
-                            <span className={styles.infoLabel}>League Tenure</span>
-                            <span className={styles.infoValue}>{leagueTenure}</span>
-                        </div>
-                    </div>
-
-                    {champTeam && (
-                        <div className={styles.hubCard} style={{ textAlign: 'center' }}>
-                            <h3 className={styles.cardHeader} style={{ border: 'none', marginBottom: 0 }}>{recentChamp.year} Champion</h3>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px' }}>
-                                <div style={{ color: '#eebf1c', fontSize: '1.1em', fontWeight: 800, textTransform: 'uppercase' }}>{champTeam.name}</div>
-                                <img src={champTeam.avatar} alt="Champ" style={{ width: '50px', height: '50px', borderRadius: '50%', border: '2px solid #eebf1c', objectFit: 'cover' }} />
+                    {/* Pop Out Modals */}
+                    {activeModal === 'projections' && (
+                        <div className={styles.mobileModal}>
+                            <div className={styles.modalHeader}>
+                                <h2>Projections</h2>
+                                <button onClick={() => setActiveModal(null)}><i className="material-icons">close</i></button>
+                            </div>
+                            <div className={styles.modalContent}>
+                                <ProjectionsPanel />
                             </div>
                         </div>
                     )}
 
-                    <Transactions preview={true} />
+                    {activeModal === 'hub' && (
+                        <div className={styles.mobileModal}>
+                            <div className={styles.modalHeader}>
+                                <h2>League Hub</h2>
+                                <button onClick={() => setActiveModal(null)}><i className="material-icons">close</i></button>
+                            </div>
+                            <div className={styles.modalContent}>
+                                <div className={styles.hubCard}>
+                                    <h3 className={styles.cardHeader}>League Hub Info</h3>
+                                    <div className={styles.infoRow}>
+                                        <span className={styles.infoLabel}>Platform</span>
+                                        <span className={styles.infoValue} style={{ textTransform: 'capitalize' }}>{activeLeague.platform || 'Sleeper'}</span>
+                                    </div>
+                                    <div className={styles.infoRow}>
+                                        <span className={styles.infoLabel}>Your Role</span>
+                                        <span className={styles.infoValue} style={{ color: '#eebf1c' }}>{leagueRole}</span>
+                                    </div>
+                                    <div className={styles.infoRow} style={{ marginBottom: '20px' }}>
+                                        <span className={styles.infoLabel}>League Tenure</span>
+                                        <span className={styles.infoValue}>{leagueTenure}</span>
+                                    </div>
+                                    <button className={styles.fullWidthBtn} onClick={copyInviteLink}>{copyLinkText}</button>
+                                </div>
+                                {champTeam && (
+                                    <div className={styles.hubCard} style={{ textAlign: 'center', marginTop: '20px' }}>
+                                        <h3 className={styles.cardHeader} style={{ border: 'none', marginBottom: 0 }}>{recentChamp.year} Champion</h3>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px' }}>
+                                            <div style={{ color: '#eebf1c', fontSize: '1.2em', fontWeight: 800, textTransform: 'uppercase' }}>{champTeam.name}</div>
+                                            <img src={champTeam.avatar} alt="Champ" style={{ width: '60px', height: '60px', borderRadius: '50%', border: '2px solid #eebf1c', objectFit: 'cover' }} />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

@@ -83,3 +83,70 @@
     gap: 20px;
     padding: 10px;
 }
+
+/* Mobile Actions & Modals */
+.mobileActionGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 10px;
+}
+
+.mobileActionBtn {
+    background: #1e2530;
+    border: 1px solid rgba(238, 191, 28, 0.3);
+    color: #eebf1c;
+    padding: 15px;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    font-weight: 800;
+    text-transform: uppercase;
+    font-size: 0.85em;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.mobileActionBtn i { font-size: 28px; }
+
+.mobileModal {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: #0b0e14;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    animation: slideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+
+.modalHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    background: rgba(11, 14, 20, 0.95);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.modalHeader h2 {
+    margin: 0; color: #f8fafc; text-transform: uppercase; font-size: 1.2em; letter-spacing: 1px;
+}
+
+.modalHeader button {
+    background: none; border: none; color: #94a3b8; cursor: pointer; display: flex;
+}
+
+.modalHeader button i { font-size: 30px; }
+
+.modalContent {
+    padding: 20px;
+    overflow-y: auto;
+    flex-grow: 1;
+}
