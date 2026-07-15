@@ -14,7 +14,6 @@
     letter-spacing: 2px;
 }
 
-/* Header & Dropdown Controls */
 .headerControls {
     display: flex;
     flex-direction: column;
@@ -24,13 +23,13 @@
 }
 
 .headerTitle {
- color: #f8fafc;
-text-transform: uppercase;
-font-size: 2em;
-letter-spacing: 2px;
-margin-bottom: 30px;
-font-weight: 500;
-text-align: center;
+    color: #f8fafc;
+    text-transform: uppercase;
+    font-size: 2em;
+    letter-spacing: 2px;
+    margin-bottom: 30px;
+    font-weight: 500;
+    text-align: center;
 }
 
 .dropdown {
@@ -49,7 +48,6 @@ text-align: center;
     border-color: #eebf1c;
 }
 
-/* Empty States */
 .emptyState {
     text-align: center;
     color: #94a3b8;
@@ -71,7 +69,6 @@ text-align: center;
     font-size: 1em;
 }
 
-/* Table Wrapper & Grid */
 .tableWrapper {
     background: #1e2530;
     border-radius: 12px;
@@ -157,10 +154,19 @@ text-align: center;
     font-weight: 700;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
+    .tableWrapper { 
+        width: 100%; 
+        overflow-x: auto; 
+        -webkit-overflow-scrolling: touch; 
+    }
     .table th, .row td {
         padding: 12px 10px;
         font-size: 0.85em;
+        white-space: nowrap;
     }
-    .avatar { width: 32px; height: 32px; }
+    .avatar { 
+        width: 32px; 
+        height: 32px; 
+    }
 }

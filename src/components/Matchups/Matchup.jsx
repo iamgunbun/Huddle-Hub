@@ -29,7 +29,6 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
     const projectionDifference = projA - projB;
     const varianceScaleKey = 0.045;
     const calculatedOddsA = Math.round(100 / (1 + Math.exp(-varianceScaleKey * projectionDifference)));
-    
     const oddsA = Math.max(1, Math.min(99, calculatedOddsA));
     const oddsB = 100 - oddsA;
 
@@ -87,46 +86,57 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
 
                 {/* 2. MOBILE NATIVE APP LAYOUT */}
                 <div className={styles.mobileScoreboard}>
-                    <div className={styles.mRow1}>
-                        <div className={styles.mTeamBlock}>
+                    <div className={styles.mGridTop}>
+                        {/* Team A Profile */}
+                        <div className={styles.mProfileLeft}>
                             <img src={metaA.avatar} className={styles.mAvatar} alt="A" />
-                            <div className={styles.mOddsCol}>
-                                <div className={styles.mOddsText}><span className={styles.mWinPct}>{oddsA}%</span> WIN</div>
-                                <div className={styles.mOddsBarBg}><div className={styles.mOddsFillGreen} style={{width: `${oddsA}%`}}></div></div>
-                            </div>
-                            <div className={styles.mScoreCol}>
-                                <div className={styles.mActualScore}>{scoreA > 0 ? scoreA.toFixed(2) : '-'}</div>
-                                <div className={styles.mProjScore}>{projA.toFixed(2)}</div>
+                            <div className={styles.mNameStack}>
+                                <span className={styles.mTeamNameText}>{metaA.name}</span>
                             </div>
                         </div>
 
-                        <div className={styles.mVS}>
+                        {/* VS Center */}
+                        <div className={styles.mVsBadge}>
                             VS
-                            <i className="material-icons" style={{ fontSize: '12px', display: 'block', margin: '2px auto 0' }}>
-                                {isExpanded ? 'expand_less' : 'expand_more'}
-                            </i>
+                            <i className="material-icons">{isExpanded ? 'expand_less' : 'expand_more'}</i>
                         </div>
 
-                        <div className={`${styles.mTeamBlock} ${styles.right}`}>
-                            <div className={styles.mScoreCol}>
-                                <div className={styles.mActualScore}>{scoreB > 0 ? scoreB.toFixed(2) : '-'}</div>
-                                <div className={styles.mProjScore}>{projB.toFixed(2)}</div>
-                            </div>
-                            <div className={`${styles.mOddsCol} ${styles.right}`}>
-                                <div className={`${styles.mOddsText} ${styles.right}`}><span className={styles.mWinPctRed}>{oddsB}%</span> WIN</div>
-                                <div className={`${styles.mOddsBarBg} ${styles.right}`}><div className={styles.mOddsFillRed} style={{width: `${oddsB}%`}}></div></div>
+                        {/* Team B Profile */}
+                        <div className={styles.mProfileRight}>
+                            <div className={`${styles.mNameStack} ${styles.mRightAlign}`}>
+                                <span className={styles.mTeamNameText}>{metaB.name}</span>
                             </div>
                             <img src={metaB.avatar} className={styles.mAvatar} alt="B" />
                         </div>
                     </div>
 
-                    <div className={styles.mRow2}>
-                        <div className={styles.mTeamName}>{metaA.name}</div>
-                        <div className={`${styles.mTeamName} ${styles.textRight}`}>{metaB.name}</div>
+                    <div className={styles.mGridBottom}>
+                        {/* Team A Stats */}
+                        <div className={styles.mStatBoxLeft}>
+                            <div className={styles.mOddsLabel}><span className={styles.mWinPct}>{oddsA}%</span> WIN</div>
+                            <div className={styles.mOddsBar}><div className={styles.mOddsFillGreen} style={{width: `${oddsA}%`}}></div></div>
+                        </div>
+                        <div className={styles.mScoreBoxLeft}>
+                            <div className={styles.mActual}>{scoreA > 0 ? scoreA.toFixed(2) : '-'}</div>
+                            <div className={styles.mProj}>Proj: {projA.toFixed(2)}</div>
+                        </div>
+
+                        {/* Spacer */}
+                        <div className={styles.mSpacer}></div>
+
+                        {/* Team B Stats */}
+                        <div className={styles.mScoreBoxRight}>
+                            <div className={styles.mActual}>{scoreB > 0 ? scoreB.toFixed(2) : '-'}</div>
+                            <div className={styles.mProj}>Proj: {projB.toFixed(2)}</div>
+                        </div>
+                        <div className={styles.mStatBoxRight}>
+                            <div className={`${styles.mOddsLabel} ${styles.mRightAlign}`}><span className={styles.mWinPctRed}>{oddsB}%</span> WIN</div>
+                            <div className={`${styles.mOddsBar} ${styles.mOddsBarRight}`}><div className={styles.mOddsFillRed} style={{width: `${oddsB}%`}}></div></div>
+                        </div>
                     </div>
                 </div>
 
-                {/* Odds Bar (Hidden on Mobile) */}
+                {/* Desktop Odds Bar */}
                 <div className={styles.oddsContainer}>
                     <div className={styles.oddsBar}>
                         <div className={styles.oddsGreen} style={{ width: `${oddsA}%` }}></div>
@@ -156,38 +166,41 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
 
                         return (
                             <div key={idx} className={styles.playerRow}>
+                                {/* LEFT SIDE: Team A */}
                                 <div className={styles.playerSide}>
                                     {playerA ? (
                                         <>
-                                            <div className={styles.playerImg} style={{ backgroundImage: `url(${getAvatar(playerIdA, playerA)}), url(https://sleepercdn.com/images/v2/icons/player_default.webp)` }}></div>
-                                            <div className={styles.playerInfo}>
+                                            <div className={styles.pDetailsLeft}>
                                                 <span className={styles.pName}>{playerA.fn} {playerA.ln}</span>
                                                 <span className={styles.pMeta}>{playerA.pos} - {playerA.t}</span>
                                             </div>
-                                            <div className={styles.scoreBlock}>
-                                                <span className={styles.pScore}>{pA_Score.toFixed(2)}</span>
+                                            <div className={styles.pScoresLeft}>
+                                                <span className={styles.pScore}>{pA_Score > 0 ? pA_Score.toFixed(2) : '-'}</span>
                                                 <span className={styles.pProj}>Proj {pA_Proj.toFixed(2)}</span>
                                             </div>
                                         </>
                                     ) : <div className={styles.emptySlot}>Empty Roster Slot</div>}
                                 </div>
                                 
-                                <div className={styles.posBadge} style={getPositionStyle(slotName, playerA, playerB)}>
-                                    {slotName.replace('WRRB_FLEX', 'FLEX').replace('SUPER_FLEX', 'S/FLEX')}
+                                {/* CENTER: Position Badge */}
+                                <div className={styles.posBadgeWrapper}>
+                                    <div className={styles.posBadge} style={getPositionStyle(slotName, playerA, playerB)}>
+                                        {slotName.replace('WRRB_FLEX', 'FLEX').replace('SUPER_FLEX', 'S/FLEX')}
+                                    </div>
                                 </div>
                                 
-                                <div className={`${styles.playerSide} ${styles.rightSide}`}>
+                                {/* RIGHT SIDE: Team B */}
+                                <div className={styles.playerSide}>
                                     {playerB ? (
                                         <>
-                                            <div className={`${styles.scoreBlock} ${styles.alignRight}`}>
-                                                <span className={styles.pScore}>{pB_Score.toFixed(2)}</span>
+                                            <div className={styles.pScoresRight}>
+                                                <span className={styles.pScore}>{pB_Score > 0 ? pB_Score.toFixed(2) : '-'}</span>
                                                 <span className={styles.pProj}>Proj {pB_Proj.toFixed(2)}</span>
                                             </div>
-                                            <div className={`${styles.playerInfo} ${styles.alignRight}`}>
+                                            <div className={styles.pDetailsRight}>
                                                 <span className={styles.pName}>{playerB.fn} {playerB.ln}</span>
                                                 <span className={styles.pMeta}>{playerB.pos} - {playerB.t}</span>
                                             </div>
-                                            <div className={styles.playerImg} style={{ backgroundImage: `url(${getAvatar(playerIdB, playerB)}), url(https://sleepercdn.com/images/v2/icons/player_default.webp)` }}></div>
                                         </>
                                     ) : <div className={styles.emptySlot}>Empty Roster Slot</div>}
                                 </div>

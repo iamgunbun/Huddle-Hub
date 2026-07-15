@@ -16,7 +16,13 @@
 }
 
 .headerTitle {
-    color: #f8fafc; text-transform: uppercase; font-size: 2em; letter-spacing: 2px; margin-bottom: 30px; font-weight: 500; text-align: center;
+    color: #f8fafc;
+    text-transform: uppercase;
+    font-size: 2em;
+    letter-spacing: 2px;
+    margin-bottom: 30px;
+    font-weight: 500;
+    text-align: center;
 }
 
 .controlsRow {
@@ -91,7 +97,6 @@
     margin-bottom: 25px;
 }
 
-/* Dual Column Season Records Layout Wrapper */
 .seasonLeaderboardsGrid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(550px, 1fr));
@@ -106,7 +111,6 @@
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
 }
 
-/* Table Card Layout System */
 .tableWrapper {
     background: rgba(0, 0, 0, 0.15);
     border-radius: 8px;
@@ -158,7 +162,6 @@
     text-align: left;
 }
 
-/* Mixed Identity Complex Table Cells */
 .managerCellLayout {
     display: flex;
     align-items: center;
@@ -212,7 +215,6 @@
     font-weight: 700;
 }
 
-/* Card Leaderboard Grid Layout for Weekly Blocks */
 .recordsGrid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
@@ -261,7 +263,6 @@
     gap: 12px;
 }
 
-/* Metric Alignment Nodes */
 .recordRowItem, .extremeRowItem {
     display: flex;
     align-items: center;
@@ -318,7 +319,6 @@
     gap: 6px;
 }
 
-/* Head to Head Extremes Layout Row Items */
 .extremeMeta {
     color: #64748b;
     font-size: 0.7em;
@@ -363,7 +363,6 @@
     gap: 6px;
 }
 
-/* Tie Status Indicator Tag */
 .tieBadge {
     background: rgba(238, 191, 28, 0.12);
     color: #eebf1c;
@@ -388,37 +387,49 @@
     padding: 20px 0;
 }
 
-/* MOBILE OPTIMIZATIONS FOR RECORDS */
 @media (max-width: 1100px) {
     .seasonLeaderboardsGrid, .extremesGrid, .recordsGrid {
         grid-template-columns: 1fr;
     }
     
-    .controlsRow { flex-direction: column; align-items: stretch; gap: 15px; }
-    .viewToggles { justify-content: center; }
+    .controlsRow { 
+        flex-direction: column; 
+        align-items: stretch; 
+        gap: 15px; 
+    }
     
-    /* Horizontal Scrolling for Tables to prevent crush */
+    .viewToggles { 
+        justify-content: center; 
+    }
+    
+    .tableCardFull { 
+        padding: 15px 10px; 
+    }
+    
     .tableWrapper { 
         width: 100%; 
         overflow-x: auto; 
         -webkit-overflow-scrolling: touch; 
     }
+    
     .table th, .table td { 
         white-space: nowrap; 
         padding: 12px 10px; 
         font-size: 0.85em; 
     }
     
-    /* Prevent cutoffs by making row items flex-wrap properly */
     .recordRowItem, .extremeRowItem {
         flex-direction: row;
         flex-wrap: wrap;
-        padding: 12px;
+        padding: 15px;
         gap: 8px;
         min-height: auto;
     }
     
-    .textGroup { padding-right: 0; width: calc(100% - 50px); }
+    .textGroup { 
+        padding-right: 0; 
+        width: calc(100% - 40px); 
+    }
     
     .scoreMetric, .diffValue {
         position: relative; 
