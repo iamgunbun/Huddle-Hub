@@ -3,17 +3,13 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { tabs } from '../utils/tabs';
 import styles from './MobileTopNav.module.css';
 
-export default function MobileTopNav({ toggleSidebar }) {
+export default function MobileTopNav({ toggleSidebar, activeLeague }) {
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const dropdownRef = useRef(null);
     const location = useLocation();
 
-    // Close dropdown when navigating
-    useEffect(() => {
-        setDropdownOpen(false);
-    }, [location.pathname]);
+    useEffect(() => { setDropdownOpen(false); }, [location.pathname]);
 
-    // Close dropdown if clicking outside of it
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -26,9 +22,13 @@ export default function MobileTopNav({ toggleSidebar }) {
 
     return (
         <div className={styles.mobileNavContainer}>
-            <button className={styles.hamburgerBtn} onClick={toggleSidebar}>
-                <i className="material-icons">menu</i>
-            </button>
+            <div className={styles.topBar}>
+                {activeLeague?.avatar && <img src={activeLeague.avatar} alt="League" className={styles.leagueAvatar} />}
+                <span className={styles.leagueName}>{activeLeague?.league_name || 'Huddle'}</span>
+                <button className={styles.hamburgerBtn} onClick={toggleSidebar}>
+                    <i className="material-icons">menu</i>
+                </button>
+            </div>
             
             <div className={styles.navGrid}>
                 {tabs.filter(tab => tab.key !== 'resources').map((tab) => {
@@ -42,17 +42,11 @@ export default function MobileTopNav({ toggleSidebar }) {
                                     <i className="material-icons">{tab.icon}</i>
                                     <span>{tab.label}</span>
                                 </button>
-                                
                                 {dropdownOpen && (
                                     <div className={styles.dropdownMenu}>
                                         {tab.children.map(child => (
-                                            <NavLink 
-                                                key={child.label} 
-                                                to={child.dest}
-                                                className={({ isActive }) => isActive ? `${styles.dropdownItem} ${styles.activeDropdown}` : styles.dropdownItem}
-                                            >
-                                                <i className="material-icons">{child.icon}</i>
-                                                {child.label}
+                                            <NavLink key={child.label} to={child.dest} className={({ isActive }) => isActive ? `${styles.dropdownItem} ${styles.activeDropdown}` : styles.dropdownItem}>
+                                                <i className="material-icons">{child.icon}</i>{child.label}
                                             </NavLink>
                                         ))}
                                     </div>
@@ -60,15 +54,10 @@ export default function MobileTopNav({ toggleSidebar }) {
                             </div>
                         );
                     }
-                    
                     return (
-                        <NavLink 
-                            key={tab.key} 
-                            to={tab.dest} 
-                            className={({ isActive }) => isActive ? `${styles.navItem} ${styles.active}` : styles.navItem}
-                        >
+                        <NavLink key={tab.key} to={tab.dest} className={({ isActive }) => isActive ? `${styles.navItem} ${styles.active}` : styles.navItem}>
                             <i className="material-icons">{tab.icon}</i>
-                            <span>{tab.label}</span>
+                            <span>{tab.label === 'Trades & Waivers' ? 'Trades' : tab.label}</span>
                         </NavLink>
                     );
                 })}

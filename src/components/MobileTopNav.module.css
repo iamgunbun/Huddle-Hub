@@ -2,38 +2,32 @@
 
 @media (max-width: 1100px) {
     .mobileNavContainer {
-        display: flex;
-        align-items: center;
-        position: fixed;
-        top: 0; left: 0; right: 0;
-        height: 65px;
+        display: flex; flex-direction: column;
+        position: fixed; top: 0; left: 0; right: 0;
         background: #0b0e14;
         border-bottom: 1px solid rgba(238, 191, 28, 0.2);
         z-index: 9000;
-        padding: 0 5px;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
     }
-    .hamburgerBtn {
-        background: none; border: none; color: #f8fafc;
-        padding: 10px; cursor: pointer; display: flex; align-items: center;
+    .topBar {
+        display: flex; align-items: center; padding: 10px 15px; border-bottom: 1px solid rgba(255,255,255,0.05);
     }
-    .navGrid {
-        display: flex; flex-grow: 1; justify-content: space-around;
-        height: 100%;
-    }
+    .leagueAvatar { width: 30px; height: 30px; border-radius: 50%; margin-right: 10px; }
+    .leagueName { color: #f8fafc; font-weight: 800; font-size: 0.9em; flex-grow: 1; }
+    .hamburgerBtn { background: none; border: none; color: #f8fafc; cursor: pointer; display: flex; }
+
+    .navGrid { display: flex; justify-content: space-around; padding: 8px 5px; }
     .navItem {
         display: flex; flex-direction: column; align-items: center; justify-content: center;
-        color: #64748b; text-decoration: none; font-size: 0.65em; font-weight: 800;
+        color: #64748b; text-decoration: none; font-size: 0.6em; font-weight: 800;
         text-transform: uppercase; gap: 4px; background: transparent; border: none; cursor: pointer;
-        flex: 1; transition: color 0.2s;
+        transition: color 0.2s; width: 60px;
     }
-    .navItem i { font-size: 24px; }
+    .navItem i { font-size: 20px; margin-bottom: 2px; }
     .navItem.active { color: #eebf1c; }
     
-    .dropdownContainer { position: relative; flex: 1; display: flex; }
-    
     .dropdownMenu {
-        position: absolute; top: 60px; right: 10px; width: 220px;
+        position: absolute; top: 110px; right: 10px; width: 220px;
         background: #1e2530; border: 1px solid rgba(238, 191, 28, 0.3);
         border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.8);
         display: flex; flex-direction: column; overflow: hidden;
@@ -43,7 +37,4 @@
         font-size: 1em; font-weight: 600; display: flex; align-items: center; gap: 12px;
         border-bottom: 1px solid rgba(255,255,255,0.05);
     }
-    .dropdownItem i { color: #64748b; font-size: 22px; }
-    .activeDropdown { background: rgba(238, 191, 28, 0.05); color: #eebf1c; }
-    .activeDropdown i { color: #eebf1c; }
 }
