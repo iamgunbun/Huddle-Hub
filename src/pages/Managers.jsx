@@ -9,77 +9,82 @@ import styles from './Managers.module.css';
 export default function Managers() {
     const { activeLeague } = useLeague();
     const [searchParams, setSearchParams] = useSearchParams();
+    
+    // Core Data UI States
     const [loading, setLoading] = useState(true);
     const [mergedManagers, setMergedManagers] = useState([]);
+    const [myManagerId, setMyManagerId] = useState(null);
     
+    // AI Evaluation Display Controls
+    const [evaluations, setEvaluations] = useState({});
+    const [regenStatus, setRegenStatus] = useState({});
+    const [evalLoading, setEvalLoading] = useState(false);
+    const [uiErrorMessage, setUiErrorMessage] = useState(null);
+          
     const selectedManagerId = searchParams.get('manager');
     const selectedManager = mergedManagers.find(m => m.managerId === selectedManagerId);
-
+    
     const normalizeStr = (str) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
     useEffect(() => {
         const load = async () => {
             if (!activeLeague?.sleeper_league_id) return;
             setLoading(true);
-            
             try {
-                localStorage.removeItem("records");
-                localStorage.removeItem("awards");
-
                 if (syncActiveLeague) {
                     syncActiveLeague(activeLeague.sleeper_league_id, activeLeague.league_name);
                 }
-
+                
                 const [tmData, podiumsData, recordsData] = await Promise.all([
                     getLeagueTeamManagers(activeLeague.sleeper_league_id),
                     getAwards(true, activeLeague.sleeper_league_id),
                     getLeagueRecords(true, activeLeague.sleeper_league_id)
                 ]);
 
-                // 1. Fetch user_leagues to get usernames
-                const { data: ulData } = await supabase
-                    .from('user_leagues')
-                    .select('user_id, team_name')
-                    .eq('league_id', activeLeague.id);
-
-                // 2. Fetch profiles separately to safely bypass Supabase Foreign Key join blocks
+                let foundMyManagerId = null;
+                const { data: sessionData } = await supabase.auth.getSession();
+                const { data: ulData } = await supabase.from('user_leagues').select('user_id, team_name').eq('league_id', activeLeague.id);
                 const userIds = ulData?.map(u => u.user_id) || [];
-                const { data: profilesData } = await supabase
-                    .from('profiles')
-                    .select('id, favorite_team')
-                    .in('id', userIds);
-
-                // 3. Merge them manually
+                const { data: profilesData } = await supabase.from('profiles').select('id, favorite_team').in('id', userIds);
+                
                 const dbUsers = ulData?.map(ul => ({
                     ...ul,
                     favorite_team: profilesData?.find(p => p.id === ul.user_id)?.favorite_team
                 }));
 
+                if (sessionData?.session?.user) {
+                    const myUlRecord = dbUsers?.find(u => u.user_id === sessionData.session.user.id);
+                    const searchName = normalizeStr(myUlRecord?.team_name);
+                    
+                    if (searchName && searchName !== normalizeStr('commissioner team')) {
+                        for (const [rId, rData] of Object.entries(tmData.teamManagersMap[tmData.currentSeason] || {})) {
+                            if (normalizeStr(rData.team?.name) === searchName) {
+                                foundMyManagerId = rData.managers?.[0];
+                                break;
+                            }
+                        }
+                    }
+                }
+                setMyManagerId(foundMyManagerId);
+
                 const currentSeason = tmData.currentSeason;
                 const activeRosters = tmData.teamManagersMap[currentSeason] || {};
-
                 const formatted = [];
 
                 for (const [rId, rData] of Object.entries(activeRosters)) {
                     const primaryManagerId = rData.managers?.[0];
                     if (!primaryManagerId) continue;
-
                     const sleeperUser = tmData.users[primaryManagerId] || {};
                     const teamName = rData.team.name;
                     
                     let supaUser = dbUsers?.find(u => {
                         const dbName = normalizeStr(u.team_name);
-                        return dbName === normalizeStr(teamName) || 
-                               dbName === normalizeStr(sleeperUser.display_name) ||
-                               dbName === normalizeStr(sleeperUser.username);
+                        return dbName === normalizeStr(teamName) || dbName === normalizeStr(sleeperUser.display_name);
                     });
-
-                    const favoriteTeam = supaUser?.favorite_team || null;
 
                     const rings = [];
                     const runnerUps = [];
                     const toiletBowls = [];
-
                     (podiumsData || []).forEach(p => {
                         const yearRosters = tmData.teamManagersMap[p.year] || {};
                         if (yearRosters[p.champion]?.managers?.includes(primaryManagerId)) rings.push(p.year);
@@ -95,30 +100,114 @@ export default function Managers() {
                         teamName: teamName,
                         teamAvatar: rData.team.avatar,
                         username: sleeperUser.display_name || 'Unknown Manager',
-                        favoriteTeam: favoriteTeam,
+                        favoriteTeam: supaUser?.favorite_team || null,
                         rings: rings,
                         runnerUps: runnerUps,
                         toiletBowls: toiletBowls,
                         record: managerRecord
                     });
                 }
-
                 formatted.sort((a, b) => b.rings.length - a.rings.length);
                 setMergedManagers(formatted);
-
             } catch (e) {
-                console.error("Failed to load managers:", e);
+                console.error("Failed to load managers layout:", e);
             } finally {
                 setLoading(false);
             }
         };
-
         load();
     }, [activeLeague]);
+
+    const runEvaluation = async (manager, forceRegenerate = false) => {
+        setEvalLoading(true);
+        setUiErrorMessage(null);
+        try {
+            const currentYear = new Date().getFullYear();
+            
+            // 1. Query Cache Table
+            const { data: existing, error: fetchCacheError } = await supabase
+                .from('ai_evaluations')
+                .select('*')
+                .eq('manager_id', manager.managerId)
+                .eq('league_id', activeLeague.sleeper_league_id)
+                .eq('year', currentYear)
+                .maybeSingle();
+
+            if (existing && !forceRegenerate) {
+                let parsed = { strategy: "Format Error", profile: "Format Error", philosophy: "Format Error" };
+                try { parsed = JSON.parse(existing.evaluation_text.replace(/```json/gi, '').replace(/```/g, '').trim()); } catch (e) { console.error(e); }
+                setEvaluations(prev => ({ ...prev, [manager.managerId]: parsed }));
+                setRegenStatus(prev => ({ ...prev, [manager.managerId]: existing.regenerated }));
+                setEvalLoading(false);
+                return;
+            }
+
+            if (existing && forceRegenerate && existing.regenerated) {
+                alert("This manager's evaluation has already been manually regenerated this season.");
+                setEvalLoading(false);
+                return;
+            }
+
+            // 2. Fetch from API Route
+            console.log("Hitting API route '/api/evaluate-manager' for manager:", manager.teamName);
+            const response = await fetch('/api/evaluate-manager', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ managerId: manager.managerId, leagueId: activeLeague.sleeper_league_id, teamName: manager.teamName }),
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`Server API responded with status ${response.status}: ${errText}`);
+            }
+
+            const data = await response.json();
+            if (!data.evaluation) throw new Error("API executed completely but returned an empty evaluation field.");
+            
+            let newEvalParsed = { strategy: "Parsing failed", profile: "Parsing failed", philosophy: "Parsing failed" };
+            try { 
+                newEvalParsed = JSON.parse(data.evaluation.replace(/```json/gi, '').replace(/```/g, '').trim()); 
+            } catch (e) { 
+                console.error("AI Payload string format cannot clear JSON boundaries:", data.evaluation); 
+            }
+
+            // 3. Save Cache Data Block
+            if (existing && forceRegenerate) {
+                await supabase.from('ai_evaluations').update({ evaluation_text: data.evaluation, regenerated: true }).eq('id', existing.id);
+                setRegenStatus(prev => ({ ...prev, [manager.managerId]: true }));
+            } else if (!existing) {
+                await supabase.from('ai_evaluations').insert({
+                    manager_id: manager.managerId,
+                    league_id: activeLeague.sleeper_league_id,
+                    year: currentYear,
+                    evaluation_text: data.evaluation,
+                    regenerated: false
+                });
+                setRegenStatus(prev => ({ ...prev, [manager.managerId]: false }));
+            }
+
+            setEvaluations(prev => ({ ...prev, [manager.managerId]: newEvalParsed }));
+        } catch (err) {
+            console.error("Scouting Pipeline Root Error:", err);
+            setUiErrorMessage(err.message || "Failed to parse system response.");
+        } finally {
+            setEvalLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (selectedManager && !evaluations[selectedManager.managerId] && !evalLoading) {
+            runEvaluation(selectedManager, false);
+        }
+    }, [selectedManager]);
 
     if (loading) return <div className={styles.loading}>Loading Franchise Owners...</div>;
 
     if (selectedManager) {
+        const evalData = evaluations[selectedManager.managerId];
+        const hasRegenerated = regenStatus[selectedManager.managerId];
+        const canRegenerate = activeLeague?.is_commissioner || myManagerId === selectedManager.managerId;
+
         return (
             <div className={styles.container}>
                 <div className={styles.detailedView}>
@@ -151,7 +240,6 @@ export default function Managers() {
                                     <strong>Toilet Bowls:</strong> {selectedManager.toiletBowls.length > 0 ? selectedManager.toiletBowls.join(', ') : 'None'}
                                 </div>
                             </div>
-
                             <h4 className={styles.sectionHeading} style={{marginTop: '30px'}}>All-Time Record</h4>
                             <div className={styles.recordBox}>
                                 {selectedManager.record.wins}W - {selectedManager.record.losses}L {selectedManager.record.ties > 0 ? `- ${selectedManager.record.ties}T` : ''}
@@ -159,11 +247,36 @@ export default function Managers() {
                         </div>
 
                         <div className={styles.detailColumn}>
-                            <h4 className={styles.sectionHeading}>Analytics (Pending)</h4>
+                            <h4 className={styles.sectionHeading}>Franchise Analytics</h4>
                             <div className={styles.aiBox}>
-                                <p><strong>Strategy Pattern:</strong> Evaluating roster composition... <br/><span className={styles.aiSubtext}>Evaluation Pending</span></p>
-                                <p><strong>Manager Profile:</strong> Generating historical summary... <br/><span className={styles.aiSubtext}>Evaluation Pending</span></p>
-                                <p><strong>Trading Philosophy:</strong> Analyzing historical transactions... <br/><span className={styles.aiSubtext}>Evaluation Pending</span></p>
+                                {uiErrorMessage ? (
+                                    <p style={{ color: '#ef4444', fontSize: '0.9em' }}><strong>Pipeline Failure:</strong> {uiErrorMessage}</p>
+                                ) : (
+                                    <>
+                                        <p><strong>Strategy Pattern:</strong> {evalData?.strategy || 'Evaluating roster composition...'} </p>
+                                        <p><strong>Manager Profile:</strong> {evalData?.profile || 'Generating historical summary...'} </p>
+                                        <p><strong>Trading Philosophy:</strong> {evalData?.philosophy || 'Analyzing historical transactions...'} </p>
+                                    </>
+                                )}
+                                
+                                {evalLoading && <span className={styles.aiSubtext}>Gemini Engine compiling records...</span>}
+                                
+                                {evalData && !evalLoading && canRegenerate && !uiErrorMessage && (
+                                    <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                                        {hasRegenerated ? (
+                                            <span className={styles.aiSubtext} style={{ color: '#ef4444' }}>
+                                                You have already used your manual regeneration for this season.
+                                            </span>
+                                        ) : (
+                                            <button 
+                                                onClick={() => runEvaluation(selectedManager, true)}
+                                                style={{ background: '#1e2530', border: '1px solid #eebf1c', color: '#eebf1c', padding: '8px 15px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85em', fontWeight: 'bold' }}
+                                            >
+                                                Regenerate Scouting Report (1 Remaining)
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -177,7 +290,6 @@ export default function Managers() {
             <div className={styles.headerControls}>
                 <h2 className={styles.title}>League Managers</h2>
             </div>
-
             <div className={styles.managersGrid}>
                 {mergedManagers.map(manager => (
                     <div 
@@ -205,7 +317,6 @@ export default function Managers() {
                                     <div className={styles.noFavTeam}>No Team Link</div>
                                 )}
                             </div>
-                            
                             <div className={styles.ringCount}>
                                 🏆 {manager.rings.length}
                             </div>
@@ -213,7 +324,7 @@ export default function Managers() {
 
                         <div className={styles.aiSnippet}>
                             <i className="material-icons">auto_awesome</i> 
-                            <span>Evaluation Pending...</span>
+                            <span>Scouting report ready</span>
                         </div>
                     </div>
                 ))}
