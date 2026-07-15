@@ -51,10 +51,10 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
 
     return (
         <div className={`${styles.matchupCard} ${isExpanded ? styles.expanded : ''}`}>
-            <div className={styles.scoreboardWrapper} onClick={() => setIsExpanded(!isExpanded)} style={{ cursor: 'pointer' }}>
-                <div className={styles.scoreboard}>
-                    
-                    {/* Native Sleeper Layout: Team A Row */}
+            <div className={styles.scoreboardWrapper} onClick={() => setIsExpanded(!isExpanded)}>
+                
+                {/* 1. DESKTOP LAYOUT */}
+                <div className={styles.desktopScoreboard}>
                     <div className={styles.teamHeader}>
                         <div className={styles.teamIdentity}>
                             <img src={metaA.avatar} alt="Team A" className={styles.teamAvatar} />
@@ -66,27 +66,67 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                         <div className={`${styles.teamScore} ${styles.scoreGreen}`}>{scoreA.toFixed(2)}</div>
                     </div>
                     
-                    {/* VS Badge Pushed to Right Middle on Mobile */}
                     <div className={styles.vsBadge}>
                         VS
-                        <i className="material-icons" style={{ fontSize: '12px', display: 'block', marginTop: '2px' }}>
+                        <i className="material-icons" style={{ fontSize: '12px', display: 'block', margin: '2px auto 0' }}>
                             {isExpanded ? 'expand_less' : 'expand_more'}
                         </i>
                     </div>
                     
-                    {/* Native Sleeper Layout: Team B Row */}
                     <div className={styles.teamHeader}>
-                        <div className={styles.teamIdentity}>
-                            <img src={metaB.avatar} alt="Team B" className={styles.teamAvatar} />
-                            <div className={styles.teamNameContainer}>
+                        <div className={`${styles.teamScore} ${styles.scoreRed}`}>{scoreB.toFixed(2)}</div>
+                        <div className={`${styles.teamIdentity} ${styles.alignRight}`}>
+                            <div className={`${styles.teamNameContainer} ${styles.alignRight}`}>
                                 <div className={styles.teamName}>{metaB.name}</div>
                                 <div className={styles.projTotal}>Proj: {projB.toFixed(2)}</div>
                             </div>
+                            <img src={metaB.avatar} alt="Team B" className={styles.teamAvatar} />
                         </div>
-                        <div className={`${styles.teamScore} ${styles.scoreRed}`}>{scoreB.toFixed(2)}</div>
                     </div>
                 </div>
 
+                {/* 2. MOBILE NATIVE APP LAYOUT */}
+                <div className={styles.mobileScoreboard}>
+                    <div className={styles.mRow1}>
+                        <div className={styles.mTeamBlock}>
+                            <img src={metaA.avatar} className={styles.mAvatar} alt="A" />
+                            <div className={styles.mOddsCol}>
+                                <div className={styles.mOddsText}><span className={styles.mWinPct}>{oddsA}%</span> WIN</div>
+                                <div className={styles.mOddsBarBg}><div className={styles.mOddsFillGreen} style={{width: `${oddsA}%`}}></div></div>
+                            </div>
+                            <div className={styles.mScoreCol}>
+                                <div className={styles.mActualScore}>{scoreA > 0 ? scoreA.toFixed(2) : '-'}</div>
+                                <div className={styles.mProjScore}>{projA.toFixed(2)}</div>
+                            </div>
+                        </div>
+
+                        <div className={styles.mVS}>
+                            VS
+                            <i className="material-icons" style={{ fontSize: '12px', display: 'block', margin: '2px auto 0' }}>
+                                {isExpanded ? 'expand_less' : 'expand_more'}
+                            </i>
+                        </div>
+
+                        <div className={`${styles.mTeamBlock} ${styles.right}`}>
+                            <div className={styles.mScoreCol}>
+                                <div className={styles.mActualScore}>{scoreB > 0 ? scoreB.toFixed(2) : '-'}</div>
+                                <div className={styles.mProjScore}>{projB.toFixed(2)}</div>
+                            </div>
+                            <div className={`${styles.mOddsCol} ${styles.right}`}>
+                                <div className={`${styles.mOddsText} ${styles.right}`}><span className={styles.mWinPctRed}>{oddsB}%</span> WIN</div>
+                                <div className={`${styles.mOddsBarBg} ${styles.right}`}><div className={styles.mOddsFillRed} style={{width: `${oddsB}%`}}></div></div>
+                            </div>
+                            <img src={metaB.avatar} className={styles.mAvatar} alt="B" />
+                        </div>
+                    </div>
+
+                    <div className={styles.mRow2}>
+                        <div className={styles.mTeamName}>{metaA.name}</div>
+                        <div className={`${styles.mTeamName} ${styles.textRight}`}>{metaB.name}</div>
+                    </div>
+                </div>
+
+                {/* Odds Bar (Hidden on Mobile) */}
                 <div className={styles.oddsContainer}>
                     <div className={styles.oddsBar}>
                         <div className={styles.oddsGreen} style={{ width: `${oddsA}%` }}></div>
@@ -100,6 +140,7 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                 </div>
             </div>
 
+            {/* Expanded Rosters */}
             {isExpanded && (
                 <div className={styles.playerBreakdown}>
                     {startersA.map((playerIdA, idx) => {

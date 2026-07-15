@@ -285,17 +285,51 @@
     font-style: italic;
 }
 
+/* Mobile Layout Fixes */
 @media (max-width: 1100px) {
     .managersGrid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 15px;
+        grid-template-columns: 1fr 1fr; /* Forces 2 columns */
+        gap: 12px;
     }
-    .avatar { width: 50px; height: 50px; border-width: 2px;}
-    .teamName { font-size: 1.1em; }
-    .managerCard { padding: 15px; }
-    .detailBody {
-        grid-template-columns: 1fr;
+    
+    .managerCard { padding: 12px; }
+    .avatar { width: 45px; height: 45px; border-width: 2px; }
+    .cardHeader { gap: 8px; margin-bottom: 15px; }
+    
+    .teamName { 
+        font-size: 1em; 
+        white-space: nowrap; 
+        overflow: hidden; 
+        text-overflow: ellipsis; 
+        max-width: 140px; 
     }
-    .detailAvatar { width: 70px; height: 70px; }
+    .userName { font-size: 0.75em; }
+    
+    .metaStrip { padding: 10px; flex-direction: column; gap: 8px; justify-content: center; }
+    .favTeamIcon { height: 25px; }
+    .ringCount { font-size: 1em; }
+    
+    .aiSnippet { font-size: 0.65em; padding-top: 10px; }
+    .aiSnippet i { font-size: 1.1em; }
+
+    /* Fix Detail Profile Stacking */
+    .detailBody { grid-template-columns: 1fr; gap: 20px; }
+    
+    .accoladesList { 
+        display: grid; 
+        grid-template-columns: 1fr 1fr 1fr; 
+        gap: 10px; 
+    }
+    
+    .accoladeItem { 
+        flex-direction: column; 
+        text-align: center; 
+        padding: 10px; 
+        font-size: 0.75em; 
+    }
+    
+    .emoji { margin-bottom: 5px; }
+    
+    .detailAvatar { width: 70px; height: 70px; border-width: 3px; }
     .detailTitle h1 { font-size: 1.5em; }
 }

@@ -8,7 +8,7 @@
         top: 0; left: 0; right: 0;
         background: #0b0e14;
         border-bottom: 1px solid rgba(238, 191, 28, 0.2);
-        z-index: 1000; /* Lowered so chat button stays above */
+        z-index: 900; /* Lowered so chat button stays above */
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
     }
     

@@ -18,6 +18,7 @@
     color: #f8fafc; text-transform: uppercase; font-size: 2em; letter-spacing: 2px; margin-bottom: 30px; font-weight: 500; text-align: center;
 }
 
+/* Selectors Area */
 .selectorWrapper {
     display: flex;
     justify-content: center;
@@ -97,12 +98,14 @@
     margin: 0 0 10px 0;
 }
 
+/* Content Grid */
 .contentGrid {
     display: grid;
     grid-template-columns: 1fr 1.5fr;
     gap: 40px;
 }
 
+/* Left Stats Column */
 .statsColumn {
     display: flex;
     flex-direction: column;
@@ -126,6 +129,7 @@
     margin: 0 0 20px 0;
 }
 
+/* Series Column Layout */
 .seriesRecord {
     display: flex;
     justify-content: center;
@@ -136,11 +140,37 @@
     margin-bottom: 20px;
 }
 
-.recordCol { display: flex; flex-direction: column; align-items: center; line-height: 1; }
-.recordLabel { font-size: 0.35em; color: #64748b; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
-.recordSide { color: #475569; transition: color 0.3s; }
-.recordSide.winner { color: #00ceb8; }
-.recordDivider { color: #334155; font-weight: 300; line-height: 1; padding-bottom: 2px; }
+.recordCol {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1;
+}
+
+.recordLabel {
+    font-size: 0.35em;
+    color: #64748b;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+}
+
+.recordSide {
+    color: #475569;
+    transition: color 0.3s;
+}
+
+.recordSide.winner {
+    color: #00ceb8;
+}
+
+.recordDivider {
+    color: #334155;
+    font-weight: 300;
+    line-height: 1;
+    padding-bottom: 2px;
+}
 
 .barContainer {
     width: 100%;
@@ -161,14 +191,43 @@
     gap: 15px;
 }
 
-.pointValue { font-size: 2em; font-weight: 800; color: #f8fafc; }
-.goldText { color: #eebf1c; }
-.pointDivider { color: #64748b; font-size: 0.9em; text-transform: uppercase; font-weight: 600; }
+.pointValue {
+    font-size: 2em;
+    font-weight: 800;
+    color: #f8fafc;
+}
 
-.highlightData { display: flex; flex-direction: column; gap: 5px; }
-.highlightDiff { font-size: 1.8em; font-weight: 800; color: #f8fafc; }
-.highlightContext { color: #94a3b8; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px; }
+.goldText {
+    color: #eebf1c;
+}
 
+.pointDivider {
+    color: #64748b;
+    font-size: 0.9em;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.highlightData {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.highlightDiff {
+    font-size: 1.8em;
+    font-weight: 800;
+    color: #f8fafc;
+}
+
+.highlightContext {
+    color: #94a3b8;
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Right History Column */
 .historyColumn {
     background: #1e2530;
     border-radius: 12px;
@@ -246,10 +305,28 @@
 .winnerBlock { background: rgba(0, 206, 184, 0.1); border: 1px solid rgba(0, 206, 184, 0.3); }
 .loserBlock { opacity: 0.7; }
 
-.hAvatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #111; }
-.hScore { color: #f8fafc; font-weight: 700; font-size: 1.1em; }
+.hAvatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #111;
+}
+
+.hScore {
+    color: #f8fafc;
+    font-weight: 700;
+    font-size: 1.1em;
+}
+
 .winnerBlock .hScore { color: #00ceb8; }
-.hScoreDivider { color: #64748b; font-size: 0.8em; font-weight: 700; text-transform: uppercase; }
+
+.hScoreDivider {
+    color: #64748b;
+    font-size: 0.8em;
+    font-weight: 700;
+    text-transform: uppercase;
+}
 
 /* MOBILE OPTIMIZATIONS */
 @media (max-width: 950px) {
@@ -272,7 +349,8 @@
     .historyList {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 10px;
+        gap: 12px;
+        padding-right: 0;
     }
 
     .historyRow {
@@ -287,6 +365,8 @@
         flex-direction: row;
         justify-content: space-between;
         margin-bottom: 12px;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        padding-bottom: 5px;
     }
 
     .historyScores {
@@ -300,7 +380,11 @@
         flex-direction: column;
         padding: 5px;
         gap: 5px;
+        background: transparent;
+        border: none !important;
     }
 
-    .hScoreDivider { display: block; }
+    .hAvatar { width: 28px; height: 28px; }
+    .hScore { font-size: 0.95em; }
+    .hScoreDivider { display: flex; align-items: center; font-size: 0.7em; }
 }
