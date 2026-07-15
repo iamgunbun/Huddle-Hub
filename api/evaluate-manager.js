@@ -1,66 +1,78 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
+  // 1. Check if the environment variable is loaded
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(500).json({ error: "Backend Error: The GEMINI_API_KEY is missing from your .env.local file or Vercel settings." });
+  }
+
   const { managerId, leagueId, teamName } = req.body;
 
   try {
-    // 1. Fetch historical data from Sleeper
-    const leagueRes = await fetch(`https://api.sleeper.app/v1/league/${leagueId}`);
-    const leagueData = await leagueRes.json();
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     
+    // --- STEP 1: FETCH SLEEPER DATA ---
     let currentLeagueId = leagueId;
     let foundRoster = null;
     let history = [];
-    let year = leagueData.season;
+    let year = new Date().getFullYear();
 
-    while (currentLeagueId && currentLeagueId !== "0" && currentLeagueId !== 0) {
-      const rostersRes = await fetch(`https://api.sleeper.app/v1/league/${currentLeagueId}/rosters`);
-      if (!rostersRes.ok) break;
-      const rosters = await rostersRes.json();
-      const roster = rosters.find(r => r.owner_id === managerId || (r.co_owners && r.co_owners.includes(managerId)));
-      
-      if (roster) {
-        history.push({ year, wins: roster.settings?.wins, losses: roster.settings?.losses });
-        if (!foundRoster) foundRoster = roster;
+    try {
+      while (currentLeagueId && currentLeagueId !== "0" && currentLeagueId !== 0) {
+        const rostersRes = await fetch(`https://api.sleeper.app/v1/league/${currentLeagueId}/rosters`);
+        if (!rostersRes.ok) break;
+        const rosters = await rostersRes.json();
+        const roster = rosters.find(r => r.owner_id === managerId || (r.co_owners && r.co_owners.includes(managerId)));
+        
+        if (roster) {
+          history.push({ year, wins: roster.settings?.wins, losses: roster.settings?.losses });
+          if (!foundRoster) foundRoster = roster;
+        }
+
+        const lRes = await fetch(`https://api.sleeper.app/v1/league/${currentLeagueId}`);
+        if (!lRes.ok) break;
+        const lData = await lRes.json();
+        currentLeagueId = lData.previous_league_id;
+        year = lData.season;
       }
-
-      const lRes = await fetch(`https://api.sleeper.app/v1/league/${currentLeagueId}`);
-      if (!lRes.ok) break;
-      const lData = await lRes.json();
-      currentLeagueId = lData.previous_league_id;
-      year = lData.season;
+    } catch (sleeperErr) {
+        throw new Error(`Sleeper API fetch failed: ${sleeperErr.message}`);
     }
 
-    // 2. Prepare the Prompt for Gemini
+    // --- STEP 2: GEMINI AI GENERATION ---
+    // Disable safety thresholds to prevent fantasy football terminology from triggering blocks
+    const safetySettings = [
+      { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+      { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+      { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+      { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+    ];
+
     const model = genAI.getGenerativeModel({ 
         model: "gemini-1.5-flash",
-        generationConfig: { responseMimeType: "application/json" } // Force JSON output
+        safetySettings,
+        generationConfig: { responseMimeType: "application/json" } 
     });
     
     const prompt = history.length === 0 
       ? `Analyze a new manager named ${teamName} who has just joined a Dynasty Fantasy Football league. They have no historical roster data. Return a raw JSON object with exactly three keys: "strategy", "profile", "philosophy". Keep it welcoming and professional.`
-      : `You are a Dynasty Fantasy Football Analyst. Evaluate manager: ${teamName}.
-History: ${JSON.stringify(history)}.
-Latest Roster Snapshot: ${JSON.stringify(foundRoster?.starters)}.
+      : `You are a Dynasty Fantasy Football Analyst. Evaluate manager: ${teamName}. History: ${JSON.stringify(history)}. Latest Roster: ${JSON.stringify(foundRoster?.starters)}. Return a raw JSON object with exactly three keys: "strategy", "profile", "philosophy". Do not use markdown blocks.`;
 
-You MUST return your response as a raw JSON object with the following three keys exactly:
-{
-  "strategy": "A 1-2 sentence evaluation of their current roster composition (e.g. Win-Now, Rebuilding, Aging core).",
-  "profile": "A 1-2 sentence summary of their overall dynasty performance and history.",
-  "philosophy": "A 1-2 sentence prediction on their trading style and roster management habits."
-}`;
-
-    // 3. Call Gemini
     const result = await model.generateContent(prompt);
-    const evaluation = result.response.text();
 
+    // Check if the response was completely blocked by Google
+    if (!result.response.candidates || result.response.candidates.length === 0) {
+        throw new Error(`Gemini blocked the response. Finish Reason: ${result.response.promptFeedback?.blockReason || "Unknown"}`);
+    }
+
+    const evaluation = result.response.text();
     res.status(200).json({ evaluation });
+
   } catch (error) {
-    console.error("Gemini API Error:", error);
-    res.status(500).json({ error: "Failed to evaluate manager" });
+    console.error("Backend Crash:", error);
+    // Force the exact error to appear on the frontend
+    res.status(500).json({ error: error.toString() });
   }
 }
