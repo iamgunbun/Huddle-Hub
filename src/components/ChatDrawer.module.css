@@ -133,6 +133,17 @@
 .notifyBtn:hover { background: rgba(255, 255, 255, 0.05); }
 .notifyBtn i { font-size: 22px; }
 
+/* SPINNER FOR SUBSCRIPTION STATE */
+.spinning {
+    animation: spin 1s linear infinite;
+    color: #eebf1c !important;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
 .messageArea {
     flex-grow: 1;
     padding: 20px;

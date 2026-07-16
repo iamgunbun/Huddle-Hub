@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
 import { getLeagueTeamManagers } from '../utils/helper';
+import { subscribeToWebPush } from '../utils/pushNotifications'; // Added Web Push Utility
 import EmojiPicker from 'emoji-picker-react';
 import styles from './ChatDrawer.module.css';
 
@@ -15,6 +16,7 @@ export default function ChatDrawer() {
     
     const [unreadCount, setUnreadCount] = useState(0);
     const [pushEnabled, setPushEnabled] = useState(Notification.permission === 'granted');
+    const [isSubscribing, setIsSubscribing] = useState(false); // Added loading state
     
     const [currentUser, setCurrentUser] = useState(null);
     const [authorName, setAuthorName] = useState('Unknown Team');
@@ -41,14 +43,39 @@ export default function ChatDrawer() {
         }
     }, [isOpen]);
 
-    const requestNotifications = () => {
-        if (!("Notification" in window)) {
-            alert("This browser does not support system notifications.");
+    // INTEGRATED WEB PUSH SUBSCRIPTION LOGIC
+    const handleEnableNotifications = async () => {
+        if (!currentUser) {
+            alert("Please log in to enable notifications.");
             return;
         }
-        Notification.requestPermission().then(permission => {
-            setPushEnabled(permission === 'granted');
-        });
+
+        if (pushEnabled) {
+            alert("Notifications are already enabled for this device!");
+            return;
+        }
+
+        setIsSubscribing(true);
+
+        try {
+            const subscription = await subscribeToWebPush();
+            
+            if (subscription) {
+                const { error } = await supabase
+                    .from('users') 
+                    .update({ web_push_subscription: JSON.stringify(subscription) })
+                    .eq('id', currentUser.id);
+                
+                if (error) throw error;
+                
+                setPushEnabled(true);
+            }
+        } catch (err) {
+            console.error("Subscription failed:", err);
+            alert("Failed to enable notifications. Ensure your browser is allowing them.");
+        } finally {
+            setIsSubscribing(false);
+        }
     };
 
     useEffect(() => {
@@ -113,7 +140,8 @@ export default function ChatDrawer() {
                                     setUnreadCount(prev => prev + 1);
                                 }
 
-                                if (Notification.permission === 'granted') {
+                                // Kept as fallback for desktop browser users who have app open in background tab
+                                if ('Notification' in window && Notification.permission === 'granted') {
                                     if (document.visibilityState !== 'visible' || !isOpenRef.current) {
                                         new Notification(payload.new.author_name, {
                                             body: payload.new.content || 'Sent an attachment',
@@ -254,11 +282,12 @@ export default function ChatDrawer() {
                     
                     <button 
                         className={styles.notifyBtn} 
-                        onClick={requestNotifications} 
+                        onClick={handleEnableNotifications} 
+                        disabled={isSubscribing}
                         title={pushEnabled ? "Notifications Enabled" : "Enable Push Notifications"}
                     >
-                        <i className="material-icons" style={{ color: pushEnabled ? '#eebf1c' : '#64748b' }}>
-                            {pushEnabled ? 'notifications_active' : 'notifications_off'}
+                        <i className={`material-icons ${isSubscribing ? styles.spinning : ''}`} style={{ color: pushEnabled ? '#eebf1c' : '#64748b' }}>
+                            {pushEnabled ? 'notifications_active' : (isSubscribing ? 'sync' : 'notifications_off')}
                         </i>
                     </button>
                 </div>
