@@ -118,7 +118,7 @@
     display: flex;
     flex-direction: column;
     justify-content: space-around;
-    height: 620px; /* Clamps desktop round maps into synchronized vertical grid lanes */
+    height: 620px; 
 }
 
 .mainMatchesSection {
@@ -286,7 +286,6 @@
         gap: 25px;
     }
 
-    /* Packs all rounds side-by-side inside exactly 100% viewport screen width */
     .bracketTreeWrapper {
         display: flex;
         flex-direction: row;
@@ -313,7 +312,7 @@
     }
 
     .roundColumnLayout {
-        height: 330px; /* Contracts tracking bounds layout vertically on mobile */
+        height: 330px; 
         gap: 0;
         justify-content: space-around;
     }
@@ -325,7 +324,6 @@
         justify-content: space-around;
     }
 
-    /* Scales matching typography and asset profiles down to match native app density */
     .matchCard {
         padding: 2px;
         border-radius: 6px;
@@ -353,14 +351,13 @@
 
     .teamName {
         font-size: 0.55em;
-        max-width: 50px; /* Clamped length handles to protect cell bounding box fields */
+        max-width: 50px; 
     }
 
     .score {
         font-size: 0.55em;
     }
 
-    /* Consolation bottom rows mobile alignments */
     .consolationSection {
         padding-top: 20px;
     }

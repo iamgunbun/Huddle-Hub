@@ -31,62 +31,64 @@ export default function MatchupsAndBrackets({ matchupsData, leagueTeamManagers, 
 
         const totalRounds = bracketTree.bracket.length;
 
+        // Gatekeeper function to catch Sleeper's phantom dummy teams
+        const isValidTeam = (t) => {
+            if (!t) return false;
+            const rid = t.roster_id;
+            return rid !== undefined && rid !== null && rid !== 0 && rid !== "0" && rid !== "";
+        };
+
         return (
             <div className={styles.bracketContainer}>
                 {/* Main Championship Playoff Tree */}
                 <div className={styles.bracketTreeWrapper}>
                     {bracketTree.bracket.map((roundMatches, roundIdx) => {
                         const isFinalsRound = roundIdx === totalRounds - 1;
-
-                        // Dynamically build tracking tracks for Round 1 to insert missing BYE placements
                         let displayItems = [];
                         
+                        // Pure Mathematical Deduction for Round 1
                         if (roundIdx === 0 && totalRounds > 1) {
+                            const round1Matches = roundMatches;
                             const round2Matches = bracketTree.bracket[1] || [];
-                            const processedMatchIds = new Set();
                             
-                            round2Matches.forEach((r2Match) => {
-                                const teams = [r2Match[0] || {}, r2Match[1] || {}];
-                                teams.forEach(t => {
-                                    if (t.roster_id && !t.tFrom && !t.from && !t.m) { 
-                                        displayItems.push({ isByeBlock: true, team: t });
-                                    } else if (t.tFrom || t.from) {
-                                        const matchId = t.tFrom || t.from;
-                                        const r1Match = roundMatches.find(m => m.m === matchId || m.match_id === matchId || m.id === matchId || (m[0] && (m[0].m === matchId || m[0].match_id === matchId)));
-                                        if (r1Match && !processedMatchIds.has(r1Match)) {
-                                            displayItems.push({ isByeBlock: false, match: r1Match });
-                                            processedMatchIds.add(r1Match);
-                                        }
-                                    }
-                                });
+                            const trueR1Matches = [];
+                            const r1RosterIds = new Set();
+
+                            // 1. Find all REAL matches (both slots occupied by valid teams)
+                            round1Matches.forEach(m => {
+                                const t1 = m[0] || {};
+                                const t2 = m[1] || {};
+                                if (isValidTeam(t1) && isValidTeam(t2)) {
+                                    trueR1Matches.push(m);
+                                    r1RosterIds.add(t1.roster_id);
+                                    r1RosterIds.add(t2.roster_id);
+                                }
                             });
 
-                            // Fallback interleaving if dynamic pairing fails for standard 6-team formats
-                            if (displayItems.length < roundMatches.length + 2) {
-                                const byes = [];
-                                round2Matches.forEach(m2 => {
-                                    [m2[0] || {}, m2[1] || {}].forEach(t => {
-                                        if (t.roster_id && !t.tFrom && !t.from) byes.push(t);
-                                    });
-                                });
-                                
-                                if (byes.length === 2 && roundMatches.length === 2) {
-                                    displayItems = [
-                                        { isByeBlock: true, team: byes[0] },
-                                        { isByeBlock: false, match: roundMatches[0] },
-                                        { isByeBlock: true, team: byes[1] },
-                                        { isByeBlock: false, match: roundMatches[1] }
-                                    ];
-                                } else {
-                                    roundMatches.forEach(m => {
-                                        if (!processedMatchIds.has(m)) {
-                                            displayItems.push({ isByeBlock: false, match: m });
-                                            processedMatchIds.add(m);
-                                        }
-                                    });
+                            // 2. Mathematically deduce BYEs (Any valid R2 team that didn't play in a true R1 match)
+                            const byeTeams = [];
+                            round2Matches.forEach(m => {
+                                const t1 = m[0] || {};
+                                const t2 = m[1] || {};
+                                if (isValidTeam(t1) && !r1RosterIds.has(t1.roster_id)) byeTeams.push(t1);
+                                if (isValidTeam(t2) && !r1RosterIds.has(t2.roster_id)) byeTeams.push(t2);
+                            });
+
+                            // 3. Assemble the visual stack perfectly
+                            if (byeTeams.length > 0 && trueR1Matches.length > 0) {
+                                // Standard 6-team format: Interleave BYE, Match, BYE, Match
+                                const maxLen = Math.max(byeTeams.length, trueR1Matches.length);
+                                for (let i = 0; i < maxLen; i++) {
+                                    if (byeTeams[i]) displayItems.push({ isByeBlock: true, team: byeTeams[i] });
+                                    if (trueR1Matches[i]) displayItems.push({ isByeBlock: false, match: trueR1Matches[i] });
                                 }
+                            } else {
+                                // Fallback for 4-team, 8-team, or pure anomalies
+                                byeTeams.forEach(t => displayItems.push({ isByeBlock: true, team: t }));
+                                trueR1Matches.forEach(m => displayItems.push({ isByeBlock: false, match: m }));
                             }
                         } else {
+                            // Round 2+ maps normally without intervention
                             roundMatches.forEach(m => displayItems.push({ isByeBlock: false, match: m }));
                         }
 
@@ -102,6 +104,7 @@ export default function MatchupsAndBrackets({ matchupsData, leagueTeamManagers, 
                                 <div className={`${styles.roundColumnLayout} ${styles[`roundIdx${roundIdx}`]}`}>
                                     <div className={styles.mainMatchesSection}>
                                         {displayItems.map((item, itemIdx) => {
+                                            
                                             if (item.isByeBlock) {
                                                 const meta = item.team.roster_id ? getTeamFromTeamManagers(leagueTeamManagers, item.team.roster_id, matchupsData.year) : null;
                                                 return (
@@ -110,7 +113,7 @@ export default function MatchupsAndBrackets({ matchupsData, leagueTeamManagers, 
                                                         <div className={`${styles.teamRow} ${styles.byeRow}`}>
                                                             <div className={styles.teamInfo}>
                                                                 {meta ? <img src={meta.avatar} className={styles.avatar} alt="bye" /> : <div className={styles.avatarPlaceholder} />}
-                                                                <span className={styles.teamName}>{meta ? meta.name : "TBD"}</span>
+                                                                <span className={styles.teamName}>{meta ? meta.name : (item.team.roster_id ? "Unknown Team" : "TBD")}</span>
                                                             </div>
                                                             <span className={styles.score} style={{color: '#64748b', fontWeight: '800'}}>BYE</span>
                                                         </div>
@@ -160,7 +163,7 @@ export default function MatchupsAndBrackets({ matchupsData, leagueTeamManagers, 
                     })}
                 </div>
 
-                {/* Consolation Section - Completely isolated at bottom of viewport */}
+                {/* Consolation Section */}
                 <div className={styles.consolationSection}>
                     <h3 className={styles.consolationHeading}>Placement & Consolation Matches</h3>
                     <div className={styles.consolationGrid}>
@@ -194,7 +197,6 @@ export default function MatchupsAndBrackets({ matchupsData, leagueTeamManagers, 
                                                 if (pVal === 3 && !isToiletBowl) clabel = "🥉 3rd Place Match";
                                                 else clabel = `${pVal}th Place Match`;
                                             } else {
-                                                // Hardcoded Fallback logic based on specific rounds
                                                 if (!isToiletBowl) {
                                                     if (roundIdx === totalRounds - 1) clabel = "🥉 3rd Place Match";
                                                     else if (roundIdx === totalRounds - 2) clabel = "5th Place Match";
