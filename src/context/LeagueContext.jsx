@@ -1,122 +1,87 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { getLeagueData } from '../utils/helper';
 
 const LeagueContext = createContext();
 
+export const useLeague = () => useContext(LeagueContext);
+
 export const LeagueProvider = ({ children }) => {
     const [activeLeague, setActiveLeague] = useState(null);
-    const [userLeaguesList, setUserLeaguesList] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [userId, setUserId] = useState(null);
 
-    const loadLeagueContext = async (userId, targetLeagueId = null) => {
+    // This function fetches the user's leagues and sets the active one
+    const loadLeagueContext = async (uid, specificLeagueId = null) => {
         setLoading(true);
         try {
-            const { data: userLeagues, error: linkError } = await supabase
+            let query = supabase
                 .from('user_leagues')
-                .select(`league_id, is_commissioner, leagues ( sleeper_league_id, league_name )`)
-                .eq('user_id', userId);
+                .select('league_id, is_commissioner, team_name, leagues(*)')
+                .eq('user_id', uid);
 
-            if (linkError || !userLeagues || userLeagues.length === 0) {
-                setLoading(false);
-                return;
+            // If a specific league ID is passed (like right after adding a new league), prioritize it
+            if (specificLeagueId) {
+                query = query.eq('league_id', specificLeagueId);
             }
 
-            const formattedLeagues = await Promise.all(userLeagues.map(async link => {
-                const sleeperId = link.leagues.sleeper_league_id;
-                const lData = await getLeagueData(sleeperId).catch(() => null);
-                
-                return {
-                    id: link.league_id,
-                    sleeper_league_id: sleeperId,
-                    name: link.leagues.league_name,
-                    is_commissioner: link.is_commissioner,
-                    avatar: lData?.avatar ? `https://sleepercdn.com/avatars/thumbs/${lData.avatar}` : null
-                };
-            }));
+            const { data, error } = await query;
 
-            setUserLeaguesList(formattedLeagues);
+            if (error) throw error;
 
-            let activeLink = null;
-            if (targetLeagueId) {
-                activeLink = formattedLeagues.find(l => l.id === targetLeagueId);
-            } else {
-                const savedId = localStorage.getItem('activeLeagueId');
-                activeLink = formattedLeagues.find(l => l.id === savedId) || formattedLeagues[0];
-            }
-
-            if (activeLink) {
-                localStorage.setItem('activeLeagueId', activeLink.id);
-                
-                const { data: league, error: leagueError } = await supabase
-                    .from('leagues')
-                    .select('*')
-                    .eq('id', activeLink.id)
-                    .single();
-
-                if (!leagueError) {
-                    setActiveLeague({
-                        ...league,
-                        is_commissioner: activeLink.is_commissioner,
-                        avatar: activeLink.avatar
-                    });
-                }
-            }
-        } catch (err) {
-            console.error("Context initialization error:", err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // A fast, dedicated switcher that utilizes pre-loaded state
-    const switchActiveLeague = async (targetLeagueId) => {
-        if (activeLeague?.id === targetLeagueId) return; // Prevent unnecessary fetches
-        
-        setLoading(true);
-        try {
-            const targetLeagueInfo = userLeaguesList.find(l => l.id === targetLeagueId);
-            if (!targetLeagueInfo) return;
-
-            localStorage.setItem('activeLeagueId', targetLeagueId);
-
-            const { data: league, error: leagueError } = await supabase
-                .from('leagues')
-                .select('*')
-                .eq('id', targetLeagueId)
-                .single();
-
-            if (!leagueError) {
+            if (data && data.length > 0) {
+                // If they have multiple leagues, default to the first one returned
+                const selected = data[0];
                 setActiveLeague({
-                    ...league,
-                    is_commissioner: targetLeagueInfo.is_commissioner,
-                    avatar: targetLeagueInfo.avatar
+                    ...selected.leagues,
+                    is_commissioner: selected.is_commissioner,
+                    my_team_name: selected.team_name
                 });
+            } else {
+                setActiveLeague(null);
             }
         } catch (err) {
-            console.error("Error switching leagues:", err);
+            console.error("Error loading league context:", err);
+            setActiveLeague(null);
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        const init = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
+        // 1. Initial check when the app first loads
+        supabase.auth.getSession().then(({ data: { session } }) => {
             if (session?.user) {
+                setUserId(session.user.id);
                 loadLeagueContext(session.user.id);
             } else {
                 setLoading(false);
             }
+        });
+
+        // 2. THE FIX: The active listener. 
+        // This fires instantly when the user finishes logging in or logging out.
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_IN' && session?.user) {
+                // Instantly grab data without needing a page refresh
+                setUserId(session.user.id);
+                loadLeagueContext(session.user.id);
+            } else if (event === 'SIGNED_OUT') {
+                // Clear the data completely if they log out
+                setUserId(null);
+                setActiveLeague(null);
+                setLoading(false);
+            }
+        });
+
+        // Cleanup listener when app closes
+        return () => {
+            if (subscription) subscription.unsubscribe();
         };
-        init();
     }, []);
 
     return (
-        <LeagueContext.Provider value={{ activeLeague, userLeaguesList, loading, loadLeagueContext, switchActiveLeague }}>
+        <LeagueContext.Provider value={{ activeLeague, setActiveLeague, loading, loadLeagueContext }}>
             {children}
         </LeagueContext.Provider>
     );
 };
-
-export const useLeague = () => useContext(LeagueContext);
