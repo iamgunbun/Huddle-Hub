@@ -132,14 +132,12 @@ export default function Managers() {
         load();
     }, [activeLeague]);
 
-    // NEW FLAG: autoCheckOnly prevents accidental API spam when clicking through managers
     const runEvaluation = async (manager, forceRegenerate = false, autoCheckOnly = false) => {
         setEvalLoading(true);
         setUiErrorMessage(null);
         try {
             const currentYear = new Date().getFullYear();
             
-            // 1. Query Cache Table First
             const { data: existing } = await supabase
                 .from('ai_evaluations')
                 .select('*')
@@ -167,13 +165,12 @@ export default function Managers() {
                 return;
             }
 
-            // CRITICAL CHANGE: Stop here if we are only auto-checking the cache on load
             if (autoCheckOnly) {
                 setEvalLoading(false);
                 return; 
             }
 
-            setEvalLoading(true); // Restart loading text for actual API hit
+            setEvalLoading(true);
             
             const pData = await loadPlayers();
             const rData = await getLeagueRosters(activeLeague.sleeper_league_id);
@@ -232,10 +229,9 @@ export default function Managers() {
         }
     };
 
-    // Safely auto-check cache without spamming API
     useEffect(() => {
         if (selectedManager && !evaluations[selectedManager.managerId] && !evalLoading) {
-            runEvaluation(selectedManager, false, true); // true = autoCheckOnly
+            runEvaluation(selectedManager, false, true);
         }
     }, [selectedManager]);
 
@@ -293,10 +289,14 @@ export default function Managers() {
                                     <div style={{ textAlign: 'center', padding: '15px 0' }}>
                                         <button 
                                             onClick={() => runEvaluation(selectedManager, false, false)}
-                                            style={{ background: '#eebf1c', border: 'none', color: '#121212', padding: '10px 15px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9em', fontWeight: 'bold' }}
+                                            style={{ background: '#eebf1c', border: 'none', color: '#121212', padding: '10px 15px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9em', fontWeight: 'bold', marginBottom: '15px' }}
                                         >
-                                            Generate Scouting Report
+                                            Generate AI Scouting Report
                                         </button>
+                                        <div style={{ fontSize: '0.75em', color: '#94a3b8', lineHeight: '1.5', padding: '0 10px' }}>
+                                            <p style={{ margin: '0 0 6px 0', fontWeight: '500' }}>You are allotted one initial generation and 1 manual regeneration per season.</p>
+                                            <p style={{ margin: '0', fontStyle: 'italic', color: '#64748b' }}>*For Keeper & Redraft leagues, we highly recommend waiting until after your draft is complete to generate your evaluation for the most accurate results.</p>
+                                        </div>
                                     </div>
                                 ) : (
                                     <>
@@ -306,7 +306,7 @@ export default function Managers() {
                                     </>
                                 )}
                                 
-                                {evalLoading && <span className={styles.aiSubtext}>Compiling records...</span>}
+                                {evalLoading && <span className={styles.aiSubtext}>Gemini Engine compiling records...</span>}
                                 
                                 {evalData && !evalLoading && canRegenerate && !uiErrorMessage && (
                                     <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
@@ -315,12 +315,15 @@ export default function Managers() {
                                                 You have already used your manual regeneration for this season.
                                             </span>
                                         ) : (
-                                            <button 
-                                                onClick={() => runEvaluation(selectedManager, true, false)}
-                                                style={{ background: '#1e2530', border: '1px solid #eebf1c', color: '#eebf1c', padding: '8px 15px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85em', fontWeight: 'bold' }}
-                                            >
-                                                Regenerate Scouting Report (1 Remaining)
-                                            </button>
+                                            <div style={{ textAlign: 'center' }}>
+                                                <button 
+                                                    onClick={() => runEvaluation(selectedManager, true, false)}
+                                                    style={{ background: '#1e2530', border: '1px solid #eebf1c', color: '#eebf1c', padding: '8px 15px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85em', fontWeight: 'bold', marginBottom: '8px' }}
+                                                >
+                                                    Regenerate Scouting Report (1 Remaining)
+                                                </button>
+                                                <p style={{ fontSize: '0.7em', color: '#64748b', fontStyle: 'italic', margin: '0' }}>*Keeper & Redraft leagues: Ensure your draft is complete before using your final regeneration.</p>
+                                            </div>
                                         )}
                                     </div>
                                 )}
