@@ -295,7 +295,7 @@ export default function Managers() {
                                             onClick={() => runEvaluation(selectedManager, false, false)}
                                             style={{ background: '#eebf1c', border: 'none', color: '#121212', padding: '10px 15px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9em', fontWeight: 'bold' }}
                                         >
-                                            Generate AI Scouting Report
+                                            Generate Scouting Report
                                         </button>
                                     </div>
                                 ) : (
@@ -306,7 +306,7 @@ export default function Managers() {
                                     </>
                                 )}
                                 
-                                {evalLoading && <span className={styles.aiSubtext}>Gemini Engine compiling records...</span>}
+                                {evalLoading && <span className={styles.aiSubtext}>Compiling records...</span>}
                                 
                                 {evalData && !evalLoading && canRegenerate && !uiErrorMessage && (
                                     <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
