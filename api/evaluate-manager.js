@@ -73,19 +73,18 @@ export default async function handler(req, res) {
       { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
     ];
 
-    // Force strict JSON structure so Gemini cannot hallucinate extra brackets
     const responseSchema = {
       type: SchemaType.OBJECT,
       properties: {
         strategy: { type: SchemaType.STRING, description: "A 1-2 sentence evaluation of their current roster composition." },
-        profile: { type: SchemaType.STRING, description: "A 1-2 sentence summary of their overall dynasty/keeper performance and history." },
+        profile: { type: SchemaType.STRING, description: "A 1-2 sentence summary of their overall performance and history." },
         philosophy: { type: SchemaType.STRING, description: "A 1-2 sentence prediction on their trading style and roster management habits." }
       },
       required: ["strategy", "profile", "philosophy"]
     };
 
     const model = genAI.getGenerativeModel({ 
-        model: "gemini-3.5-flash",
+        model: "gemini-2.5-flash",
         safetySettings,
         generationConfig: { 
             responseMimeType: "application/json",
@@ -97,7 +96,7 @@ export default async function handler(req, res) {
 
     const prompt = `You are an expert ${leagueTypeStr} Fantasy Football Analyst. Evaluate manager: ${teamName}.
     
-    CRITICAL LEAGUE TYPE RULE: This is a ${leagueTypeStr} league. Adjust your strategy language accordingly (e.g., if Redraft, ignore future draft picks and focus only on this season).
+    CRITICAL LEAGUE TYPE RULE: This is a ${leagueTypeStr} league. Adjust your strategy language accordingly.
     CRITICAL TIMELINE RULE: We are currently in the ${currentYear} pre-season. The ${currentYear} season has NOT started yet. Do not speak about the ${currentYear} season in the past tense.
     
     Completed Past Seasons Historical Performance Records for this Franchise Slot:
@@ -119,6 +118,11 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error("Backend Crash:", error);
-    res.status(500).json({ error: error.toString() });
+    // Gracefully handle the 429 Rate Limit error
+    if (error.message.includes("429")) {
+        res.status(429).json({ error: "Google API Free Tier speed limit reached (20 requests per minute). Please wait 60 seconds and try again." });
+    } else {
+        res.status(500).json({ error: error.toString() });
+    }
   }
 }

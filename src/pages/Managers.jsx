@@ -6,7 +6,6 @@ import { getLeagueTeamManagers, getAwards, getLeagueRecords, loadPlayers, getLea
 import { syncActiveLeague } from '../utils/leagueInfo';
 import styles from './Managers.module.css';
 
-// Aggressive JSON cleaner to prevent UI crashes if AI hallucinates brackets
 const parseAiResponse = (rawText) => {
     try {
         return JSON.parse(rawText);
@@ -27,12 +26,10 @@ export default function Managers() {
     const { activeLeague } = useLeague();
     const [searchParams, setSearchParams] = useSearchParams();
     
-    // Core Data UI States
     const [loading, setLoading] = useState(true);
     const [mergedManagers, setMergedManagers] = useState([]);
     const [myManagerId, setMyManagerId] = useState(null);
     
-    // AI Evaluation Display Controls
     const [evaluations, setEvaluations] = useState({});
     const [regenStatus, setRegenStatus] = useState({});
     const [evalLoading, setEvalLoading] = useState(false);
@@ -135,13 +132,14 @@ export default function Managers() {
         load();
     }, [activeLeague]);
 
-    const runEvaluation = async (manager, forceRegenerate = false) => {
+    // NEW FLAG: autoCheckOnly prevents accidental API spam when clicking through managers
+    const runEvaluation = async (manager, forceRegenerate = false, autoCheckOnly = false) => {
         setEvalLoading(true);
         setUiErrorMessage(null);
         try {
             const currentYear = new Date().getFullYear();
             
-            // 1. Query Cache Table
+            // 1. Query Cache Table First
             const { data: existing } = await supabase
                 .from('ai_evaluations')
                 .select('*')
@@ -169,7 +167,14 @@ export default function Managers() {
                 return;
             }
 
-            // 2. Resolve Player IDs to Actual Names/Positions
+            // CRITICAL CHANGE: Stop here if we are only auto-checking the cache on load
+            if (autoCheckOnly) {
+                setEvalLoading(false);
+                return; 
+            }
+
+            setEvalLoading(true); // Restart loading text for actual API hit
+            
             const pData = await loadPlayers();
             const rData = await getLeagueRosters(activeLeague.sleeper_league_id);
             const playersMap = pData?.players || {};
@@ -183,7 +188,6 @@ export default function Managers() {
                 return player ? `${player.fn} ${player.ln} (${player.pos} - ${player.t})` : 'Unknown Player';
             });
 
-            // 3. Fetch from API Route
             const response = await fetch('/api/evaluate-manager', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -196,22 +200,15 @@ export default function Managers() {
             });
 
             if (!response.ok) {
-                const errText = await response.text();
-                throw new Error(`Server API error ${response.status}: ${errText}`);
+                const errJson = await response.json().catch(() => ({}));
+                throw new Error(errJson.error || `Server API error ${response.status}`);
             }
 
             const data = await response.json();
             if (!data.evaluation) throw new Error("API completely executed but returned an empty response block.");
             
-            let newEvalParsed = { strategy: "Parsing failed", profile: "Parsing failed", philosophy: "Parsing failed" };
-            try { 
-                newEvalParsed = parseAiResponse(data.evaluation); 
-            } catch (e) { 
-                console.error("AI Payload format boundary mismatch:", data.evaluation);
-                throw new Error("The AI failed to format its response correctly. Please regenerate.");
-            }
+            let newEvalParsed = parseAiResponse(data.evaluation); 
 
-            // 4. Save Cache Data Block
             if (existing && forceRegenerate) {
                 await supabase.from('ai_evaluations').update({ evaluation_text: data.evaluation, regenerated: true }).eq('id', existing.id);
                 setRegenStatus(prev => ({ ...prev, [manager.managerId]: true }));
@@ -235,9 +232,10 @@ export default function Managers() {
         }
     };
 
+    // Safely auto-check cache without spamming API
     useEffect(() => {
         if (selectedManager && !evaluations[selectedManager.managerId] && !evalLoading) {
-            runEvaluation(selectedManager, false);
+            runEvaluation(selectedManager, false, true); // true = autoCheckOnly
         }
     }, [selectedManager]);
 
@@ -291,11 +289,20 @@ export default function Managers() {
                             <div className={styles.aiBox}>
                                 {uiErrorMessage ? (
                                     <p style={{ color: '#ef4444', fontSize: '0.9em' }}><strong>Pipeline Failure:</strong> {uiErrorMessage}</p>
+                                ) : !evalData && !evalLoading ? (
+                                    <div style={{ textAlign: 'center', padding: '15px 0' }}>
+                                        <button 
+                                            onClick={() => runEvaluation(selectedManager, false, false)}
+                                            style={{ background: '#eebf1c', border: 'none', color: '#121212', padding: '10px 15px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9em', fontWeight: 'bold' }}
+                                        >
+                                            Generate AI Scouting Report
+                                        </button>
+                                    </div>
                                 ) : (
                                     <>
-                                        <p><strong>Strategy Pattern:</strong> {evalData?.strategy || 'Evaluating roster composition...'} </p>
-                                        <p><strong>Manager Profile:</strong> {evalData?.profile || 'Generating historical summary...'} </p>
-                                        <p><strong>Trading Philosophy:</strong> {evalData?.philosophy || 'Analyzing historical transactions...'} </p>
+                                        <p><strong>Strategy Pattern:</strong> {evalData?.strategy} </p>
+                                        <p><strong>Manager Profile:</strong> {evalData?.profile} </p>
+                                        <p><strong>Trading Philosophy:</strong> {evalData?.philosophy} </p>
                                     </>
                                 )}
                                 
@@ -309,7 +316,7 @@ export default function Managers() {
                                             </span>
                                         ) : (
                                             <button 
-                                                onClick={() => runEvaluation(selectedManager, true)}
+                                                onClick={() => runEvaluation(selectedManager, true, false)}
                                                 style={{ background: '#1e2530', border: '1px solid #eebf1c', color: '#eebf1c', padding: '8px 15px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85em', fontWeight: 'bold' }}
                                             >
                                                 Regenerate Scouting Report (1 Remaining)
