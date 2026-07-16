@@ -19,6 +19,27 @@
 <meta name="theme-color" content="#0b0e14" />
   </head>
   <body>
+    <div id="splash-screen" style="position:fixed; inset:0; display:flex; justify-content:center; align-items:center; background-color:#0b0e14; z-index:9999;">
+  <div style="width:150px; height:150px; background-image:url('/logo.png'); background-size:contain; background-repeat:no-repeat; animation:pulse 1.5s infinite ease-in-out;"></div>
+</div>
+
+<style>
+  @keyframes pulse {
+    0%, 100% { transform: scale(0.9); opacity: 0.6; }
+    50% { transform: scale(1.05); opacity: 1; }
+  }
+</style>
+
+<div id="root"></div>
+
+<script>
+  // Remove splash when React loads
+  window.addEventListener('load', () => {
+    const splash = document.getElementById('splash-screen');
+    splash.style.opacity = '0';
+    setTimeout(() => splash.remove(), 500);
+  });
+</script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
