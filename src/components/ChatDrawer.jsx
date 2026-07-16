@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
 import { getLeagueTeamManagers } from '../utils/helper';
-import { subscribeToWebPush } from '../utils/pushNotifications'; // Added Web Push Utility
+import { subscribeToWebPush } from '../utils/pushNotifications';
 import EmojiPicker from 'emoji-picker-react';
 import styles from './ChatDrawer.module.css';
 
@@ -16,7 +16,7 @@ export default function ChatDrawer() {
     
     const [unreadCount, setUnreadCount] = useState(0);
     const [pushEnabled, setPushEnabled] = useState(Notification.permission === 'granted');
-    const [isSubscribing, setIsSubscribing] = useState(false); // Added loading state
+    const [isSubscribing, setIsSubscribing] = useState(false); 
     
     const [currentUser, setCurrentUser] = useState(null);
     const [authorName, setAuthorName] = useState('Unknown Team');
@@ -43,7 +43,6 @@ export default function ChatDrawer() {
         }
     }, [isOpen]);
 
-    // INTEGRATED WEB PUSH SUBSCRIPTION LOGIC
     const handleEnableNotifications = async () => {
         if (!currentUser) {
             alert("Please log in to enable notifications.");
@@ -139,17 +138,6 @@ export default function ChatDrawer() {
                                 if (!isOpenRef.current) {
                                     setUnreadCount(prev => prev + 1);
                                 }
-
-                                // Kept as fallback for desktop browser users who have app open in background tab
-                                if ('Notification' in window && Notification.permission === 'granted') {
-                                    if (document.visibilityState !== 'visible' || !isOpenRef.current) {
-                                        new Notification(payload.new.author_name, {
-                                            body: payload.new.content || 'Sent an attachment',
-                                            icon: payload.new.author_avatar || '/brand.png',
-                                            silent: false
-                                        });
-                                    }
-                                }
                             }
                         }
                     }).subscribe();
@@ -170,6 +158,7 @@ export default function ChatDrawer() {
     const sendPayload = async (payload) => {
         if (!activeLeague || !currentUser) return;
         
+        // 1. Save the message to Supabase
         const { error } = await supabase.from('messages').insert({
             league_id: activeLeague.id,
             user_id: currentUser.id,
@@ -178,7 +167,38 @@ export default function ChatDrawer() {
             ...payload
         });
 
-        if (error) console.error("Message error:", error);
+        if (error) {
+            console.error("Message error:", error);
+            return;
+        }
+
+        // 2. Fetch the Push Subscriptions of OTHER users in this league
+        const { data: leagueMembers } = await supabase
+            .from('user_leagues')
+            .select('users(web_push_subscription)')
+            .eq('league_id', activeLeague.id)
+            .neq('user_id', currentUser.id);
+
+        const subscriptions = leagueMembers
+            ?.map(member => member.users?.web_push_subscription)
+            .filter(sub => sub != null)
+            .map(sub => typeof sub === 'string' ? JSON.parse(sub) : sub);
+
+        // 3. Ping your Vercel API to dispatch the notifications
+        if (subscriptions && subscriptions.length > 0) {
+            fetch('/api/send-push', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    subscriptions: subscriptions,
+                    payload: {
+                        title: `New message from ${authorName}`,
+                        body: payload.content || (payload.image_url ? 'Sent an image' : 'Sent a GIF'),
+                        url: `/?league=${activeLeague.id}` 
+                    }
+                })
+            }).catch(err => console.error("Failed to trigger push API:", err));
+        }
     };
 
     const handleSendText = (e) => {
