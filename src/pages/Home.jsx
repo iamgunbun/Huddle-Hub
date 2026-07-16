@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
 import { getLeagueTeamManagers, getLeagueData } from '../utils/helper';
@@ -8,7 +9,9 @@ import Transactions from '../components/Transactions/Transactions';
 import ProjectionsPanel from '../components/Projections/ProjectionsPanel';
 
 export default function Home() {
-    const { activeLeague } = useLeague();
+    const navigate = useNavigate();
+    // Pull the loading state from your context
+    const { activeLeague, loading: leagueLoading } = useLeague();
     
     // UI State
     const [copyLinkText, setCopyLinkText] = useState('Copy Invite Link');
@@ -16,25 +19,38 @@ export default function Home() {
     const [activeModal, setActiveModal] = useState(null);
     
     // Data State
+    const [authChecking, setAuthChecking] = useState(true);
     const [recentChamp, setRecentChamp] = useState(null);
     const [teamManagers, setTeamManagers] = useState(null);
     const [leagueRole, setLeagueRole] = useState('Member');
     const [leagueTenure, setLeagueTenure] = useState('Loading...');
 
+    // 1. Check Authentication Status Immediately
+    useEffect(() => {
+        const verifyAuth = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+                navigate('/login');
+            } else {
+                setAuthChecking(false);
+            }
+        };
+        verifyAuth();
+    }, [navigate]);
+
+    // 2. Handle Resize and Fetch League Hub Data
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth <= 1100);
         window.addEventListener('resize', handleResize);
         
         const fetchHubData = async () => {
             if (!activeLeague?.sleeper_league_id) return;
-
             const sleeperId = activeLeague.sleeper_league_id;
-
             try {
                 const managersData = await getLeagueTeamManagers(sleeperId);
                 setTeamManagers(managersData);
-
                 const { data: { session } } = await supabase.auth.getSession();
+                
                 if (session?.user) {
                     const { data: ulData } = await supabase.from('user_leagues')
                         .select('team_name')
@@ -44,7 +60,6 @@ export default function Home() {
                     
                     let currentRole = activeLeague.is_commissioner ? 'Commissioner' : 'Member';
                     let tenureText = '1st Year';
-
                     const leagueYears = Object.keys(managersData.teamManagersMap).map(Number);
                     const currentYear = managersData.currentSeason;
                     
@@ -53,11 +68,11 @@ export default function Home() {
                         const totalSeasons = leagueYears.length;
                         tenureText = `${leagueStartYear} - Present (${totalSeasons} Year${totalSeasons > 1 ? 's' : ''})`;
                     }
-
+                    
                     if (ulData?.team_name) {
                         const searchName = ulData.team_name.toLowerCase().trim();
                         let myManagerId = null;
-
+                        
                         if (searchName !== 'commissioner team') {
                             const rostersMap = managersData.teamManagersMap[currentYear] || {};
                             for (const [rId, rData] of Object.entries(rostersMap)) {
@@ -74,18 +89,17 @@ export default function Home() {
                                     break;
                                 }
                             }
-
                             if (!myManagerId) {
                                 for (const [uId, uData] of Object.entries(managersData.users)) {
-                                    if (uData.display_name?.toLowerCase().trim() === searchName || 
-                                        uData.metadata?.team_name?.toLowerCase().trim() === searchName) {
+                                    if (uData.display_name?.toLowerCase().trim() === searchName ||
+                                         uData.metadata?.team_name?.toLowerCase().trim() === searchName) {
                                         myManagerId = uId;
                                         break;
                                     }
                                 }
                             }
                         }
-
+                        
                         if (myManagerId) {
                             const activeYears = [];
                             for (const y in managersData.teamManagersMap) {
@@ -107,7 +121,7 @@ export default function Home() {
                     setLeagueRole(currentRole);
                     setLeagueTenure(tenureText);
                 }
-
+                
                 const leagueData = await getLeagueData(sleeperId);
                 const prevLeagueId = leagueData?.status === "complete" ? leagueData.league_id : leagueData?.previous_league_id;
                 
@@ -128,12 +142,11 @@ export default function Home() {
                         }
                     }
                 }
-
             } catch (e) {
                 console.error("Dashboard data load failed:", e);
             }
         };
-
+        
         fetchHubData();
         return () => window.removeEventListener('resize', handleResize);
     }, [activeLeague]);
@@ -147,11 +160,34 @@ export default function Home() {
         });
     };
 
+    // 3. Display Custom Loading Screen while Auth or Data Resolves
+    if (authChecking || leagueLoading) {
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '70vh', textAlign: 'center' }}>
+                <img 
+                    src="/brand.png" 
+                    alt="Huddle Logo" 
+                    style={{ maxWidth: '180px', marginBottom: '25px', animation: 'pulse 1.5s infinite ease-in-out' }} 
+                />
+                <h2 style={{ color: '#eebf1c', textTransform: 'uppercase', letterSpacing: '2px', fontSize: '1.2em' }}>
+                    Loading your Leagues...
+                </h2>
+            </div>
+        );
+    }
+
+    // 4. True Empty State (Logged in, but zero leagues found)
     if (!activeLeague) {
         return (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '70vh', textAlign: 'center', color: '#f8fafc' }}>
                 <h1 style={{ fontWeight: '500', textTransform: 'uppercase', letterSpacing: '2px' }}>Welcome to Huddle</h1>
-                <p style={{ color: '#94a3b8' }}>You don't have any active leagues connected to your account.</p>
+                <p style={{ color: '#94a3b8', marginBottom: '30px' }}>You don't have any active leagues connected to your account.</p>
+                <button 
+                    onClick={() => navigate('/add-league')}
+                    style={{ padding: '14px 28px', background: '#eebf1c', color: '#000', border: 'none', borderRadius: '8px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '1px', cursor: 'pointer', transition: 'all 0.2s' }}
+                >
+                    Connect a League
+                </button>
             </div>
         );
     }
@@ -172,12 +208,10 @@ export default function Home() {
                         <div className={styles.commishNote}>
                             <h3 className={styles.cardHeader}>Commissioner's Note</h3>
                             <div style={{ color: '#f8fafc', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
-                                {/* CORRECTED TO COMMISH_NOTE */}
                                 {activeLeague.commish_note || 'Welcome to your dynasty hub. The commissioner has not set a message yet.'}
                             </div>
                         </div>
                         
-                        {/* Ensure preview is TRUE for the Home Page */}
                         <Transactions preview={true} />
                     </div>
                     
