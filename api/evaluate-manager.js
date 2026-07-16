@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, SchemaType } from "@google/generative-ai";
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -21,41 +21,32 @@ export default async function handler(req, res) {
 
     try {
       while (currentLeagueId && currentLeagueId !== "0" && currentLeagueId !== 0) {
-        
-        // Fetch League Data
         const lRes = await fetch(`https://api.sleeper.app/v1/league/${currentLeagueId}`);
         if (!lRes.ok) break;
         const lData = await lRes.json();
         const actualSeasonYear = lData.season;
 
-        // Dynamically determine if this is Redraft, Keeper, or Dynasty
         if (isFirstLeagueFetch) {
             const typeCode = lData.settings?.type || 0;
             leagueTypeStr = typeCode === 2 ? "Dynasty" : (typeCode === 1 ? "Keeper" : "Redraft");
             isFirstLeagueFetch = false;
         }
 
-        // Fetch Roster Data
         const rostersRes = await fetch(`https://api.sleeper.app/v1/league/${currentLeagueId}/rosters`);
         if (!rostersRes.ok) break;
         const rosters = await rostersRes.json();
         
         let roster;
-        
-        // If it's the current year, find the roster slot by the manager's owner_id
         if (!targetRosterId) {
             roster = rosters.find(r => r.owner_id === managerId || (r.co_owners && r.co_owners.includes(managerId)));
-            if (roster) targetRosterId = roster.roster_id; // Lock onto this franchise slot for past years
+            if (roster) targetRosterId = roster.roster_id; 
         } else {
-            // For past years, find the roster by the franchise slot ID so we can trace orphans
             roster = rosters.find(r => r.roster_id === targetRosterId);
         }
         
         if (roster) {
           const wins = roster.settings?.wins || 0;
           const losses = roster.settings?.losses || 0;
-          
-          // Check if the owner ID of this slot was different in the past
           const wasDifferentOwner = (roster.owner_id !== managerId) && (!roster.co_owners || !roster.co_owners.includes(managerId));
           
           if (wins > 0 || losses > 0) {
@@ -63,7 +54,7 @@ export default async function handler(req, res) {
                 year: actualSeasonYear, 
                 wins, 
                 losses,
-                note: wasDifferentOwner ? "This manager inherited this team's past record (Orphan takeover)." : "Managed by current user."
+                note: wasDifferentOwner ? "Inherited orphan team." : "Managed by current user."
             });
           }
         }
@@ -82,10 +73,24 @@ export default async function handler(req, res) {
       { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
     ];
 
+    // Force strict JSON structure so Gemini cannot hallucinate extra brackets
+    const responseSchema = {
+      type: SchemaType.OBJECT,
+      properties: {
+        strategy: { type: SchemaType.STRING, description: "A 1-2 sentence evaluation of their current roster composition." },
+        profile: { type: SchemaType.STRING, description: "A 1-2 sentence summary of their overall dynasty/keeper performance and history." },
+        philosophy: { type: SchemaType.STRING, description: "A 1-2 sentence prediction on their trading style and roster management habits." }
+      },
+      required: ["strategy", "profile", "philosophy"]
+    };
+
     const model = genAI.getGenerativeModel({ 
-        model: "gemini-3.5-flash",
+        model: "gemini-2.5-flash",
         safetySettings,
-        generationConfig: { responseMimeType: "application/json" } 
+        generationConfig: { 
+            responseMimeType: "application/json",
+            responseSchema: responseSchema
+        } 
     });
     
     const currentYear = new Date().getFullYear();
@@ -97,14 +102,11 @@ export default async function handler(req, res) {
     
     Completed Past Seasons Historical Performance Records for this Franchise Slot:
     ${JSON.stringify(history)}
-    (If a year says 'inherited' or 'orphan takeover', it means the manager is new to the team and taking over someone else's past mess/success).
     
     ACTUAL CURRENT ROSTER OF PLAYERS FOR THE UPCOMING ${currentYear} SEASON:
     ${JSON.stringify(currentRosterPlayers)}
     
-    CRITICAL ROSTER INTEGRITY RULE: You must ONLY evaluate the specific players listed in the current roster above. Do not invent, assume, or hallucinate any other players. If the list is empty, state they are currently clearing space or drafting.
-    
-    Return a raw JSON object with exactly three keys: "strategy", "profile", "philosophy". Do not use markdown blocks.`;
+    CRITICAL ROSTER INTEGRITY RULE: You must ONLY evaluate the specific players listed in the current roster above. Do not invent, assume, or hallucinate any other players. If the list is empty, state they are currently clearing space or drafting.`;
 
     const result = await model.generateContent(prompt);
 

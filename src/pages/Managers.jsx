@@ -6,6 +6,23 @@ import { getLeagueTeamManagers, getAwards, getLeagueRecords, loadPlayers, getLea
 import { syncActiveLeague } from '../utils/leagueInfo';
 import styles from './Managers.module.css';
 
+// Aggressive JSON cleaner to prevent UI crashes if AI hallucinates brackets
+const parseAiResponse = (rawText) => {
+    try {
+        return JSON.parse(rawText);
+    } catch (e) {
+        let clean = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+        while (clean.endsWith('}')) {
+            try {
+                return JSON.parse(clean);
+            } catch (err) {
+                clean = clean.slice(0, -1).trim();
+            }
+        }
+        throw new Error("Catastrophic JSON format error.");
+    }
+};
+
 export default function Managers() {
     const { activeLeague } = useLeague();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -134,10 +151,14 @@ export default function Managers() {
                 .maybeSingle();
 
             if (existing && !forceRegenerate) {
-                let parsed = { strategy: "Format Error", profile: "Format Error", philosophy: "Format Error" };
-                try { parsed = JSON.parse(existing.evaluation_text.replace(/```json/gi, '').replace(/```/g, '').trim()); } catch (e) { console.error(e); }
-                setEvaluations(prev => ({ ...prev, [manager.managerId]: parsed }));
-                setRegenStatus(prev => ({ ...prev, [manager.managerId]: existing.regenerated }));
+                try { 
+                    const parsed = parseAiResponse(existing.evaluation_text);
+                    setEvaluations(prev => ({ ...prev, [manager.managerId]: parsed }));
+                    setRegenStatus(prev => ({ ...prev, [manager.managerId]: existing.regenerated }));
+                } catch (e) { 
+                    console.error("Cache Parsing Failed:", e);
+                    setUiErrorMessage("The cached evaluation was corrupted. Please regenerate.");
+                }
                 setEvalLoading(false);
                 return;
             }
@@ -170,7 +191,7 @@ export default function Managers() {
                     managerId: manager.managerId, 
                     leagueId: activeLeague.sleeper_league_id, 
                     teamName: manager.teamName,
-                    currentRosterPlayers: mappedPlayerStrings // Sent resolved data explicitly
+                    currentRosterPlayers: mappedPlayerStrings
                 }),
             });
 
@@ -184,9 +205,10 @@ export default function Managers() {
             
             let newEvalParsed = { strategy: "Parsing failed", profile: "Parsing failed", philosophy: "Parsing failed" };
             try { 
-                newEvalParsed = JSON.parse(data.evaluation.replace(/```json/gi, '').replace(/```/g, '').trim()); 
+                newEvalParsed = parseAiResponse(data.evaluation); 
             } catch (e) { 
-                console.error("AI Payload format boundary mismatch:", data.evaluation); 
+                console.error("AI Payload format boundary mismatch:", data.evaluation);
+                throw new Error("The AI failed to format its response correctly. Please regenerate.");
             }
 
             // 4. Save Cache Data Block
