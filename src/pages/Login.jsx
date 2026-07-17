@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
+import { useLeague } from '../context/LeagueContext'; // 1. Import Context
 import styles from './Login.module.css';
 
 export default function Login() {
     const navigate = useNavigate();
+    const { loadLeagueContext } = useLeague(); // 2. Destructure load function
+    
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isLogin, setIsLogin] = useState(true);
@@ -37,22 +40,29 @@ export default function Login() {
             setAuthError("Please select your favorite NFL team.");
             return;
         }
+        
         setLoading(true);
         setAuthError('');
 
         try {
             if (isLogin) {
-                const { error } = await supabase.auth.signInWithPassword({ email, password });
+                const { data, error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;
+                
+                // 3. CRITICAL FIX: Block the redirect until leagues are loaded into memory
+                if (data?.user) {
+                    await loadLeagueContext(data.user.id);
+                }
             } else {
                 const { data, error } = await supabase.auth.signUp({ email, password });
                 if (error) throw error;
+                
                 if (data?.user) {
                     await supabase.from('profiles').upsert({ id: data.user.id, favorite_team: favoriteTeam });
+                    await loadLeagueContext(data.user.id);
                 }
             }
 
-            // INVITE REDIRECT LOGIC
             const returnUrl = localStorage.getItem('returnUrl');
             if (returnUrl) {
                 localStorage.removeItem('returnUrl');
@@ -60,7 +70,6 @@ export default function Login() {
             } else {
                 navigate(isLogin ? '/' : '/add-league');
             }
-
         } catch (error) {
             setAuthError(error.message);
         } finally {
