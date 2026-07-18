@@ -58,13 +58,13 @@ export default function Home() {
                                  
                 if (session?.user) {
                     const { data: ulData } = await supabase.from('user_leagues')
-                        .select('team_name, paid_amount')
+                        .select('team_name')
                         .eq('user_id', session.user.id)
                         .eq('league_id', activeLeague.id)
                         .single();
 
                     const { data: dbLeagueMeta } = await supabase.from('leagues')
-                        .select('dues_amount, enable_txn_fees, txn_fee_amount, exclude_defenses_from_fees')
+                        .select('dues_amount, enable_txn_fees, txn_fee_amount, exclude_defenses_from_fees, financial_ledger')
                         .eq('id', activeLeague.id)
                         .maybeSingle();
                                          
@@ -106,10 +106,8 @@ export default function Home() {
                     setLeagueRole(currentRole);
                     setLeagueTenure(tenureText);
 
-                    // MATHEMATICAL TRANSACTION RECORD RESOLVER MATRIX
                     if (activeRosterId) {
                         let allTxns = [];
-                        // Including 0 to pull any true off-season anomalies
                         for (let i = 0; i <= 18; i++) {
                             const res = await fetch(`https://api.sleeper.app/v1/league/${activeLeague.sleeper_league_id}/transactions/${i}`);
                             if (res.ok) {
@@ -121,7 +119,6 @@ export default function Home() {
                         const completedTxns = allTxns.filter(t => t.status === 'complete');
                         const isExcludeDefsEnabled = dbLeagueMeta?.exclude_defenses_from_fees ?? false;
 
-                        // UPDATED: Tally specific Trade Events AND Waiver/FA Adds
                         let calculatedAddsCount = 0;
                         const rIdInt = parseInt(activeRosterId);
 
@@ -146,11 +143,13 @@ export default function Home() {
 
                         setMyTxnCount(calculatedAddsCount);
 
-                        // Gross Statement Balancing
                         const baseDues = dbLeagueMeta?.dues_amount ?? 100;
                         const txnFeeCost = dbLeagueMeta?.enable_txn_fees ? (calculatedAddsCount * (dbLeagueMeta?.txn_fee_amount ?? 1)) : 0;
                         const totalGrossOwed = baseDues + txnFeeCost;
-                        const collectedAmount = ulData?.paid_amount || 0;
+                        
+                        // NEW JSON DATA CONNECTION
+                        const ledger = dbLeagueMeta?.financial_ledger || {};
+                        const collectedAmount = ledger[activeRosterId] || 0;
                         
                         setMyBalanceOwed(totalGrossOwed - collectedAmount);
                     }

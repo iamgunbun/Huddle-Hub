@@ -17,7 +17,7 @@ export default function AdminFees() {
     const [txnFeeAmount, setTxnFeeAmount] = useState(1);
     const [excludeDefs, setExcludeDefs] = useState(false);
     
-    // Raw Data State (Stored in memory so checkboxes don't trigger API reloads)
+    // Raw Data State 
     const [rawTxns, setRawTxns] = useState([]);
     const [rawRosters, setRawRosters] = useState({});
     const [rawUsers, setRawUsers] = useState({});
@@ -37,10 +37,10 @@ export default function AdminFees() {
             if (!activeLeague?.sleeper_league_id) return;
             setLoading(true);
             try {
-                // 1. Fetch DB configs
+                // 1. Fetch DB configs and the new JSON financial ledger
                 const { data: leagueConfigs } = await supabase
                     .from('leagues')
-                    .select('dues_amount, enable_txn_fees, txn_fee_amount, exclude_defenses_from_fees, ledger_season')
+                    .select('dues_amount, enable_txn_fees, txn_fee_amount, exclude_defenses_from_fees, ledger_season, financial_ledger')
                     .eq('id', activeLeague.id)
                     .maybeSingle();
 
@@ -65,22 +65,20 @@ export default function AdminFees() {
                 setRawRosters(activeRosters);
                 setRawUsers(tmData.users || {});
 
-                // 3. AUTO-RESET CHECK: If a new season has started, wipe payments to $0
-                let { data: userLeaguesRecords } = await supabase
-                    .from('user_leagues')
-                    .select('team_name, paid_amount')
-                    .eq('league_id', activeLeague.id);
-
+                // 3. AUTO-RESET CHECK: If a new season has started, wipe payments in the JSON ledger to {}
+                let activeLedger = leagueConfigs?.financial_ledger || {};
+                
                 if (leagueConfigs?.ledger_season && leagueConfigs.ledger_season !== currentSeason.toString()) {
-                    // Trigger Auto-Reset
-                    await supabase.from('user_leagues').update({ paid_amount: 0 }).eq('league_id', activeLeague.id);
-                    await supabase.from('leagues').update({ ledger_season: currentSeason.toString() }).eq('id', activeLeague.id);
-                    userLeaguesRecords = userLeaguesRecords.map(r => ({ ...r, paid_amount: 0 }));
+                    activeLedger = {}; // Reset the ledger object
+                    await supabase.from('leagues').update({ 
+                        ledger_season: currentSeason.toString(),
+                        financial_ledger: activeLedger
+                    }).eq('id', activeLeague.id);
                 } else if (!leagueConfigs?.ledger_season) {
                     await supabase.from('leagues').update({ ledger_season: currentSeason.toString() }).eq('id', activeLeague.id);
                 }
 
-                // 4. Fetch Transactions ONCE (Starting at 0 captures off-season trades perfectly)
+                // 4. Fetch Transactions ONCE
                 let allTxns = [];
                 for (let i = 0; i <= 18; i++) {
                     const res = await fetch(`https://api.sleeper.app/v1/league/${activeLeague.sleeper_league_id}/transactions/${i}`);
@@ -90,11 +88,10 @@ export default function AdminFees() {
                     }
                 }
                 const completedTxns = allTxns.filter(t => t.status === 'complete');
-                
                 setRawTxns(completedTxns);
 
-                // 5. Initial Map Generation
-                buildManagersList(activeRosters, completedTxns, pMap, tmData.users, userLeaguesRecords, leagueConfigs?.exclude_defenses_from_fees ?? false);
+                // 5. Initial Map Generation using the activeLedger JSON object
+                buildManagersList(activeRosters, completedTxns, pMap, tmData.users, activeLedger, leagueConfigs?.exclude_defenses_from_fees ?? false);
 
             } catch (err) {
                 console.error("Failed to gather financial matrix details:", err);
@@ -106,15 +103,14 @@ export default function AdminFees() {
         loadInitialData();
     }, [activeLeague, navigate]);
 
-    // The builder function that calculates math locally (instant toggle response)
-    const buildManagersList = (rosters, txns, pMap, users, dbRecords, excludeDefensesActive) => {
+    // The builder function that calculates math locally
+    const buildManagersList = (rosters, txns, pMap, users, ledger, excludeDefensesActive) => {
         const formattedManagers = Object.entries(rosters).map(([rosterId, rData]) => {
             const primaryManagerId = rData.managers?.[0];
             const sleeperUser = users[primaryManagerId] || {};
             const teamName = rData.team.name;
             const rIdInt = parseInt(rosterId);
 
-            // UPDATED: Now tallies both specific Trade Events AND Waiver/FA Adds
             let txnCounts = 0;
             txns.forEach(txn => {
                 if (txn.type === 'trade') {
@@ -135,17 +131,14 @@ export default function AdminFees() {
                 }
             });
 
-            const matchedDbRecord = dbRecords?.find(
-                rec => rec.team_name?.toLowerCase().trim() === teamName?.toLowerCase().trim()
-            );
-
             return {
                 rosterId,
                 teamName,
                 avatar: rData.team.avatar,
                 username: sleeperUser.display_name || 'Unknown',
                 txnCounts,
-                paidAmount: matchedDbRecord?.paid_amount || 0
+                // Read from the JSON ledger directly using the Roster ID
+                paidAmount: ledger[rosterId] || 0
             };
         });
 
@@ -155,8 +148,10 @@ export default function AdminFees() {
     // Re-calculate math instantly when the exclude toggle changes
     useEffect(() => {
         if (!loading && Object.keys(rawRosters).length > 0) {
-            const currentDbRecords = managersList.map(m => ({ team_name: m.teamName, paid_amount: m.paidAmount }));
-            buildManagersList(rawRosters, rawTxns, playersMap, rawUsers, currentDbRecords, excludeDefs);
+            // Re-build the temporary ledger from state to maintain input changes
+            const currentLedger = {};
+            managersList.forEach(m => currentLedger[m.rosterId] = m.paidAmount);
+            buildManagersList(rawRosters, rawTxns, playersMap, rawUsers, currentLedger, excludeDefs);
         }
     }, [excludeDefs]);
 
@@ -170,7 +165,7 @@ export default function AdminFees() {
         if (!window.confirm("Are you sure you want to reset all paid amounts to $0? This cannot be undone.")) return;
         setIsSaving(true);
         try {
-            await supabase.from('user_leagues').update({ paid_amount: 0 }).eq('league_id', activeLeague.id);
+            await supabase.from('leagues').update({ financial_ledger: {} }).eq('id', activeLeague.id);
             setManagersList(prev => prev.map(m => ({ ...m, paidAmount: 0 })));
             setSaveMessage({ type: 'success', text: 'All payments reset to $0.' });
         } catch (e) {
@@ -185,25 +180,27 @@ export default function AdminFees() {
         setIsSaving(true);
         setSaveMessage(null);
         try {
+            // Compile the array back into a single JSON ledger object
+            const newLedger = {};
+            managersList.forEach(mgr => {
+                if (mgr.paidAmount > 0) {
+                    newLedger[mgr.rosterId] = mgr.paidAmount;
+                }
+            });
+
+            // Run exactly ONE database update. Flawless execution.
             const { error: leagueErr } = await supabase
                 .from('leagues')
                 .update({
                     dues_amount: duesAmount,
                     enable_txn_fees: enableTxnFees,
                     txn_fee_amount: txnFeeAmount,
-                    exclude_defenses_from_fees: excludeDefs
+                    exclude_defenses_from_fees: excludeDefs,
+                    financial_ledger: newLedger
                 })
                 .eq('id', activeLeague.id);
 
             if (leagueErr) throw leagueErr;
-
-            for (const mgr of managersList) {
-                await supabase
-                    .from('user_leagues')
-                    .update({ paid_amount: mgr.paidAmount })
-                    .eq('league_id', activeLeague.id)
-                    .eq('team_name', mgr.teamName);
-            }
 
             setSaveMessage({ type: 'success', text: 'Financial framework saved successfully.' });
             const { data: { session } } = await supabase.auth.getSession();
@@ -211,7 +208,7 @@ export default function AdminFees() {
                 await loadLeagueContext(session.user.id, activeLeague.id);
             }
         } catch (err) {
-            setSaveMessage({ type: 'error', text: 'Error executing cloud pipeline save updates.' });
+            setSaveMessage({ type: 'error', text: 'Error saving ledger. Ensure you are the league commissioner.' });
         } finally {
             setIsSaving(false);
             setTimeout(() => setSaveMessage(null), 3000);
@@ -227,7 +224,6 @@ export default function AdminFees() {
                 <h2 className={styles.subtitle}>Manage League Dues & Fees</h2>
             </div>
 
-            {/* CONFIGURATION PARAMETERS SECTION */}
             <div className={styles.configGrid}>
                 <div className={styles.configCard}>
                     <label className={styles.fieldLabel}>Base Buy-In Dues ($)</label>
@@ -275,7 +271,6 @@ export default function AdminFees() {
                 </div>
             </div>
 
-            {/* LEDGER MATRIX DISPLAY */}
             <div className={styles.ledgerCard}>
                 <div className={styles.cardHeader}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -339,6 +334,7 @@ export default function AdminFees() {
                     </table>
                 </div>
 
+                {/* MOBILE VIEW - CLEANED UP AND OPTIMIZED */}
                 <div className={styles.mobileLedgerList}>
                     {managersList.map(mgr => {
                         const calculatedTxnTotal = enableTxnFees ? (mgr.txnCounts * txnFeeAmount) : 0;
@@ -356,31 +352,31 @@ export default function AdminFees() {
                                 </div>
                                 <div className={styles.mobileMetricsRows}>
                                     <div className={styles.mobileMetricRow}>
-                                        <span>Total Base Buy-In Dues:</span>
-                                        <span>${duesAmount.toFixed(2)}</span>
+                                        <span className={styles.mobileLabel}>Base Buy-In:</span>
+                                        <span className={styles.mobileValue}>${duesAmount.toFixed(2)}</span>
                                     </div>
                                     <div className={styles.mobileMetricRow}>
-                                        <span>Completed Adds/Trades ({mgr.txnCounts} moves):</span>
-                                        <span style={{ color: enableTxnFees ? '#ffaa00' : '#64748b' }}>
+                                        <span className={styles.mobileLabel}>Txn Fees ({mgr.txnCounts}):</span>
+                                        <span className={styles.mobileValue} style={{ color: enableTxnFees ? '#ffaa00' : '#64748b' }}>
                                             ${calculatedTxnTotal.toFixed(2)}
                                         </span>
                                     </div>
-                                    <div className={styles.mobileMetricRow} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '10px' }}>
-                                        <strong>Gross Balance Owed:</strong>
-                                        <strong>${grossOwed.toFixed(2)}</strong>
+                                    <div className={styles.mobileTotalRow}>
+                                        <span className={styles.mobileLabel}>Gross Owed:</span>
+                                        <span className={styles.mobileValue}>${grossOwed.toFixed(2)}</span>
                                     </div>
-                                    <div className={styles.mobileInputRow} style={{ marginTop: '10px' }}>
-                                        <label>Amount Collected ($):</label>
+                                    <div className={styles.mobileInputRow}>
+                                        <label>Amount Collected ($)</label>
                                         <input 
                                             type="number" 
-                                            className={styles.tableInput} 
+                                            className={styles.mobileInput} 
                                             value={mgr.paidAmount} 
                                             onChange={(e) => handlePaidChange(mgr.rosterId, e.target.value)} 
                                         />
                                     </div>
-                                    <div className={styles.mobileMetricRow} style={{ marginTop: '10px' }}>
-                                        <span>Outstanding Balance Due:</span>
-                                        <span style={{ color: netBalance > 0 ? '#ff2a6d' : '#00ceb8', fontWeight: '900' }}>
+                                    <div className={styles.mobileBalanceRow} style={{ borderColor: netBalance > 0 ? 'rgba(255, 42, 109, 0.3)' : 'rgba(0, 206, 184, 0.3)' }}>
+                                        <span className={styles.mobileLabel}>Balance Due:</span>
+                                        <span style={{ color: netBalance > 0 ? '#ff2a6d' : '#00ceb8', fontWeight: '900', fontSize: '1.2em' }}>
                                             ${netBalance.toFixed(2)}
                                         </span>
                                     </div>
@@ -401,7 +397,7 @@ export default function AdminFees() {
                         onClick={handleSaveBylaws} 
                         disabled={isSaving}
                     >
-                        {isSaving ? 'Processing Records...' : 'Commit Framework Adjustments'}
+                        {isSaving ? 'Processing Records...' : 'Save Financial Ledger'}
                     </button>
                 </div>
             </div>

@@ -81,7 +81,6 @@
     border-color: #eebf1c;
 }
 
-/* CUSTOM CHECKBOX GRAPHICS STYLE */
 .checkboxLabel {
     display: flex;
     align-items: center;
@@ -143,7 +142,6 @@
     border: 1px solid rgba(255,255,255,0.02);
 }
 
-/* LEDGER PANEL GRID GRAPHICS */
 .ledgerCard {
     background: #1e2530;
     border-radius: 12px;
@@ -161,6 +159,7 @@
     font-weight: 700;
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 10px;
     font-size: 1.1em;
 }
@@ -254,7 +253,6 @@
     outline: none;
 }
 
-/* BOTTOM INTERACTIVE SUBMISSION CONTROLS */
 .cardFooter {
     padding: 20px;
     background: rgba(0, 0, 0, 0.15);
@@ -315,7 +313,7 @@
     display: none;
 }
 
-/* RESPONSIVE FLUID GRAPHICS REDIRECTION FOR PHONE CORES */
+/* POLISHED MOBILE UI */
 @media (max-width: 768px) {
     .tableWrapper {
         display: none;
@@ -324,50 +322,100 @@
     .mobileLedgerList {
         display: flex;
         flex-direction: column;
-        gap: 15px;
+        gap: 20px;
         padding: 15px;
     }
     
     .mobileRecordCard {
-        background: rgba(0,0,0,0.2);
+        background: #11141c;
         border: 1px solid rgba(255,255,255,0.05);
-        border-radius: 10px;
-        padding: 15px;
+        border-radius: 12px;
+        padding: 20px;
         display: flex;
         flex-direction: column;
         gap: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     }
 
     .mobileCardTop {
         display: flex;
         align-items: center;
-        gap: 12px;
-        border-bottom: 1px solid rgba(255,255,255,0.05);
-        padding-bottom: 10px;
+        gap: 15px;
+        border-bottom: 1px solid rgba(238, 191, 28, 0.2);
+        padding-bottom: 15px;
     }
 
     .mobileMetricsRows {
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 10px;
     }
 
-    .mobileMetricRow {
+    .mobileMetricRow, .mobileTotalRow, .mobileBalanceRow {
         display: flex;
         justify-content: space-between;
+        align-items: center;
+    }
+
+    .mobileLabel {
+        color: #94a3b8;
         font-size: 0.85em;
-        color: #cbd5e1;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .mobileValue {
+        color: #f8fafc;
+        font-size: 0.95em;
+        font-weight: 700;
+    }
+
+    .mobileTotalRow {
+        border-top: 1px dashed rgba(255,255,255,0.1);
+        padding-top: 10px;
+        margin-top: 5px;
     }
 
     .mobileInputRow {
         display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 0.85em;
+        flex-direction: column;
+        gap: 8px;
+        background: rgba(0,0,0,0.3);
+        padding: 12px;
+        border-radius: 8px;
+        margin-top: 5px;
     }
     
     .mobileInputRow label {
-        color: #94a3b8;
+        color: #eebf1c;
+        font-weight: 700;
+        font-size: 0.8em;
+        text-transform: uppercase;
+    }
+
+    .mobileInput {
+        width: 100%;
+        padding: 12px;
+        background: #1e2530;
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 6px;
+        color: #fff;
+        font-family: inherit;
+        font-size: 1em;
         font-weight: bold;
+        box-sizing: border-box;
+    }
+
+    .mobileInput:focus {
+        border-color: #eebf1c;
+        outline: none;
+    }
+
+    .mobileBalanceRow {
+        background: rgba(0,0,0,0.2);
+        border: 1px solid;
+        padding: 15px;
+        border-radius: 8px;
+        margin-top: 5px;
     }
 }
