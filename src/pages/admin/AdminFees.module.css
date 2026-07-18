@@ -1,13 +1,14 @@
 .container {
     padding: 30px 20px;
-    max-width: 900px;
+    max-width: 1100px;
     margin: 0 auto;
     font-family: 'Montserrat', sans-serif;
+    box-sizing: border-box;
 }
 
 .loading {
     text-align: center;
-    color: #ffaa00;
+    color: #eebf1c;
     font-size: 1.2em;
     font-weight: bold;
     text-transform: uppercase;
@@ -19,33 +20,137 @@
     margin-bottom: 40px;
 }
 
-/* SLEEK WHITE HEADERS */
 .title {
-    color: #f8fafc;
+    color: #ffaa00;
     text-transform: uppercase;
-    font-size: 1.8em;
+    font-size: 1.2em;
     letter-spacing: 2px;
     margin: 0 0 5px 0;
-    font-weight: 500; /* Removed heavy bolding */
+    font-weight: 800;
 }
 
 .subtitle {
-    color: #94a3b8;
-    font-size: 1.1em;
+    color: #f8fafc;
+    font-size: 2em;
     margin: 0;
-    font-weight: 400; /* Sleek contrast */
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    font-weight: 900;
 }
 
+.configGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.configCard {
+    background: #1e2530;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 25px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.fieldLabel {
+    display: block;
+    color: #94a3b8;
+    font-size: 0.85em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+}
+
+.numInput {
+    width: 100%;
+    padding: 12px;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    color: #f8fafc;
+    font-family: inherit;
+    font-size: 1em;
+    box-sizing: border-box;
+    outline: none;
+}
+
+.numInput:focus {
+    border-color: #eebf1c;
+}
+
+/* CUSTOM CHECKBOX GRAPHICS STYLE */
+.checkboxLabel {
+    display: flex;
+    align-items: center;
+    position: relative;
+    cursor: pointer;
+    color: #cbd5e1;
+    font-weight: 600;
+    font-size: 1em;
+    user-select: none;
+    padding-left: 30px;
+}
+
+.checkboxLabel input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    height: 0;
+    width: 0;
+}
+
+.customCheck {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 20px;
+    width: 20px;
+    background-color: rgba(0,0,0,0.4);
+    border: 2px solid #475569;
+    border-radius: 4px;
+    transition: 0.2s;
+}
+
+.checkboxLabel input:checked ~ .customCheck {
+    background-color: #eebf1c;
+    border-color: #eebf1c;
+}
+
+.customCheck::after {
+    content: "";
+    position: absolute;
+    display: none;
+    left: 6px;
+    top: 2px;
+    width: 4px;
+    height: 9px;
+    border: solid #0b0e14;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.checkboxLabel input:checked ~ .customCheck::after {
+    display: block;
+}
+
+.feeSubPanel {
+    background: rgba(0,0,0,0.2);
+    border-radius: 8px;
+    padding: 15px;
+    border: 1px solid rgba(255,255,255,0.02);
+}
+
+/* LEDGER PANEL GRID GRAPHICS */
 .ledgerCard {
     background: #1e2530;
     border-radius: 12px;
     border: 1px solid rgba(255, 170, 0, 0.2);
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
-    display: flex;
-    flex-direction: column;
     overflow: hidden;
+    margin-bottom: 40px;
 }
 
 .cardHeader {
@@ -61,121 +166,60 @@
 }
 
 .cardHeader i {
-    color: #22c55e;
+    color: #ffaa00;
 }
 
-.editorBody {
-    padding: 30px;
-    display: flex;
-    flex-direction: column;
-    gap: 30px;
+.tableWrapper {
+    background: rgba(0, 0, 0, 0.1);
+    overflow-x: auto;
 }
 
-.globalSettings {
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th {
+    background: rgba(0, 0, 0, 0.25);
+    color: #94a3b8;
+    text-transform: uppercase;
+    font-size: 0.75em;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.table td {
+    padding: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+    color: #cbd5e1;
+    font-size: 0.95em;
+}
+
+.textLeft { text-align: left; }
+.textCenter { text-align: center; }
+
+.row:hover {
+    background: rgba(255, 255, 255, 0.01);
+}
+
+.managerCell {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    background: rgba(0, 0, 0, 0.15);
-    padding: 20px;
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    flex-wrap: wrap;
-    gap: 20px;
-}
-
-.inputGroup {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.inputGroup label {
-    color: #94a3b8;
-    font-size: 0.85em;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
-.duesInput {
-    background: #0b0e14;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #f8fafc;
-    padding: 12px 15px;
-    border-radius: 6px;
-    font-size: 1.1em;
-    font-weight: 700;
-    width: 150px;
-    outline: none;
-    transition: border-color 0.2s;
-}
-
-.duesInput:focus {
-    border-color: #ffaa00;
-}
-
-.potSummary {
-    text-align: right;
-}
-
-.potLabel {
-    color: #94a3b8;
-    font-size: 0.85em;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 5px;
-}
-
-.potValue {
-    font-size: 2em;
-    font-weight: 900;
-    color: #22c55e;
-}
-
-.potTarget {
-    font-size: 0.5em;
-    color: #64748b;
-}
-
-.managerList {
-    display: flex;
-    flex-direction: column;
     gap: 12px;
 }
 
-.managerRow {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: rgba(255, 255, 255, 0.03);
-    padding: 15px 20px;
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    transition: all 0.2s;
-}
-
-.paidRow {
-    border-color: rgba(34, 197, 94, 0.3);
-    background: rgba(34, 197, 94, 0.05);
-}
-
-.teamInfo {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.avatar {
-    width: 45px;
-    height: 45px;
+.tableAvatar {
+    width: 38px;
+    height: 38px;
     border-radius: 50%;
+    border: 2px solid #475569;
     object-fit: cover;
-    border: 2px solid #334155;
     background: #111;
 }
 
-.nameStack {
+.identityStack {
     display: flex;
     flex-direction: column;
 }
@@ -183,107 +227,60 @@
 .teamName {
     color: #f8fafc;
     font-weight: 700;
-    font-size: 1.05em;
+    font-size: 0.95em;
 }
 
 .handle {
-    color: #94a3b8;
-    font-size: 0.8em;
+    color: #64748b;
+    font-size: 0.75em;
     font-style: italic;
+    margin-top: 1px;
 }
 
-.actionGroup {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.amountInput {
+.tableInput {
+    max-width: 90px;
+    padding: 8px;
     background: #0b0e14;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #eebf1c;
-    padding: 8px 10px;
+    border: 1px solid rgba(255,255,255,0.1);
     border-radius: 6px;
-    width: 80px;
-    font-weight: 700;
+    color: #fff;
+    font-family: inherit;
     text-align: center;
+    font-weight: bold;
 }
 
-.amountInput:focus {
-    border-color: #ffaa00;
+.tableInput:focus {
+    border-color: #eebf1c;
+    outline: none;
 }
 
-.statusToggle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 120px;
-    padding: 10px;
-    border-radius: 6px;
-    font-weight: 700;
-    font-size: 0.85em;
-    cursor: pointer;
-    border: none;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    transition: all 0.2s;
-}
-
-.unpaidBtn {
-    background: rgba(239, 68, 68, 0.1);
-    color: #ef4444;
-}
-
-.unpaidBtn:hover {
-    background: rgba(239, 68, 68, 0.2);
-}
-
-.paidBtn {
-    background: #22c55e;
-    color: #0b0e14;
-}
-
-.paidBtn:hover {
-    background: #16a34a;
-}
-
+/* BOTTOM INTERACTIVE SUBMISSION CONTROLS */
 .cardFooter {
-    background: rgba(0, 0, 0, 0.2);
     padding: 20px;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(0, 0, 0, 0.15);
+    border-top: 1px solid rgba(255,255,255,0.05);
     display: flex;
-    justify-content: flex-end;
+    flex-direction: column;
     align-items: center;
-    gap: 20px;
+    gap: 15px;
 }
-
-.message {
-    font-weight: 600;
-    font-size: 0.9em;
-    animation: fadeIn 0.3s ease;
-}
-
-.success { color: #22c55e; }
-.error { color: #ef4444; }
 
 .saveBtn {
+    padding: 14px 30px;
     background: #ffaa00;
     color: #0b0e14;
     border: none;
-    padding: 12px 30px;
     border-radius: 8px;
-    font-weight: 800;
-    font-size: 1em;
-    cursor: pointer;
+    font-weight: 900;
     text-transform: uppercase;
     letter-spacing: 1px;
-    transition: all 0.2s ease;
+    cursor: pointer;
+    transition: 0.2s;
 }
 
 .saveBtn:hover:not(:disabled) {
     background: #eebf1c;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(255, 170, 0, 0.3);
+    box-shadow: 0 0 15px rgba(238, 191, 28, 0.3);
 }
 
 .saveBtn:disabled {
@@ -291,7 +288,86 @@
     cursor: not-allowed;
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(5px); }
-    to { opacity: 1; transform: translateY(0); }
+.message {
+    padding: 12px 20px;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 0.9em;
+    text-align: center;
+    width: 100%;
+    max-width: 500px;
+    box-sizing: border-box;
+}
+
+.success {
+    background: rgba(0, 206, 184, 0.1);
+    color: #00ceb8;
+    border: 1px solid rgba(0, 206, 184, 0.3);
+}
+
+.error {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.mobileLedgerList {
+    display: none;
+}
+
+/* RESPONSIVE FLUID GRAPHICS REDIRECTION FOR PHONE CORES */
+@media (max-width: 768px) {
+    .tableWrapper {
+        display: none;
+    }
+    
+    .mobileLedgerList {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        padding: 15px;
+    }
+    
+    .mobileRecordCard {
+        background: rgba(0,0,0,0.2);
+        border: 1px solid rgba(255,255,255,0.05);
+        border-radius: 10px;
+        padding: 15px;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .mobileCardTop {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        padding-bottom: 10px;
+    }
+
+    .mobileMetricsRows {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .mobileMetricRow {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.85em;
+        color: #cbd5e1;
+    }
+
+    .mobileInputRow {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.85em;
+    }
+    
+    .mobileInputRow label {
+        color: #94a3b8;
+        font-weight: bold;
+    }
 }

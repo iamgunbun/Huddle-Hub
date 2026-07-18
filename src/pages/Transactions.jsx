@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLeague } from '../context/LeagueContext';
 import { loadPlayers, getLeagueTeamManagers } from '../utils/helper';
-import styles from './Transactions.module.css';
+import styles from './Transactions.module.css'; 
 
 export default function Transactions() {
     const { activeLeague } = useLeague();
@@ -10,6 +10,7 @@ export default function Transactions() {
     const [playersMap, setPlayersMap] = useState({});
     const [teamManagers, setTeamManagers] = useState(null);
     
+    // State for your toggle buttons
     const [filter, setFilter] = useState('all'); 
     const [visibleCount, setVisibleCount] = useState(30);
 
@@ -50,7 +51,7 @@ export default function Transactions() {
 
     const handleFilterChange = (type) => {
         setFilter(type);
-        setVisibleCount(30); 
+        setVisibleCount(30);
     };
 
     const getTeamInfo = (rosterId) => {
@@ -69,17 +70,7 @@ export default function Transactions() {
         return `${date.toLocaleDateString('en-US', options)}, ${date.toLocaleTimeString('en-US', timeOptions)}`;
     };
 
-    const filteredTransactions = transactions.filter(t => {
-        if (filter === 'all') return true;
-        if (filter === 'trade') return t.type === 'trade';
-        if (filter === 'waiver') return t.type === 'waiver' || t.type === 'free_agent';
-        return true;
-    });
-
-    const displayedTransactions = filteredTransactions.slice(0, visibleCount);
-
-    const renderBracketCard = (txn) => {
-        // Group all moves by the roster ID so we can put them in the same bracket block
+    const renderWaiverCard = (txn) => {
         const teamMovements = {};
 
         if (txn.adds) {
@@ -94,13 +85,6 @@ export default function Transactions() {
                 teamMovements[rId].drops.push(pId);
             });
         }
-        if (txn.draft_picks) {
-            txn.draft_picks.forEach(pick => {
-                const rId = pick.owner_id;
-                if (!teamMovements[rId]) teamMovements[rId] = { adds: [], drops: [], picks: [] };
-                teamMovements[rId].picks.push(pick);
-            });
-        }
 
         return Object.keys(teamMovements).map((rId, index) => {
             const team = getTeamInfo(rId);
@@ -108,14 +92,12 @@ export default function Transactions() {
             
             return (
                 <div key={`${txn.transaction_id}-${rId}-${index}`} className={styles.bracketCard}>
-                    {/* The Yellow/Gold Bracket */}
                     <div className={styles.bracketDecor}></div>
                     
                     <div className={styles.cardMain}>
                         <div className={styles.teamNameLabel}>{team.name}</div>
                         
                         <div className={styles.assetContainer}>
-                            {/* Render Adds */}
                             {moves.adds.map(pId => {
                                 const player = playersMap[pId];
                                 const isDef = player?.pos === 'DEF';
@@ -137,7 +119,6 @@ export default function Transactions() {
                                 );
                             })}
 
-                            {/* Render Drops */}
                             {moves.drops.map(pId => {
                                 const player = playersMap[pId];
                                 const isDef = player?.pos === 'DEF';
@@ -158,23 +139,6 @@ export default function Transactions() {
                                     </div>
                                 );
                             })}
-
-                            {/* Render Draft Picks */}
-                            {moves.picks.map((pick, i) => (
-                                <div key={`pick-${i}`} className={styles.assetRow}>
-                                    <div className={styles.avatarWrapper}>
-                                        <div className={`${styles.avatarImg} ${styles.avatarAdd}`} style={{ background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                            <i className="material-icons" style={{ color: '#eebf1c' }}>stars</i>
-                                        </div>
-                                        <div className={`${styles.badge} ${styles.badgeAdd}`}><i className="material-icons">add</i></div>
-                                    </div>
-                                    <div className={styles.assetText}>
-                                        <div className={styles.assetName}>{pick.season} Round {pick.round}</div>
-                                        <div className={styles.assetMeta}>Draft Pick</div>
-                                    </div>
-                                    <div className={styles.txnTimestamp}>{formatDateTime(txn.status_updated)}</div>
-                                </div>
-                            ))}
                         </div>
                     </div>
                 </div>
@@ -182,29 +146,128 @@ export default function Transactions() {
         });
     };
 
+    const renderTradeCard = (txn) => {
+        return (
+            <div key={txn.transaction_id} className={styles.bracketCard}>
+                <div className={styles.bracketDecor} style={{ background: '#eebf1c' }}></div>
+                <div className={styles.cardMain}>
+                    <div className={styles.teamNameLabel} style={{ color: '#eebf1c', marginBottom: '10px' }}>TRADE</div>
+                    
+                    {txn.roster_ids.map((rId, index) => {
+                        const team = getTeamInfo(rId);
+                        
+                        const addedPlayers = Object.keys(txn.adds || {}).filter(pId => txn.adds[pId] === rId);
+                        const addedPicks = (txn.draft_picks || []).filter(pick => pick.owner_id === rId);
+
+                        if (addedPlayers.length === 0 && addedPicks.length === 0) return null;
+
+                        return (
+                            <div key={rId} style={{ marginTop: index > 0 ? '15px' : '0' }}>
+                                <div className={styles.teamNameLabel} style={{ fontSize: '0.85em', color: '#94a3b8', marginBottom: '8px' }}>
+                                    {team.name} Received:
+                                </div>
+                                <div className={styles.assetContainer}>
+                                    
+                                    {addedPlayers.map(pId => {
+                                        const player = playersMap[pId];
+                                        const isDef = player?.pos === 'DEF';
+                                        const avatarUrl = isDef ? `https://sleepercdn.com/images/team_logos/nfl/${pId.toLowerCase()}.png` : `https://sleepercdn.com/content/nfl/players/thumb/${pId}.jpg`;
+                                        const fallback = 'https://sleepercdn.com/images/v2/icons/player_default.webp';
+                                        
+                                        return (
+                                            <div key={`trade-add-${pId}`} className={styles.assetRow}>
+                                                <div className={styles.avatarWrapper}>
+                                                    <div className={`${styles.avatarImg} ${styles.avatarAdd}`} style={{ backgroundImage: `url(${avatarUrl}), url(${fallback})` }}></div>
+                                                </div>
+                                                <div className={styles.assetText}>
+                                                    <div className={styles.assetName}>{player?.fn} {player?.ln}</div>
+                                                    <div className={styles.assetMeta}>{player?.pos} - {player?.t || 'FA'}</div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+
+                                    {addedPicks.map((pick, i) => (
+                                        <div key={`trade-pick-${i}`} className={styles.assetRow}>
+                                            <div className={styles.avatarWrapper}>
+                                                <div className={`${styles.avatarImg} ${styles.avatarAdd}`} style={{ background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <i className="material-icons" style={{ color: '#eebf1c', fontSize: '18px' }}>stars</i>
+                                                </div>
+                                            </div>
+                                            <div className={styles.assetText}>
+                                                <div className={styles.assetName}>{pick.season} Round {pick.round}</div>
+                                                <div className={styles.assetMeta}>Draft Pick</div>
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                </div>
+                            </div>
+                        );
+                    })}
+                    <div className={styles.txnTimestamp} style={{ marginTop: '15px' }}>{formatDateTime(txn.status_updated)}</div>
+                </div>
+            </div>
+        );
+    };
+
     if (loading) return <div className={styles.loading}>Loading Transactions...</div>;
+
+    // Apply the active filter state
+    const filteredTxns = transactions.filter(txn => {
+        if (filter === 'trades') return txn.type === 'trade';
+        if (filter === 'waivers') return txn.type === 'waiver' || txn.type === 'free_agent';
+        return true; // 'all'
+    });
+
+    const displayedTransactions = filteredTxns.slice(0, visibleCount);
 
     return (
         <div className={styles.container}>
+            
             <h1 className={styles.headerTitle}>Transactions Log</h1>
             
-            <div className={styles.filters}>
-                <button className={`${styles.filterBtn} ${filter === 'all' ? styles.active : ''}`} onClick={() => handleFilterChange('all')}>All</button>
-                <button className={`${styles.filterBtn} ${filter === 'trade' ? styles.active : ''}`} onClick={() => handleFilterChange('trade')}>Trades</button>
-                <button className={`${styles.filterBtn} ${filter === 'waiver' ? styles.active : ''}`} onClick={() => handleFilterChange('waiver')}>Waivers</button>
+            {/* Filter Buttons */}
+            <div className={styles.filterToggle} style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '40px' }}>
+                <button 
+                    style={{ padding: '8px 20px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', fontWeight: 'bold', background: filter === 'all' ? '#eebf1c' : 'transparent', color: filter === 'all' ? '#000' : '#94a3b8' }}
+                    onClick={() => handleFilterChange('all')}
+                >
+                    ALL
+                </button>
+                <button 
+                    style={{ padding: '8px 20px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', fontWeight: 'bold', background: filter === 'trades' ? '#eebf1c' : 'transparent', color: filter === 'trades' ? '#000' : '#94a3b8' }}
+                    onClick={() => handleFilterChange('trades')}
+                >
+                    TRADES
+                </button>
+                <button 
+                    style={{ padding: '8px 20px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', fontWeight: 'bold', background: filter === 'waivers' ? '#eebf1c' : 'transparent', color: filter === 'waivers' ? '#000' : '#94a3b8' }}
+                    onClick={() => handleFilterChange('waivers')}
+                >
+                    WAIVERS
+                </button>
             </div>
 
             <div className={styles.feed}>
                 {displayedTransactions.length === 0 ? (
                     <div className={styles.noData}>No transactions found for this category.</div>
                 ) : (
-                    displayedTransactions.map(txn => renderBracketCard(txn))
+                    displayedTransactions.map(txn => {
+                        if (txn.type === 'trade') return renderTradeCard(txn);
+                        return renderWaiverCard(txn);
+                    })
                 )}
             </div>
 
-            {visibleCount < filteredTransactions.length && (
-                <div className={styles.loadMoreWrapper}>
-                    <button className={styles.loadMoreBtn} onClick={() => setVisibleCount(prev => prev + 30)}>
+            {/* Load More Button */}
+            {visibleCount < filteredTxns.length && (
+                <div className={styles.loadMoreWrapper} style={{ display: 'flex', justifyContent: 'center', marginTop: '30px' }}>
+                    <button 
+                        className={styles.loadMoreBtn} 
+                        onClick={() => setVisibleCount(prev => prev + 30)}
+                        style={{ background: 'transparent', color: '#eebf1c', border: '2px solid #eebf1c', padding: '10px 30px', borderRadius: '24px', fontWeight: '700', textTransform: 'uppercase', cursor: 'pointer' }}
+                    >
                         Load More
                     </button>
                 </div>

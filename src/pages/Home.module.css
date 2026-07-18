@@ -38,41 +38,83 @@
     font-weight: 500;
 }
 
-.infoRow { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-size: 0.95em; }
-.infoLabel { color: #94a3b8; display: flex; align-items: center; }
-.infoValue { color: #f8fafc; font-weight: 600; }
+.infoRow { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    margin-bottom: 15px; 
+    font-size: 0.95em; 
+}
+
+.infoLabel { 
+    color: #94a3b8; 
+    display: flex; 
+    align-items: center; 
+}
+
+.infoValue { 
+    color: #f8fafc; 
+    font-weight: 600; 
+}
 
 .fullWidthBtn {
-    width: 100%; background: transparent; border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #f8fafc; border-radius: 8px; padding: 12px; font-weight: bold;
-    cursor: pointer; text-transform: uppercase; transition: 0.2s;
+    width: 100%; 
+    background: transparent; 
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #f8fafc; 
+    border-radius: 8px; 
+    padding: 12px; 
+    font-weight: bold;
+    cursor: pointer; 
+    text-transform: uppercase; 
+    transition: 0.2s;
 }
 
 .fullWidthBtn:hover {
-    border-color: #eebf1c; color: #eebf1c; background: rgba(238, 191, 28, 0.05);
+    border-color: #eebf1c; 
+    color: #eebf1c; 
+    background: rgba(238, 191, 28, 0.05);
 }
 
 .mobileLayout {
-    display: flex; flex-direction: column; gap: 20px; padding: 10px;
+    display: flex; 
+    flex-direction: column; 
+    gap: 20px; 
+    padding: 10px;
 }
 
 .mobileActionGrid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 10px;
+    display: grid; 
+    grid-template-columns: 1fr 1fr; 
+    gap: 15px; 
+    margin-bottom: 10px;
 }
 
 .mobileActionBtn {
-    background: #1e2530; border: 1px solid rgba(238, 191, 28, 0.3); color: #eebf1c;
-    padding: 15px; border-radius: 12px; display: flex; flex-direction: column;
-    align-items: center; gap: 8px; font-weight: 800; text-transform: uppercase;
-    font-size: 0.85em; cursor: pointer; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    background: #1e2530; 
+    border: 1px solid rgba(238, 191, 28, 0.3); 
+    color: #eebf1c;
+    padding: 15px; 
+    border-radius: 12px; 
+    display: flex; 
+    flex-direction: column;
+    align-items: center; 
+    gap: 8px; 
+    font-weight: 800; 
+    text-transform: uppercase;
+    font-size: 0.85em; 
+    cursor: pointer; 
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
 }
 
 .mobileActionBtn i { font-size: 28px; }
 
 .mobileModal {
     position: fixed;
-    top: 115px; /* Pushed down to clear the Top Nav on Mobile */
-    left: 0; right: 0; bottom: 0;
+    top: 115px; 
+    left: 0; 
+    right: 0; 
+    bottom: 0;
     background: #0b0e14;
     z-index: 400; 
     display: flex;
@@ -86,12 +128,34 @@
 }
 
 .modalHeader {
-    display: flex; justify-content: space-between; align-items: center; padding: 20px;
-    background: rgba(11, 14, 20, 0.95); border-bottom: 1px solid rgba(255,255,255,0.05);
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    padding: 20px;
+    background: rgba(11, 14, 20, 0.95); 
+    border-bottom: 1px solid rgba(255,255,255,0.05);
 }
 
-.modalHeader h2 { margin: 0; color: #f8fafc; text-transform: uppercase; font-size: 1.2em; letter-spacing: 1px; }
-.modalHeader button { background: none; border: none; color: #94a3b8; cursor: pointer; display: flex; }
+.modalHeader h2 { 
+    margin: 0; 
+    color: #f8fafc; 
+    text-transform: uppercase; 
+    font-size: 1.2em; 
+    letter-spacing: 1px; 
+}
+
+.modalHeader button { 
+    background: none; 
+    border: none; 
+    color: #94a3b8; 
+    cursor: pointer; 
+    display: flex; 
+}
+
 .modalHeader button i { font-size: 30px; }
 
-.modalContent { padding: 20px; overflow-y: auto; flex-grow: 1; }
+.modalContent { 
+    padding: 20px; 
+    overflow-y: auto; 
+    flex-grow: 1; 
+}

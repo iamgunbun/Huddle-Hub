@@ -15,6 +15,7 @@ export const tabs = [
             { icon: 'view_comfy', label: 'Drafts', dest: '/drafts' },
             { icon: 'emoji_events', label: 'Trophy Room', dest: '/awards' },
             { icon: 'military_tech', label: 'Records', dest: '/records' },
+            { icon: 'format_list_numbered', label: 'Scoring Format', dest: '/scoring' },
             { icon: 'history_edu', label: 'Constitution', dest: '/constitution' },
             { icon: 'sports_football', label: 'Go to Sleeper', dest: `https://sleeper.app/leagues/` }
         ]

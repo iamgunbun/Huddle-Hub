@@ -1,9 +1,75 @@
-/* --- NEW PLATFORM SECTIONS --- */
+.layout {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+    font-family: 'Montserrat', sans-serif;
+    box-sizing: border-box;
+}
+
+.glassBox {
+    background: rgba(11, 14, 20, 0.8);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(238, 191, 28, 0.3);
+    border-radius: 16px;
+    padding: 50px 40px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    max-width: 550px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.logo {
+    max-width: 100px;
+    margin-bottom: 20px;
+}
+
+.title {
+    color: #f8fafc;
+    font-size: 1.8em;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 0 0 10px 0;
+}
+
+.subtitle {
+    color: #94a3b8;
+    font-size: 0.95em;
+    margin: 0;
+    line-height: 1.5;
+}
+
+.error {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    padding: 12px;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    font-size: 0.85em;
+    margin-bottom: 20px;
+    font-weight: bold;
+    text-align: center;
+}
+
+.stepContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* --- STEP 1: PLATFORM SECTION --- */
 .platformSection {
     background: rgba(0, 0, 0, 0.4);
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 12px;
-    padding: 20px;
+    padding: 25px;
 }
 
 .platformLabel {
@@ -13,37 +79,29 @@
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 1px;
-    margin-bottom: 12px;
+    margin-bottom: 15px;
 }
 
-.platformSubtext {
-    color: #64748b;
-    font-size: 0.85em;
-    margin: 0 0 15px 0;
+.inputField {
+    width: 100%;
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: #f8fafc;
+    font-family: inherit;
+    font-size: 1em;
+    font-weight: 500;
+    outline: none;
+    box-sizing: border-box;
+    transition: all 0.3s;
 }
 
-.dividerRow {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    margin: 20px 0;
+.inputField:focus {
+    border-color: #eebf1c;
+    box-shadow: 0 0 15px rgba(238, 191, 28, 0.15);
 }
 
-.dividerLine {
-    height: 1px;
-    background: rgba(255, 255, 255, 0.1);
-    flex: 1;
-}
-
-.dividerText {
-    font-size: 0.8em;
-    font-weight: 800;
-    color: #64748b;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
-/* --- BUTTONS --- */
 .sleeperBtn {
     width: 100%;
     padding: 16px;
@@ -64,37 +122,45 @@
     border-color: #eebf1c;
 }
 
-.yahooBtn {
-    width: 100%;
-    padding: 16px;
-    background: #410099;
-    color: #ffffff;
-    border: none;
-    border-radius: 8px;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    cursor: pointer;
+.sleeperBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* --- STEP 2: LEAGUE SELECTION --- */
+.leagueList {
     display: flex;
-    justify-content: center;
-    align-items: center;
+    flex-direction: column;
     gap: 10px;
-    transition: 0.3s;
-    box-shadow: 0 4px 15px rgba(65, 0, 153, 0.3);
+    max-height: 300px;
+    overflow-y: auto;
+    padding-right: 5px;
+    margin-bottom: 15px;
 }
 
-.yahooBtn:hover {
-    background: #310077;
-    box-shadow: 0 4px 20px rgba(65, 0, 153, 0.6);
+.leagueList::-webkit-scrollbar { width: 4px; }
+.leagueList::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
+
+.leagueCard {
+    display: flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 12px 15px;
+    cursor: pointer;
+    transition: all 0.2s;
 }
 
-.yahooIcon {
-    width: 20px;
-    height: 20px;
-    fill: currentColor;
+.leagueCard:hover {
+    background: rgba(255, 255, 255, 0.05);
 }
 
-/* --- CHECKLIST MODIFICATIONS --- */
+.activeCard {
+    background: rgba(238, 191, 28, 0.05);
+    border-color: #eebf1c;
+}
+
 .checkboxWrapper {
     display: flex;
     align-items: center;
@@ -128,28 +194,155 @@
     transform: rotate(45deg);
 }
 
+.leagueAvatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-size: cover;
+    background-position: center;
+    margin-right: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: #111;
+    flex-shrink: 0;
+}
+
 .leagueNameWrapper {
     display: flex;
     flex-direction: column;
     flex-grow: 1;
+    overflow: hidden;
 }
 
-.leagueCard {
+.leagueName {
+    color: #f8fafc;
+    font-weight: 700;
+    font-size: 0.95em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.leagueMeta {
+    color: #64748b;
+    font-size: 0.8em;
+    margin-top: 2px;
+}
+
+.checkboxContainer {
     display: flex;
     align-items: center;
-    background: rgba(0, 0, 0, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    padding: 12px 15px;
+    color: #cbd5e1;
+    font-size: 0.9em;
+    font-weight: 500;
     cursor: pointer;
+    margin-bottom: 20px;
+}
+
+.checkboxContainer input {
+    display: none;
+}
+
+.checkmark {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #475569;
+    border-radius: 4px;
+    margin-right: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     transition: all 0.2s;
 }
 
-.leagueCard:hover {
-    background: rgba(255, 255, 255, 0.05);
+.checkboxContainer input:checked ~ .checkmark {
+    background: #eebf1c;
+    border-color: #eebf1c;
 }
 
-.activeCard {
-    background: rgba(238, 191, 28, 0.05);
-    border-color: #eebf1c;
+.checkboxContainer input:checked ~ .checkmark::after {
+    content: '';
+    width: 4px;
+    height: 8px;
+    border: solid #0b0e14;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    margin-bottom: 2px;
+}
+
+/* --- BUTTONS --- */
+.buttonRow {
+    display: flex;
+    gap: 15px;
+}
+
+.backBtn {
+    flex: 1;
+    padding: 16px;
+    background: transparent;
+    color: #94a3b8;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.backBtn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.05);
+    color: #f8fafc;
+}
+
+.goldBtn {
+    flex: 2;
+    padding: 16px;
+    background: linear-gradient(90deg, #b8860b, #ffd700, #b8860b);
+    background-size: 200% auto;
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: 0.5s;
+}
+
+.goldBtn:hover:not(:disabled) {
+    background-position: right center;
+    box-shadow: 0 0 20px rgba(238, 191, 28, 0.4);
+}
+
+.goldBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.cancelLink {
+    text-align: center;
+    color: #64748b;
+    font-size: 0.85em;
+    font-weight: 600;
+    margin-top: 25px;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.cancelLink:hover {
+    color: #cbd5e1;
+    text-decoration: underline;
+}
+
+/* --- RESPONSIVE OVERRIDES --- */
+@media (max-width: 600px) {
+    .glassBox {
+        padding: 30px 20px;
+    }
+    .title {
+        font-size: 1.5em;
+    }
+    .buttonRow {
+        flex-direction: column;
+    }
 }

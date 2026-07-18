@@ -5,13 +5,15 @@ import Layout from './components/Layout';
 
 // Public Pages
 import Login from './pages/Login';
-import Invite from './pages/Invite'; // The real invite component
+import Invite from './pages/Invite'; 
 
 // Main App Pages
 import Home from './pages/Home';
 import Projections from './pages/Projections';
 import Transactions from './pages/Transactions';
 import Matchups from './pages/Matchups';
+
+// League Info & History
 import Rosters from './pages/Rosters';
 import AddLeague from './pages/AddLeague';
 import Managers from './pages/Managers';
@@ -21,6 +23,8 @@ import Drafts from './pages/Drafts';
 import Awards from './pages/Awards';
 import Records from './pages/Records';
 import Constitution from './pages/Constitution';
+import Scoring from './pages/Scoring'; 
+import UserSettings from './pages/UserSettings'; 
 
 // Admin Pages
 import AdminNotes from './pages/admin/AdminNotes';
@@ -32,19 +36,15 @@ function App() {
         <LeagueProvider>
             <Router>
                 <Routes>
-                    {/* Public Routes */}
                     <Route path="/login" element={<Login />} />
                     <Route path="/invite/:league_id" element={<Invite />} />
                     
-                    {/* Protected Application Routes wrapped in Layout */}
                     <Route element={<Layout />}>
-                        {/* Core Dashboard */}
                         <Route path="/" element={<Home />} />
                         <Route path="/projections" element={<Projections />} />
                         <Route path="/transactions" element={<Transactions />} />
                         <Route path="/matchups" element={<Matchups />} />
                         
-                        {/* League Info & History */}
                         <Route path="/rosters" element={<Rosters />} />
                         <Route path="/add-league" element={<AddLeague />} />
                         <Route path="/managers" element={<Managers />} />
@@ -54,8 +54,9 @@ function App() {
                         <Route path="/awards" element={<Awards />} /> 
                         <Route path="/records" element={<Records />} />
                         <Route path="/constitution" element={<Constitution />} />
+                        <Route path="/scoring" element={<Scoring />} /> 
+                        <Route path="/account" element={<UserSettings />} /> 
                         
-                        {/* Commissioner Admin Dashboard */}
                         <Route path="/admin/constitution" element={<AdminConstitution />} />
                         <Route path="/admin/notes" element={<AdminNotes />} />
                         <Route path="/admin/fees" element={<AdminFees />} />

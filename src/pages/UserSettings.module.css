@@ -1,0 +1,130 @@
+
+.container {
+    padding: 40px 20px;
+    max-width: 600px;
+    margin: 0 auto;
+    font-family: 'Montserrat', sans-serif;
+}
+
+.header {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.title {
+    color: #f8fafc;
+    text-transform: uppercase;
+    font-size: 2em;
+    letter-spacing: 2px;
+    margin: 0;
+    font-weight: 800;
+}
+
+.card {
+    background: #1e2530;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.cardHeader {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 15px 25px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    color: #f8fafc;
+    font-weight: 700;
+    font-size: 1.1em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.cardBody {
+    padding: 25px;
+}
+
+.inputGroup {
+    margin-bottom: 20px;
+}
+
+.inputGroup label {
+    display: block;
+    color: #94a3b8;
+    font-size: 0.85em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+}
+
+.optional {
+    color: #64748b;
+    font-style: italic;
+    font-size: 0.85em;
+    text-transform: none;
+    letter-spacing: 0;
+    margin-left: 5px;
+}
+
+.inputField {
+    width: 100%;
+    padding: 14px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: #f8fafc;
+    font-family: inherit;
+    font-size: 1em;
+    box-sizing: border-box;
+    transition: all 0.3s;
+}
+
+.inputField:focus {
+    border-color: #eebf1c;
+    outline: none;
+}
+
+.saveBtn {
+    width: 100%;
+    padding: 16px;
+    background: #eebf1c;
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: 0.3s;
+    margin-top: 10px;
+}
+
+.saveBtn:hover:not(:disabled) {
+    background: #ffaa00;
+}
+
+.saveBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.message {
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 0.9em;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.success {
+    background: rgba(0, 206, 184, 0.1);
+    color: #00ceb8;
+    border: 1px solid rgba(0, 206, 184, 0.3);
+}
+
+.error {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}

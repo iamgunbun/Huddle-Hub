@@ -10,7 +10,7 @@ export default function AddLeague() {
     
     // Auth State
     const [userId, setUserId] = useState(null);
-
+    
     // UI & Flow State
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
@@ -20,10 +20,10 @@ export default function AddLeague() {
     const [username, setUsername] = useState('');
     const [sleeperUserId, setSleeperUserId] = useState('');
     const [leagues, setLeagues] = useState([]);
-    const [selectedLeagueIds, setSelectedLeagueIds] = useState([]); // Now an array for multi-select
+    const [selectedLeagueIds, setSelectedLeagueIds] = useState([]); // Array for multi-select
     const [isCommissioner, setIsCommissioner] = useState(false);
 
-    // Grab user session on mount for the Yahoo redirect
+    // Grab user session on mount
     useEffect(() => {
         const fetchSession = async () => {
             const { data: { session } } = await supabase.auth.getSession();
@@ -34,20 +34,6 @@ export default function AddLeague() {
         fetchSession();
     }, []);
 
-    // --- YAHOO OAUTH FLOW ---
-    const handleYahooConnect = () => {
-        if (!userId) {
-            setError("Authentication error. Please log in again.");
-            return;
-        }
-        
-        const clientId = import.meta.env.VITE_YAHOO_CLIENT_ID; 
-        const redirectUri = encodeURIComponent(import.meta.env.VITE_YAHOO_REDIRECT_URI); 
-        const state = encodeURIComponent(userId);
-
-        window.location.href = `https://api.login.yahoo.com/oauth2/request_auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&state=${state}`;
-    };
-
     // --- SLEEPER FLOW: STEP 1 ---
     const handleSearchLeagues = async () => {
         if (!username.trim()) {
@@ -56,15 +42,18 @@ export default function AddLeague() {
         }
         setLoading(true);
         setError('');
+
         try {
             const userRes = await fetch(`https://api.sleeper.app/v1/user/${username.trim()}`);
             const userData = await userRes.json();
+
             if (!userRes.ok || !userData || !userData.user_id) {
                 setError("User not found. Please check your Sleeper username.");
                 setLoading(false);
                 return;
             }
-            setSleeperUserId(userData.user_id); 
+
+            setSleeperUserId(userData.user_id);
             
             const currentYear = new Date().getFullYear();
             const leaguesRes = await fetch(`https://api.sleeper.app/v1/user/${userData.user_id}/leagues/nfl/${currentYear}`);
@@ -78,6 +67,7 @@ export default function AddLeague() {
             
             setLeagues(leaguesData);
             setStep(2);
+
         } catch (err) {
             console.error("Failed to fetch from Sleeper:", err);
             setError("An error occurred while contacting Sleeper. Please try again.");
@@ -99,6 +89,7 @@ export default function AddLeague() {
             setError("Please select at least one league to connect.");
             return;
         }
+
         setLoading(true);
         setError('');
 
@@ -116,6 +107,7 @@ export default function AddLeague() {
                     .maybeSingle();
                 
                 let dbLeagueId;
+
                 if (!existingLeague) {
                     const { data: newLeague, error: insertErr } = await supabase
                         .from('leagues')
@@ -126,6 +118,7 @@ export default function AddLeague() {
                         })
                         .select()
                         .single();
+
                     if (insertErr) throw insertErr;
                     dbLeagueId = newLeague.id;
                 } else {
@@ -159,6 +152,7 @@ export default function AddLeague() {
                             is_commissioner: isCommissioner,
                             team_name: autoTeamName
                         }, { onConflict: 'user_id, league_id' });
+
                     if (linkErr) throw linkErr;
                 } else {
                     throw new Error("Authentication error. Please log in again.");
@@ -222,27 +216,6 @@ export default function AddLeague() {
                             </button>
                         </div>
 
-                        {/* Divider */}
-                        <div className={styles.dividerRow}>
-                            <div className={styles.dividerLine}></div>
-                            <span className={styles.dividerText}>OR</span>
-                            <div className={styles.dividerLine}></div>
-                        </div>
-
-                        {/* Yahoo Section */}
-                        <div className={styles.platformSection}>
-                            <label className={styles.platformLabel}>Yahoo Fantasy Integration</label>
-                            <p className={styles.platformSubtext}>Securely log in to import your Yahoo leagues.</p>
-                            <button 
-                                className={styles.yahooBtn} 
-                                onClick={handleYahooConnect}
-                            >
-                                <svg className={styles.yahooIcon} viewBox="0 0 24 24">
-                                    <path d="M22.774 5.922L14.721 17.5h-3.418l-3.324-9.351L4.655 17.5H1.226L9.28 5.922h3.417l3.324 9.351 3.324-9.351h3.429z"/>
-                                </svg>
-                                Connect Yahoo Account
-                            </button>
-                        </div>
                     </div>
                 )}
 
@@ -273,7 +246,7 @@ export default function AddLeague() {
                         <label className={styles.checkboxContainer}>
                             <input 
                                 type="checkbox" 
-                                checked={isCommissioner} 
+                                checked={isCommissioner}
                                 onChange={(e) => setIsCommissioner(e.target.checked)} 
                             />
                             <span className={styles.checkmark}></span>

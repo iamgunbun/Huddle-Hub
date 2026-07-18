@@ -1,46 +1,63 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/brand.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="./vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#0b0e14" />
     <title>Huddle FF</title>
+
+    <!-- Restored Google Fonts & Material Icons -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <!-- For Android/Chrome -->
-<link rel="manifest" href="/manifest.json" />
 
-<!-- For iOS (Apple devices) -->
-<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-
-<!-- Theme color for the browser UI -->
-<meta name="theme-color" content="#0b0e14" />
+    <style>
+      /* Immediate Splash Screen Styles */
+      #splash-screen {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background-color: #0b0e14;
+        z-index: 9999;
+        transition: opacity 0.5s ease;
+      }
+      .logo-spinner {
+        width: 150px;
+        height: 150px;
+        background-image: url('./logo.png'); 
+        background-size: contain;
+        background-repeat: no-repeat;
+        background-position: center;
+        animation: pulse 1.5s infinite ease-in-out;
+      }
+      @keyframes pulse {
+        0%, 100% { transform: scale(0.9); opacity: 0.6; }
+        50% { transform: scale(1.05); opacity: 1; }
+      }
+    </style>
   </head>
   <body>
-    <div id="splash-screen" style="position:fixed; inset:0; display:flex; justify-content:center; align-items:center; background-color:#0b0e14; z-index:9999;">
-  <div style="width:150px; height:150px; background-image:url('/logo.png'); background-size:contain; background-repeat:no-repeat; animation:pulse 1.5s infinite ease-in-out;"></div>
-</div>
+    <!-- Splash Screen HTML -->
+    <div id="splash-screen">
+      <div class="logo-spinner"></div>
+    </div>
 
-<style>
-  @keyframes pulse {
-    0%, 100% { transform: scale(0.9); opacity: 0.6; }
-    50% { transform: scale(1.05); opacity: 1; }
-  }
-</style>
-
-<div id="root"></div>
-
-<script>
-  // Remove splash when React loads
-  window.addEventListener('load', () => {
-    const splash = document.getElementById('splash-screen');
-    splash.style.opacity = '0';
-    setTimeout(() => splash.remove(), 500);
-  });
-</script>
     <div id="root"></div>
+
+    <!-- Splash Screen Removal Script -->
+    <script>
+      window.addEventListener('load', () => {
+        const splash = document.getElementById('splash-screen');
+        if (splash) {
+          splash.style.opacity = '0';
+          setTimeout(() => splash.remove(), 500);
+        }
+      });
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

@@ -42,6 +42,19 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
         return { backgroundColor: `var(--${basePos})`, color: '#0b0e14', fontWeight: '800' };
     };
 
+    // --- DYNAMIC COLOR LOGIC ---
+    const colorGreen = '#00ceb8';
+    const colorRed = '#ff2a6d';
+    const colorTied = '#94a3b8'; // Neutral Slate
+
+    // Win Probability Colors
+    const oddsColorA = oddsA > oddsB ? colorGreen : (oddsB > oddsA ? colorRed : colorTied);
+    const oddsColorB = oddsB > oddsA ? colorGreen : (oddsA > oddsB ? colorRed : colorTied);
+
+    // Live Score Colors
+    const scoreColorA = scoreA > scoreB ? colorGreen : (scoreB > scoreA ? colorRed : colorTied);
+    const scoreColorB = scoreB > scoreA ? colorGreen : (scoreA > scoreB ? colorRed : colorTied);
+
     return (
         <div className={`${styles.matchupCard} ${isExpanded ? styles.expanded : ''}`}>
             <div className={styles.scoreboardWrapper} onClick={() => setIsExpanded(!isExpanded)}>
@@ -56,7 +69,9 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                                 <div className={styles.projTotal}>Proj: {projA.toFixed(2)}</div>
                             </div>
                         </div>
-                        <div className={`${styles.teamScore} ${styles.scoreGreen}`}>{scoreA > 0 ? scoreA.toFixed(2) : '-'}</div>
+                        <div className={styles.teamScore} style={{ color: scoreColorA }}>
+                            {scoreA > 0 ? scoreA.toFixed(2) : '-'}
+                        </div>
                     </div>
                     
                     <div className={styles.vsBadge}>
@@ -67,7 +82,9 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                     </div>
                     
                     <div className={styles.teamHeader}>
-                        <div className={`${styles.teamScore} ${styles.scoreRed}`}>{scoreB > 0 ? scoreB.toFixed(2) : '-'}</div>
+                        <div className={styles.teamScore} style={{ color: scoreColorB }}>
+                            {scoreB > 0 ? scoreB.toFixed(2) : '-'}
+                        </div>
                         <div className={`${styles.teamIdentity} ${styles.alignRight}`}>
                             <div className={`${styles.teamNameContainer} ${styles.alignRight}`}>
                                 <div className={styles.teamName}>{metaB.name}</div>
@@ -103,36 +120,48 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
 
                     <div className={styles.mGridBottom}>
                         <div className={styles.mStatBoxLeft}>
-                            <div className={styles.mOddsLabel}><span className={styles.mWinPct}>{oddsA}%</span> WIN</div>
-                            <div className={styles.mOddsBar}><div className={styles.mOddsFillGreen} style={{width: `${oddsA}%`}}></div></div>
+                            <div className={styles.mOddsLabel}>
+                                <span className={styles.mWinPct} style={{ color: oddsColorA }}>{oddsA}%</span> WIN
+                            </div>
+                            <div className={styles.mOddsBar}>
+                                <div style={{ width: `${oddsA}%`, background: oddsColorA, height: '100%' }}></div>
+                            </div>
                         </div>
                         <div className={styles.mScoreBoxLeft}>
-                            <div className={styles.mActual}>{scoreA > 0 ? scoreA.toFixed(2) : '-'}</div>
+                            <div className={styles.mActual} style={{ color: scoreColorA }}>
+                                {scoreA > 0 ? scoreA.toFixed(2) : '-'}
+                            </div>
                             <div className={styles.mProj}>Proj: {projA.toFixed(2)}</div>
                         </div>
 
                         <div className={styles.mSpacer}></div>
 
                         <div className={styles.mScoreBoxRight}>
-                            <div className={styles.mActual}>{scoreB > 0 ? scoreB.toFixed(2) : '-'}</div>
+                            <div className={styles.mActual} style={{ color: scoreColorB }}>
+                                {scoreB > 0 ? scoreB.toFixed(2) : '-'}
+                            </div>
                             <div className={styles.mProj}>Proj: {projB.toFixed(2)}</div>
                         </div>
                         <div className={styles.mStatBoxRight}>
-                            <div className={`${styles.mOddsLabel} ${styles.mRightAlign}`}><span className={styles.mWinPctRed}>{oddsB}%</span> WIN</div>
-                            <div className={`${styles.mOddsBar} ${styles.mOddsBarRight}`}><div className={styles.mOddsFillRed} style={{width: `${oddsB}%`}}></div></div>
+                            <div className={`${styles.mOddsLabel} ${styles.mRightAlign}`}>
+                                <span className={styles.mWinPctRed} style={{ color: oddsColorB }}>{oddsB}%</span> WIN
+                            </div>
+                            <div className={`${styles.mOddsBar} ${styles.mOddsBarRight}`}>
+                                <div style={{ width: `${oddsB}%`, background: oddsColorB, height: '100%' }}></div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
+                {/* DYNAMIC PROBABILITY BAR */}
                 <div className={styles.oddsContainer}>
-                    <div className={styles.oddsBar}>
-                        <div className={styles.oddsGreen} style={{ width: `${oddsA}%` }}></div>
-                        <div className={styles.oddsRed} style={{ width: `${oddsB}%` }}></div>
+                    <div className={styles.oddsBarBg} style={{ background: oddsColorB }}>
+                        <div style={{ width: `${oddsA}%`, background: oddsColorA, height: '100%', borderRadius: '3px 0 0 3px' }}></div>
                     </div>
                     <div className={styles.oddsText}>
-                        <span style={{ color: '#00ceb8' }}>{oddsA}%</span>
+                        <span style={{ color: oddsColorA }}>{oddsA}%</span>
                         <span style={{ color: '#94a3b8', fontSize: '0.85em', textTransform: 'uppercase', fontWeight: '600' }}>Win Probability</span>
-                        <span style={{ color: '#ff2a6d' }}>{oddsB}%</span>
+                        <span style={{ color: oddsColorB }}>{oddsB}%</span>
                     </div>
                 </div>
             </div>
@@ -150,6 +179,10 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                         const pA_Proj = parseFloat(playerA?.wi?.[week]?.p || 0);
                         const pB_Proj = parseFloat(playerB?.wi?.[week]?.p || 0);
 
+                        // Individual Player Head-to-Head Colors
+                        const pScoreColorA = pA_Score > pB_Score ? colorGreen : (pB_Score > pA_Score ? colorRed : '#f8fafc');
+                        const pScoreColorB = pB_Score > pA_Score ? colorGreen : (pA_Score > pB_Score ? colorRed : '#f8fafc');
+
                         return (
                             <div key={idx} className={styles.playerRow}>
                                 <div className={styles.playerSideLeft}>
@@ -160,7 +193,9 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                                                 <span className={styles.pMeta}>{playerA.pos} • {playerA.t || 'FA'}</span>
                                             </div>
                                             <div className={styles.pScoresLeft}>
-                                                <span className={styles.pScore}>{pA_Score > 0 ? pA_Score.toFixed(2) : '-'}</span>
+                                                <span className={styles.pScore} style={{ color: pScoreColorA }}>
+                                                    {pA_Score > 0 ? pA_Score.toFixed(2) : '-'}
+                                                </span>
                                                 <span className={styles.pProj}>Proj {pA_Proj.toFixed(2)}</span>
                                             </div>
                                         </>
@@ -177,7 +212,9 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                                     {playerB ? (
                                         <>
                                             <div className={styles.pScoresRight}>
-                                                <span className={styles.pScore}>{pB_Score > 0 ? pB_Score.toFixed(2) : '-'}</span>
+                                                <span className={styles.pScore} style={{ color: pScoreColorB }}>
+                                                    {pB_Score > 0 ? pB_Score.toFixed(2) : '-'}
+                                                </span>
                                                 <span className={styles.pProj}>Proj {pB_Proj.toFixed(2)}</span>
                                             </div>
                                             <div className={styles.pInfoRight}>

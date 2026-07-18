@@ -1,20 +1,18 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
-import { useLeague } from '../context/LeagueContext'; // 1. Import Context
 import styles from './Login.module.css';
 
 export default function Login() {
     const navigate = useNavigate();
-    const { loadLeagueContext } = useLeague(); // 2. Destructure load function
-    
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [isLogin, setIsLogin] = useState(true);
     const [authError, setAuthError] = useState('');
     const [loading, setLoading] = useState(false);
     const [favoriteTeam, setFavoriteTeam] = useState('');
-
+    
     const nflTeams = [
         { id: 'ari', name: 'Arizona Cardinals' }, { id: 'atl', name: 'Atlanta Falcons' },
         { id: 'bal', name: 'Baltimore Ravens' }, { id: 'buf', name: 'Buffalo Bills' },
@@ -36,33 +34,33 @@ export default function Login() {
 
     const handleAuth = async () => {
         if (!email || !password) return;
-        if (!isLogin && !favoriteTeam) {
-            setAuthError("Please select your favorite NFL team.");
-            return;
+        
+        if (!isLogin) {
+            if (!favoriteTeam) {
+                setAuthError("Please select your favorite NFL team.");
+                return;
+            }
+            if (password !== confirmPassword) {
+                setAuthError("Passwords do not match. Please try again.");
+                return;
+            }
         }
         
         setLoading(true);
         setAuthError('');
-
+        
         try {
             if (isLogin) {
-                const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+                const { error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;
-                
-                // 3. CRITICAL FIX: Block the redirect until leagues are loaded into memory
-                if (data?.user) {
-                    await loadLeagueContext(data.user.id);
-                }
             } else {
                 const { data, error } = await supabase.auth.signUp({ email, password });
                 if (error) throw error;
-                
                 if (data?.user) {
                     await supabase.from('profiles').upsert({ id: data.user.id, favorite_team: favoriteTeam });
-                    await loadLeagueContext(data.user.id);
                 }
             }
-
+            
             const returnUrl = localStorage.getItem('returnUrl');
             if (returnUrl) {
                 localStorage.removeItem('returnUrl');
@@ -118,16 +116,26 @@ export default function Login() {
                     />
                     
                     {!isLogin && (
-                        <select 
-                            className={styles.inputField} 
-                            value={favoriteTeam}
-                            onChange={(e) => setFavoriteTeam(e.target.value)}
-                        >
-                            <option value="" disabled>-- Favorite NFL Team --</option>
-                            {nflTeams.map((team) => (
-                                <option key={team.id} value={team.id}>{team.name}</option>
-                            ))}
-                        </select>
+                        <>
+                            <input 
+                                type="password" 
+                                className={styles.inputField} 
+                                placeholder="Retype Password" 
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                onKeyDown={handleKeydown} 
+                            />
+                            <select 
+                                className={styles.inputField} 
+                                value={favoriteTeam}
+                                onChange={(e) => setFavoriteTeam(e.target.value)}
+                            >
+                                <option value="" disabled>-- Favorite NFL Team --</option>
+                                {nflTeams.map((team) => (
+                                    <option key={team.id} value={team.id}>{team.name}</option>
+                                ))}
+                            </select>
+                        </>
                     )}
                     
                     <button className={styles.goldBtn} onClick={handleAuth} disabled={loading}>
@@ -136,7 +144,7 @@ export default function Login() {
                     
                     <div 
                         className={styles.toggleLink} 
-                        onClick={() => { setIsLogin(!isLogin); setAuthError(''); }}
+                        onClick={() => { setIsLogin(!isLogin); setAuthError(''); setConfirmPassword(''); }}
                     >
                         {isLogin ? "NEW?" : "RETURNING?"} <span>{isLogin ? 'CREATE ACCOUNT' : 'LOGIN'}</span>
                     </div>

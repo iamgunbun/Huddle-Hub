@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Huddle FF</string>
+    <string name="title_activity_main">Huddle FF</string>
+    <string name="package_name">com.huddleff.app</string>
+    <string name="custom_url_scheme">com.huddleff.app</string>
+</resources>
