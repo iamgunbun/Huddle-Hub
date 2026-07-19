@@ -4,6 +4,7 @@ import Header from './Header';
 import Sidebar from './Sidebar';
 import ChatDrawer from './ChatDrawer';
 import MobileTopNav from './MobileTopNav';
+import MobileBottomNav from './MobileBottomNav'; // Import the new nav
 import { useLeague } from '../context/LeagueContext';
 
 export default function Layout() {
@@ -33,9 +34,10 @@ export default function Layout() {
             
             <ChatDrawer />
             
+            {/* The paddingBottom here is crucial for the nav stack */}
             <main className="layout-main" style={{ 
                 paddingTop: '0', 
-                paddingBottom: isMobile ? '90px' : '0',
+                paddingBottom: isMobile ? '130px' : '0',
                 boxSizing: 'border-box', 
                 overflowX: 'hidden', 
                 width: '100%', 
@@ -43,6 +45,8 @@ export default function Layout() {
             }}>
                 <Outlet />
             </main>
+
+            {isMobile && <MobileBottomNav />}
         </div>
     );
 }

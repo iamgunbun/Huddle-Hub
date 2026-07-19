@@ -56,44 +56,51 @@ export default function Sidebar({ isOpen, onClose }) {
                     </button>
                 </div>
 
-                {/* paddingBottom 100px provides the cushion so the final tabs clear the footer */}
                 <div className={styles.menuContainer} style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: '100px' }}>
-                    <div className="desktopNavOnly">
-                        <div className={styles.section}>
+                    
+                    <div className={styles.section}>
+                        {/* Hidden on mobile (handled by bottom nav), visible on desktop */}
+                        <div className="desktopNavOnly">
                             <h4>Menu</h4>
                             <div className={styles.link} onClick={() => {navigate('/'); if(onClose) onClose();}}>
                                 <i className="material-icons">home</i> Home
                             </div>
                             <div className={styles.link} onClick={() => {navigate('/matchups'); if(onClose) onClose();}}>
-                                <i className="material-icons">sports_football</i> Matchups
+                                <i className="material-icons">bolt</i> Vs
+                            </div>
+                            <div className={styles.link} onClick={() => {navigate('/rosters'); if(onClose) onClose();}}>
+                                <i className="material-icons">badge</i> My Team
+                            </div>
+                            <div className={styles.link} onClick={() => {navigate('/players'); if(onClose) onClose();}}>
+                                <i className="material-icons">groups</i> Players
                             </div>
                             <div className={styles.link} onClick={() => {navigate('/transactions'); if(onClose) onClose();}}>
-                                <i className="material-icons">swap_horiz</i> Trades & Waivers
+                                <i className="material-icons">swap_horiz</i> Transactions
                             </div>
-                            
-                            <div className={`${styles.dropdown} ${infoOpen ? styles.activeDropdown : ''}`} onClick={() => setInfoOpen(!infoOpen)}>
-                                <div className={styles.dropdownLabel}>
-                                    <i className="material-icons">view_comfy</i> League Info
-                                </div>
-                                <i className={`material-icons ${styles.chevron} ${infoOpen ? styles.chevronOpen : ''}`}>expand_more</i>
+                        </div>
+                        
+                        {/* Visible on BOTH mobile and desktop sidebar */}
+                        <div className={`${styles.dropdown} ${infoOpen ? styles.activeDropdown : ''}`} onClick={() => setInfoOpen(!infoOpen)} style={{ marginTop: '10px' }}>
+                            <div className={styles.dropdownLabel}>
+                                <i className="material-icons">view_comfy</i> League Info
                             </div>
-                            
-                            <div className={`${styles.nested} ${infoOpen ? styles.nestedOpen : ''}`}>
-                                <div onClick={() => {navigate('/rosters'); if(onClose) onClose();}}><i className="material-icons">storage</i> Teams</div>
-                                <div onClick={() => {navigate('/managers'); if(onClose) onClose();}}><i className="material-icons">people</i> Managers</div>
-                                <div onClick={() => {navigate('/rivalry'); if(onClose) onClose();}}><i className="material-icons">local_fire_department</i> Rivalry</div>
-                                <div onClick={() => {navigate('/standings'); if(onClose) onClose();}}><i className="material-icons">leaderboard</i> Standings</div>
-                                <div onClick={() => {navigate('/drafts'); if(onClose) onClose();}}><i className="material-icons">event_note</i> Drafts</div>
-                                <div onClick={() => {navigate('/awards'); if(onClose) onClose();}}><i className="material-icons">emoji_events</i> Trophy Room</div>
-                                <div onClick={() => {navigate('/records'); if(onClose) onClose();}}><i className="material-icons">military_tech</i> Records</div>
-                                <div onClick={() => {navigate('/scoring'); if(onClose) onClose();}}><i className="material-icons">format_list_numbered</i> Scoring Format</div>
-                                <div onClick={() => {navigate('/constitution'); if(onClose) onClose();}}><i className="material-icons">history_edu</i> Constitution</div>
-                                <div onClick={() => {
-                                    window.open(`https://sleeper.app/leagues/${activeLeague?.sleeper_league_id || ''}`, '_blank');
-                                    if (onClose) onClose();
-                                }}>
-                                    <i className="material-icons">sports_football</i> Go to Sleeper
-                                </div>
+                            <i className={`material-icons ${styles.chevron} ${infoOpen ? styles.chevronOpen : ''}`}>expand_more</i>
+                        </div>
+                        
+                        <div className={`${styles.nested} ${infoOpen ? styles.nestedOpen : ''}`}>
+                            <div onClick={() => {navigate('/managers'); if(onClose) onClose();}}><i className="material-icons">people</i> Managers</div>
+                            <div onClick={() => {navigate('/rivalry'); if(onClose) onClose();}}><i className="material-icons">local_fire_department</i> Rivalry</div>
+                            <div onClick={() => {navigate('/standings'); if(onClose) onClose();}}><i className="material-icons">leaderboard</i> Standings</div>
+                            <div onClick={() => {navigate('/drafts'); if(onClose) onClose();}}><i className="material-icons">event_note</i> Drafts</div>
+                            <div onClick={() => {navigate('/awards'); if(onClose) onClose();}}><i className="material-icons">emoji_events</i> Trophy Room</div>
+                            <div onClick={() => {navigate('/records'); if(onClose) onClose();}}><i className="material-icons">military_tech</i> Records</div>
+                            <div onClick={() => {navigate('/scoring'); if(onClose) onClose();}}><i className="material-icons">format_list_numbered</i> Scoring Format</div>
+                            <div onClick={() => {navigate('/constitution'); if(onClose) onClose();}}><i className="material-icons">history_edu</i> Constitution</div>
+                            <div onClick={() => {
+                                window.open(`https://sleeper.app/leagues/${activeLeague?.sleeper_league_id || ''}`, '_blank');
+                                if (onClose) onClose();
+                            }}>
+                                <i className="material-icons">sports_football</i> Go to Sleeper
                             </div>
                         </div>
                     </div>

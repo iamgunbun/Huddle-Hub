@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getTeamFromTeamManagers } from '../../utils/helperFunctions/universalFunctions';
+import PlayerModal from '../PlayerModal';
 import styles from './Matchup.module.css';
 
 export default function Matchup({ matchup, players, leagueTeamManagers, year, week, leagueData, initialExpanded = false }) {
@@ -10,6 +11,7 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
     const metaB = getTeamFromTeamManagers(leagueTeamManagers, teamB.roster_id, year);
 
     const [isExpanded, setIsExpanded] = useState(false);
+    const [selectedPlayer, setSelectedPlayer] = useState(null);
     
     useEffect(() => {
         setIsExpanded(window.innerWidth > 1100 ? initialExpanded : false);
@@ -42,16 +44,13 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
         return { backgroundColor: `var(--${basePos})`, color: '#0b0e14', fontWeight: '800' };
     };
 
-    // --- DYNAMIC COLOR LOGIC ---
     const colorGreen = '#00ceb8';
     const colorRed = '#ff2a6d';
-    const colorTied = '#94a3b8'; // Neutral Slate
+    const colorTied = '#94a3b8'; 
 
-    // Win Probability Colors
     const oddsColorA = oddsA > oddsB ? colorGreen : (oddsB > oddsA ? colorRed : colorTied);
     const oddsColorB = oddsB > oddsA ? colorGreen : (oddsA > oddsB ? colorRed : colorTied);
 
-    // Live Score Colors
     const scoreColorA = scoreA > scoreB ? colorGreen : (scoreB > scoreA ? colorRed : colorTied);
     const scoreColorB = scoreB > scoreA ? colorGreen : (scoreA > scoreB ? colorRed : colorTied);
 
@@ -95,7 +94,7 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                     </div>
                 </div>
 
-                {/* 2. MOBILE NATIVE APP LAYOUT */}
+                {/* 2. MOBILE LAYOUT */}
                 <div className={styles.mobileScoreboard}>
                     <div className={styles.mGridTop}>
                         <div className={styles.mProfileLeft}>
@@ -104,12 +103,10 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                                 <span className={styles.mTeamNameText}>{metaA.name}</span>
                             </div>
                         </div>
-
                         <div className={styles.mVsBadge}>
                             VS
                             <i className="material-icons">{isExpanded ? 'expand_less' : 'expand_more'}</i>
                         </div>
-
                         <div className={styles.mProfileRight}>
                             <div className={`${styles.mNameStack} ${styles.mRightAlign}`}>
                                 <span className={styles.mTeamNameText}>{metaB.name}</span>
@@ -153,7 +150,6 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                     </div>
                 </div>
 
-                {/* DYNAMIC PROBABILITY BAR */}
                 <div className={styles.oddsContainer}>
                     <div className={styles.oddsBarBg} style={{ background: oddsColorB }}>
                         <div style={{ width: `${oddsA}%`, background: oddsColorA, height: '100%', borderRadius: '3px 0 0 3px' }}></div>
@@ -179,18 +175,26 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                         const pA_Proj = parseFloat(playerA?.wi?.[week]?.p || 0);
                         const pB_Proj = parseFloat(playerB?.wi?.[week]?.p || 0);
 
-                        // Individual Player Head-to-Head Colors
                         const pScoreColorA = pA_Score > pB_Score ? colorGreen : (pB_Score > pA_Score ? colorRed : '#f8fafc');
                         const pScoreColorB = pB_Score > pA_Score ? colorGreen : (pA_Score > pB_Score ? colorRed : '#f8fafc');
 
                         return (
                             <div key={idx} className={styles.playerRow}>
-                                <div className={styles.playerSideLeft}>
+                                <div 
+                                    className={styles.playerSideLeft} 
+                                    onClick={() => playerA && setSelectedPlayer(playerA)}
+                                    style={{ cursor: playerA ? 'pointer' : 'default' }}
+                                >
                                     {playerA ? (
                                         <>
                                             <div className={styles.pInfoLeft}>
                                                 <span className={styles.pName}>{playerA.fn ? playerA.fn.charAt(0) + '.' : ''} {playerA.ln || 'Unknown'}</span>
-                                                <span className={styles.pMeta}>{playerA.pos} • {playerA.t || 'FA'}</span>
+                                                <span className={styles.pMeta}>
+                                                    {playerA.pos} • {playerA.t || 'FA'} 
+                                                    <span style={{ color: '#eebf1c', marginLeft: '6px', fontWeight: '800' }}>
+                                                        {playerA.wi?.[week]?.opp ? `| ${playerA.wi[week].opp}` : ''}
+                                                    </span>
+                                                </span>
                                             </div>
                                             <div className={styles.pScoresLeft}>
                                                 <span className={styles.pScore} style={{ color: pScoreColorA }}>
@@ -208,7 +212,11 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                                     </div>
                                 </div>
                                 
-                                <div className={styles.playerSideRight}>
+                                <div 
+                                    className={styles.playerSideRight}
+                                    onClick={() => playerB && setSelectedPlayer(playerB)}
+                                    style={{ cursor: playerB ? 'pointer' : 'default' }}
+                                >
                                     {playerB ? (
                                         <>
                                             <div className={styles.pScoresRight}>
@@ -219,7 +227,12 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                                             </div>
                                             <div className={styles.pInfoRight}>
                                                 <span className={styles.pName}>{playerB.fn ? playerB.fn.charAt(0) + '.' : ''} {playerB.ln || 'Unknown'}</span>
-                                                <span className={styles.pMeta}>{playerB.pos} • {playerB.t || 'FA'}</span>
+                                                <span className={styles.pMeta}>
+                                                    <span style={{ color: '#eebf1c', marginRight: '6px', fontWeight: '800' }}>
+                                                        {playerB.wi?.[week]?.opp ? `${playerB.wi[week].opp} |` : ''}
+                                                    </span>
+                                                    {playerB.t || 'FA'} • {playerB.pos} 
+                                                </span>
                                             </div>
                                         </>
                                     ) : <div className={styles.emptySlot}>Empty</div>}
@@ -228,6 +241,15 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                         );
                     })}
                 </div>
+            )}
+            
+            {/* Modal Injection */}
+            {selectedPlayer && (
+                <PlayerModal 
+                    player={selectedPlayer} 
+                    week={week} 
+                    onClose={() => setSelectedPlayer(null)} 
+                />
             )}
         </div>
     );

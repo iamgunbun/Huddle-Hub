@@ -5,13 +5,14 @@ import Layout from './components/Layout';
 
 // Public Pages
 import Login from './pages/Login';
-import Invite from './pages/Invite'; 
+import Invite from './pages/Invite';
 
 // Main App Pages
 import Home from './pages/Home';
 import Projections from './pages/Projections';
 import Transactions from './pages/Transactions';
 import Matchups from './pages/Matchups';
+import Players from './pages/Players'; // <-- NEW IMPORT
 
 // League Info & History
 import Rosters from './pages/Rosters';
@@ -23,8 +24,9 @@ import Drafts from './pages/Drafts';
 import Awards from './pages/Awards';
 import Records from './pages/Records';
 import Constitution from './pages/Constitution';
-import Scoring from './pages/Scoring'; 
-import UserSettings from './pages/UserSettings'; 
+import Scoring from './pages/Scoring';
+
+import UserSettings from './pages/UserSettings';
 
 // Admin Pages
 import AdminNotes from './pages/admin/AdminNotes';
@@ -44,6 +46,7 @@ function App() {
                         <Route path="/projections" element={<Projections />} />
                         <Route path="/transactions" element={<Transactions />} />
                         <Route path="/matchups" element={<Matchups />} />
+                        <Route path="/players" element={<Players />} /> {/* <-- NEW ROUTE */}
                         
                         <Route path="/rosters" element={<Rosters />} />
                         <Route path="/add-league" element={<AddLeague />} />

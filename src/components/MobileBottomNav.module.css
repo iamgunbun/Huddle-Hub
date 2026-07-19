@@ -1,0 +1,48 @@
+.bottomNav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 65px;
+    background: rgba(11, 14, 20, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    z-index: 900;
+    padding-bottom: env(safe-area-inset-bottom);
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.navItem {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    text-decoration: none;
+    font-size: 0.65em;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    gap: 4px;
+    flex: 1;
+    height: 100%;
+    transition: color 0.2s ease, transform 0.1s ease;
+}
+
+.navItem i {
+    font-size: 24px;
+    transition: transform 0.2s ease;
+}
+
+.navItem.active {
+    color: #eebf1c;
+}
+
+.navItem.active i {
+    transform: translateY(-2px);
+    text-shadow: 0 0 12px rgba(238, 191, 28, 0.4);
+}

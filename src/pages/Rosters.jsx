@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
 import { getLeagueRosters, getLeagueTeamManagers, loadPlayers, getLeagueData, getLeagueStandings } from '../utils/helper';
 import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
+import PlayerModal from '../components/PlayerModal';
 import styles from './Rosters.module.css';
 
 export default function Rosters() {
@@ -18,18 +19,19 @@ export default function Rosters() {
     const [selectingTeam, setSelectingTeam] = useState(false);
     const [expandedBenches, setExpandedBenches] = useState({});
     
-    // Mobile Check & Collapse States
+    // Modal State
+    const [selectedPlayer, setSelectedPlayer] = useState(null);
+         
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 1100);
     const [mobileExpandedTeam, setMobileExpandedTeam] = useState({});
 
-    // Strips all casing, spaces, and special characters for a perfect comparison
     const normalizeStr = (str) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth <= 1100);
         window.addEventListener('resize', handleResize);
-
         let isMounted = true;
+
         const load = async () => {
             if (!activeLeague?.sleeper_league_id) return;
             setLoading(true);
@@ -42,18 +44,17 @@ export default function Rosters() {
                     getLeagueData(sleeperId),
                     getLeagueStandings(sleeperId)
                 ]);
-
                 if (!isMounted) return;
-                
+                                 
                 setRosters(rData.rosters || {});
                 setTeamManagers(tmData);
                 setPlayersInfo(pData.players || {});
                 setLeagueData(lData);
                 setStandings(sData?.standingsInfo || {});
-                
+                                 
                 const { data: sessionData } = await supabase.auth.getSession();
                 const user = sessionData?.session?.user;
-
+                
                 if (user && activeLeague?.id) {
                     const { data: ulData } = await supabase
                         .from('user_leagues')
@@ -61,21 +62,18 @@ export default function Rosters() {
                         .eq('user_id', user.id)
                         .eq('league_id', activeLeague.id)
                         .single();
-
                     const searchName = normalizeStr(ulData?.team_name);
-
+                    
                     if (searchName && searchName !== normalizeStr('commissioner team')) {
                         const currentSeason = tmData.currentSeason;
                         const rostersMap = tmData.teamManagersMap[currentSeason] || {};
                         let foundRosterId = null;
-
                         for (const [rId, rData] of Object.entries(rostersMap)) {
                             if (normalizeStr(rData.team?.name) === searchName) {
                                 foundRosterId = rId;
                                 break;
                             }
                         }
-
                         if (foundRosterId) setMyRosterId(foundRosterId);
                         else setViewMode('all'); 
                     } else {
@@ -88,21 +86,21 @@ export default function Rosters() {
                 if (isMounted) setLoading(false);
             }
         };
-
         load();
+        
         return () => { 
-            isMounted = false; 
-            window.removeEventListener('resize', handleResize);
+             isMounted = false; 
+             window.removeEventListener('resize', handleResize);
         };
     }, [activeLeague]);
 
     const handleSetMyTeam = async (e) => {
         const id = e.target.value;
         if (!id) return;
-        
+                 
         setMyRosterId(id);
         const selectedTeamName = teamManagers.teamManagersMap[teamManagers.currentSeason][id].team.name;
-        
+                 
         const { data: sessionData } = await supabase.auth.getSession();
         if (sessionData?.session?.user) {
             await supabase.from('user_leagues')
@@ -110,7 +108,6 @@ export default function Rosters() {
                 .eq('user_id', sessionData.session.user.id)
                 .eq('league_id', activeLeague.id);
         }
-
         setSelectingTeam(false);
     };
 
@@ -129,14 +126,13 @@ export default function Rosters() {
     };
 
     if (loading) return <div className={styles.loading}>Loading Teams...</div>;
-
     if (!leagueData || !teamManagers || Object.keys(rosters).length === 0) {
         return <div className={styles.loading}>No roster data available for this league.</div>;
     }
 
     const currentSeason = teamManagers.currentSeason;
     const rosterPositions = leagueData.roster_positions || [];
-
+    
     const getAvatar = (playerId, playerMeta) => {
         if (!playerMeta) return 'https://sleepercdn.com/images/v2/icons/player_default.webp';
         if (playerMeta.pos === 'DEF') return `https://sleepercdn.com/images/team_logos/nfl/${playerId.toLowerCase()}.png`;
@@ -153,16 +149,25 @@ export default function Rosters() {
         };
     };
 
+    const getActiveWeek = (p) => p?.wi ? Object.keys(p.wi)[0] : 1;
+
     const renderPlayerRow = (playerId, positionLabel) => {
         const player = playersInfo[playerId];
         const isPlaceholder = playerId === "0" || !player;
-        
+        const activeWeek = getActiveWeek(player);
+        const matchupText = player?.wi?.[activeWeek]?.opp ? `| ${player.wi[activeWeek].opp}` : '';
+                 
         return (
-            <div key={playerId + positionLabel + Math.random()} className={styles.playerRow}>
+            <div 
+                key={playerId + positionLabel + Math.random()} 
+                className={styles.playerRow}
+                onClick={() => !isPlaceholder && setSelectedPlayer(player)}
+                style={{ cursor: isPlaceholder ? 'default' : 'pointer' }}
+            >
                 <div className={styles.posBadge} style={getPositionStyle(positionLabel.replace('WRRB_FLEX', 'FLEX').replace('SUPER_FLEX', 'S/FLEX'))}>
                     {positionLabel.replace('WRRB_FLEX', 'FLEX').replace('SUPER_FLEX', 'S/FLEX')}
                 </div>
-                
+                                 
                 {isPlaceholder ? (
                     <div className={styles.playerInfoGroup}>
                         <div className={styles.playerImg} style={{ backgroundImage: `url(https://sleepercdn.com/images/v2/icons/player_default.webp)` }}></div>
@@ -175,7 +180,12 @@ export default function Rosters() {
                         <div className={styles.playerImg} style={{ backgroundImage: `url(${getAvatar(playerId, player)}), url(https://sleepercdn.com/images/v2/icons/player_default.webp)` }}></div>
                         <div className={styles.playerText}>
                             <span className={styles.pName}>{player.fn} {player.ln}</span>
-                            <span className={styles.pMeta}>{player.pos} - {player.t}</span>
+                            <span className={styles.pMeta}>
+                                {player.pos} - {player.t}
+                                <span style={{ color: '#eebf1c', marginLeft: '6px', fontWeight: '800' }}>
+                                    {matchupText}
+                                </span>
+                            </span>
                         </div>
                     </div>
                 )}
@@ -186,20 +196,17 @@ export default function Rosters() {
     const renderRosterCard = (rosterId, isConsolidated) => {
         const roster = rosters[rosterId];
         if (!roster) return null;
-
+        
         const teamMeta = getTeamFromTeamManagers(teamManagers, rosterId, currentSeason);
         const teamStandings = standings[rosterId] || { wins: 0, losses: 0, ties: 0, fpts: 0 };
-        
+                 
         const starters = roster.starters || [];
         const allPlayers = roster.players || [];
         const reserve = roster.reserve || [];
         const taxi = roster.taxi || [];
-
         const bench = allPlayers.filter(p => !starters.includes(p) && !reserve.includes(p) && !taxi.includes(p));
-
         const isBenchExpanded = expandedBenches[rosterId];
-        
-        // Always expanded on desktop. If on mobile, expand based on toggle.
+                 
         const isTeamExpanded = !isMobile || mobileExpandedTeam[rosterId];
 
         return (
@@ -221,7 +228,7 @@ export default function Rosters() {
                         </i>
                     )}
                 </div>
-
+                
                 {isTeamExpanded && (
                     <div className={isConsolidated ? styles.rosterGridConsolidated : styles.rosterGrid}>
                         <div className={styles.rosterColumn}>
@@ -230,25 +237,22 @@ export default function Rosters() {
                                 {starters.map((pId, idx) => renderPlayerRow(pId, rosterPositions[idx] || 'BN'))}
                             </div>
                         </div>
-
                         {isConsolidated ? (
                             <>
                                 <button className={styles.toggleBenchBtn} onClick={() => toggleBench(rosterId)}>
                                     {isBenchExpanded ? 'Hide Bench' : 'Show Bench'}
                                 </button>
-                                
+                                                                 
                                 {isBenchExpanded && (
                                     <div className={styles.rosterColumn}>
                                         <h4 className={styles.sectionTitle}>Bench</h4>
                                         <div className={styles.playerList}>{bench.map(pId => renderPlayerRow(pId, 'BN'))}</div>
-
                                         {reserve.length > 0 && (
                                             <>
                                                 <h4 className={styles.sectionTitle} style={{ marginTop: '20px' }}>Injured Reserve</h4>
                                                 <div className={styles.playerList}>{reserve.map(pId => renderPlayerRow(pId, 'IR'))}</div>
                                             </>
                                         )}
-
                                         {taxi.length > 0 && (
                                             <>
                                                 <h4 className={styles.sectionTitle} style={{ marginTop: '20px' }}>Taxi Squad</h4>
@@ -262,14 +266,12 @@ export default function Rosters() {
                             <div className={styles.rosterColumn}>
                                 <h4 className={styles.sectionTitle}>Bench</h4>
                                 <div className={styles.playerList}>{bench.map(pId => renderPlayerRow(pId, 'BN'))}</div>
-
                                 {reserve.length > 0 && (
                                     <>
                                         <h4 className={styles.sectionTitle} style={{ marginTop: '20px' }}>Injured Reserve</h4>
                                         <div className={styles.playerList}>{reserve.map(pId => renderPlayerRow(pId, 'IR'))}</div>
                                     </>
                                 )}
-
                                 {taxi.length > 0 && (
                                     <>
                                         <h4 className={styles.sectionTitle} style={{ marginTop: '20px' }}>Taxi Squad</h4>
@@ -294,13 +296,12 @@ export default function Rosters() {
                     All Teams
                 </button>
             </div>
-
+            
             {viewMode === 'mine' ? (
                 (!myRosterId || selectingTeam) ? (
                     <div className={styles.claimBox}>
                         <h3 style={{ color: '#f8fafc', marginTop: 0 }}>Which team is yours?</h3>
                         <p style={{ color: '#94a3b8', fontSize: '0.9em' }}>Select your team to view your roster.</p>
-
                         <select onChange={handleSetMyTeam} defaultValue="">
                             <option value="" disabled>-- Select Your Team --</option>
                             {Object.entries(teamManagers.teamManagersMap[currentSeason] || {}).map(([rId, rData]) => (
@@ -312,8 +313,8 @@ export default function Rosters() {
                     <>
                         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
                             <button 
-                                style={{ background: 'transparent', border: 'none', color: '#64748b', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.85em' }} 
-                                onClick={() => setSelectingTeam(true)}
+                                 style={{ background: 'transparent', border: 'none', color: '#64748b', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.85em' }} 
+                                 onClick={() => setSelectingTeam(true)}
                             >
                                 Wrong Team? Change it here.
                             </button>
@@ -325,6 +326,15 @@ export default function Rosters() {
                 <div className={styles.allTeamsGrid}>
                     {Object.keys(rosters).map(rId => renderRosterCard(rId, true))}
                 </div>
+            )}
+
+            {/* Modal Injection */}
+            {selectedPlayer && (
+                <PlayerModal 
+                    player={selectedPlayer} 
+                    week={getActiveWeek(selectedPlayer)} 
+                    onClose={() => setSelectedPlayer(null)} 
+                />
             )}
         </div>
     );
