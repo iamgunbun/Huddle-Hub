@@ -5,7 +5,6 @@ import { useLeague } from '../context/LeagueContext';
 import { getLeagueTeamManagers, getLeagueData, loadPlayers } from '../utils/helper';
 import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
 import styles from './Home.module.css';
-import Transactions from '../components/Transactions/Transactions';
 import ProjectionsPanel from '../components/Projections/ProjectionsPanel';
 
 export default function Home() {
@@ -26,6 +25,10 @@ export default function Home() {
     const [myTxnCount, setMyTxnCount] = useState(0);
     const [myBalanceOwed, setMyBalanceOwed] = useState(0);
 
+    // Live Fantasy News State
+    const [fantasyNews, setFantasyNews] = useState([]);
+    const [loadingNews, setLoadingNews] = useState(true);
+
     useEffect(() => {
         const verifyAuth = async () => {
             const { data: { session } } = await supabase.auth.getSession();
@@ -37,6 +40,57 @@ export default function Home() {
         };
         verifyAuth();
     }, [navigate]);
+
+    // Fetch Fantasy News Pipeline
+    useEffect(() => {
+        let isMounted = true;
+        const fetchNews = async () => {
+            setLoadingNews(true);
+            try {
+                const eRes = await fetch(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/news?limit=50`).catch(()=>null);
+                
+                if (eRes && eRes.ok) {
+                    const eData = await eRes.json();
+                    if (eData.articles && Array.isArray(eData.articles)) {
+                        const espnArticles = eData.articles.map((item, idx) => ({
+                            id: `espn-${item.id || idx}`,
+                            title: item.headline || 'NFL Report',
+                            description: item.description || item.story || '',
+                            source: item.byline || 'ESPN Wire',
+                            date: item.published ? new Date(item.published).toLocaleDateString() : 'Archive',
+                            url: item.links?.web?.href || item.links?.mobile?.href || '',
+                            image: item.images && item.images.length > 0 ? item.images[0].url : ''
+                        }));
+
+                        // Filter for fantasy-relevant terms
+                        const fantasyFiltered = espnArticles.filter(a => {
+                            const txt = `${a.title} ${a.description}`.toLowerCase();
+                            return txt.includes('fantasy') || 
+                                   txt.includes('waiver') || 
+                                   txt.includes('rankings') || 
+                                   txt.includes('start') || 
+                                   txt.includes('sit') || 
+                                   txt.includes('roster') ||
+                                   txt.includes('injury') ||
+                                   txt.includes('trade');
+                        });
+                        
+                        if (isMounted) {
+                            // Limit to top 5 articles for the dashboard
+                            setFantasyNews(fantasyFiltered.slice(0, 5)); 
+                        }
+                    }
+                }
+            } catch(err) {
+                console.warn("ESPN home fetch failed:", err);
+            } finally {
+                if (isMounted) setLoadingNews(false);
+            }
+        };
+
+        fetchNews();
+        return () => { isMounted = false; };
+    }, []);
 
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth <= 1100);
@@ -225,6 +279,47 @@ export default function Home() {
 
     const champTeam = (recentChamp && teamManagers) ? getTeamFromTeamManagers(teamManagers, recentChamp.champion, recentChamp.year) : null;
     
+    // Extracted News Feed Component Block
+    const renderNewsFeed = () => (
+        <div className={styles.hubCard} style={{ marginTop: '20px' }}>
+            <h3 className={styles.cardHeader}>
+                <i className="material-icons" style={{ fontSize: '1.2em', verticalAlign: 'text-bottom', marginRight: '6px', color: '#eebf1c' }}>article</i>
+                Latest Fantasy News
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                {loadingNews ? (
+                    <div style={{ color: '#94a3b8', fontStyle: 'italic', padding: '10px 0' }}>Fetching latest updates...</div>
+                ) : fantasyNews.length > 0 ? (
+                    fantasyNews.map(article => (
+                        <a 
+                            key={article.id} 
+                            href={article.url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            style={{ 
+                                textDecoration: 'none', color: 'inherit', display: 'flex', gap: '12px', 
+                                alignItems: 'flex-start', background: 'rgba(255,255,255,0.02)', padding: '12px', 
+                                borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', transition: 'background 0.2s' 
+                            }}
+                            onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                            onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+                        >
+                            {article.image && (
+                                <img src={article.image} alt="" style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '6px', flexShrink: 0 }} />
+                            )}
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontSize: '0.9em', fontWeight: 'bold', color: '#f8fafc', marginBottom: '4px', lineHeight: '1.3' }}>{article.title}</span>
+                                <span style={{ fontSize: '0.8em', color: '#94a3b8' }}>{article.date} via {article.source}</span>
+                            </div>
+                        </a>
+                    ))
+                ) : (
+                    <div style={{ color: '#94a3b8', padding: '10px 0' }}>No recent fantasy updates found.</div>
+                )}
+            </div>
+        </div>
+    );
+
     return (
         <div className={styles.homeContainer}>
             {!isMobile ? (
@@ -234,7 +329,7 @@ export default function Home() {
                         <ProjectionsPanel />
                     </div>
                                          
-                    {/* Column 2: Commish Note & Activity */}
+                    {/* Column 2: Commish Note & News Feed */}
                     <div className={styles.column}>
                         <div className={styles.commishNote}>
                             <h3 className={styles.cardHeader}>Commissioner's Note</h3>
@@ -242,8 +337,8 @@ export default function Home() {
                                 {activeLeague.commish_note || 'Welcome to your dynasty hub. The commissioner has not set a message yet.'}
                             </div>
                         </div>
-                                                 
-                        <Transactions preview={true} />
+                        
+                        {renderNewsFeed()}
                     </div>
                                          
                     {/* Column 3: League Hub Info & Champion */}
@@ -294,7 +389,7 @@ export default function Home() {
                             <button className={styles.fullWidthBtn} onClick={copyInviteLink}>{copyLinkText}</button>
                         </div>
                         {champTeam && (
-                            <div className={styles.hubCard} style={{ textAlign: 'center' }}>
+                            <div className={styles.hubCard} style={{ textAlign: 'center', marginTop: '20px' }}>
                                 <h3 className={styles.cardHeader} style={{ border: 'none', marginBottom: 0 }}>{recentChamp.year} Champion</h3>
                                 <img 
                                      src={champTeam.avatar} 
@@ -327,7 +422,7 @@ export default function Home() {
                         </div>
                     </div>
                                          
-                    <Transactions preview={true} />
+                    {renderNewsFeed()}
 
                     {/* Pop Out Modals */}
                     {activeModal === 'projections' && (

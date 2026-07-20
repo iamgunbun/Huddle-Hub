@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { writable } from '../svelte-mock';
 
 export const activeLeague = writable({
     id: null,

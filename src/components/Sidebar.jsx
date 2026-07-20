@@ -10,8 +10,6 @@ export default function Sidebar({ isOpen, onClose }) {
     const { activeLeague, userLeaguesList = [], switchActiveLeague, loadLeagueContext } = useLeague() || {};
     
     const [infoOpen, setInfoOpen] = useState(false);
-    const [commishOpen, setCommishOpen] = useState(false);
-    const [accountOpen, setAccountOpen] = useState(false);
     const [hoveredLeague, setHoveredLeague] = useState(null);
 
     const handleSwitchLeague = async (id) => {
@@ -59,7 +57,7 @@ export default function Sidebar({ isOpen, onClose }) {
                 <div className={styles.menuContainer} style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: '100px' }}>
                     
                     <div className={styles.section}>
-                        {/* Hidden on mobile (handled by bottom nav), visible on desktop */}
+                        {/* Hidden on mobile, visible on desktop */}
                         <div className="desktopNavOnly">
                             <h4>Menu</h4>
                             <div className={styles.link} onClick={() => {navigate('/'); if(onClose) onClose();}}>
@@ -77,9 +75,12 @@ export default function Sidebar({ isOpen, onClose }) {
                             <div className={styles.link} onClick={() => {navigate('/transactions'); if(onClose) onClose();}}>
                                 <i className="material-icons">swap_horiz</i> Transactions
                             </div>
+                            {/* Desktop Messages Link */}
+                            <div className={styles.link} onClick={() => {navigate('/messages'); if(onClose) onClose();}}>
+                                <i className="material-icons">chat</i> Messages
+                            </div>
                         </div>
                         
-                        {/* Visible on BOTH mobile and desktop sidebar */}
                         <div className={`${styles.dropdown} ${infoOpen ? styles.activeDropdown : ''}`} onClick={() => setInfoOpen(!infoOpen)} style={{ marginTop: '10px' }}>
                             <div className={styles.dropdownLabel}>
                                 <i className="material-icons">view_comfy</i> League Info
@@ -103,37 +104,6 @@ export default function Sidebar({ isOpen, onClose }) {
                                 <i className="material-icons">sports_football</i> Go to Sleeper
                             </div>
                         </div>
-                    </div>
-
-                    <div className={styles.section}>
-                        <h4 className={styles.commishHeader}>Settings</h4>
-                        
-                        <div className={`${styles.dropdown} ${styles.commishTrigger}`} onClick={() => setAccountOpen(!accountOpen)}>
-                            <div className={styles.dropdownLabel}>
-                                <i className="material-icons">manage_accounts</i> My Account
-                            </div>
-                            <i className={`material-icons ${styles.chevron} ${accountOpen ? styles.chevronOpen : ''}`}>expand_more</i>
-                        </div>
-                        <div className={`${styles.nested} ${accountOpen ? styles.nestedOpen : ''}`}>
-                            <div onClick={() => {navigate('/account'); if(onClose) onClose();}}><i className="material-icons">person</i> Edit Profile</div>
-                        </div>
-
-                        {activeLeague?.is_commissioner && (
-                            <>
-                                <div className={`${styles.dropdown} ${styles.commishTrigger}`} onClick={() => setCommishOpen(!commishOpen)} style={{marginTop: '10px'}}>
-                                    <div className={styles.dropdownLabel}>
-                                        <i className="material-icons">gavel</i> Commissioner Settings
-                                    </div>
-                                    <i className={`material-icons ${styles.chevron} ${commishOpen ? styles.chevronOpen : ''}`}>expand_more</i>
-                                </div>
-                                
-                                <div className={`${styles.nested} ${commishOpen ? styles.nestedOpen : ''}`}>
-                                    <div onClick={() => {navigate('/admin/notes'); if(onClose) onClose();}}><i className="material-icons">edit_note</i> Edit Commish Note</div>
-                                    <div onClick={() => {navigate('/admin/constitution'); if(onClose) onClose();}}><i className="material-icons">gavel</i> Amend Constitution</div>
-                                    <div onClick={() => {navigate('/admin/fees'); if(onClose) onClose();}}><i className="material-icons">payments</i> Manage League Dues</div>
-                                </div>
-                            </>
-                        )}
                     </div>
 
                     <div className={styles.section}>
@@ -176,7 +146,6 @@ export default function Sidebar({ isOpen, onClose }) {
                                             cursor: 'pointer',
                                             zIndex: 10
                                         }}
-                                        title="Disconnect League"
                                     >
                                         <i className="material-icons" style={{ fontSize: '18px' }}>delete</i>
                                     </div>

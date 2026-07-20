@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store'; // Vite will redirect this to svelte-mock.js!
+import { writable } from './svelte-mock';
 
 export const awards = writable({});
 export const leagueData = writable({});

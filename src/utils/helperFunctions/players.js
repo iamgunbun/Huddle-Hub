@@ -1,11 +1,9 @@
 import { leagueID as defaultLeagueID } from '../leagueInfo';
 
 export const loadPlayers = async (activeLeagueId) => {
-    // Fall back to your main project's hardcoded league ID if context isn't ready
     const currentId = activeLeagueId || defaultLeagueID;
     const now = Math.round(new Date().getTime() / 1000);
     
-    // Safeguard: Abort early if we are caught in an uninitialized rendering cycle
     if (!currentId || currentId === 'default_id' || currentId === 'undefined') {
         return { players: {}, stale: true };
     }
@@ -14,8 +12,9 @@ export const loadPlayers = async (activeLeagueId) => {
     let expiration = null;
     
     try {
-        playersInfo = JSON.parse(localStorage.getItem(`playersInfo_${currentId}`));
-        expiration = parseInt(localStorage.getItem(`expiration_${currentId}`));
+        // BUMPED TO v5: Forces browser to delete the old cache and map the new rankings & status fields
+        playersInfo = JSON.parse(localStorage.getItem(`playersInfo_v5_${currentId}`));
+        expiration = parseInt(localStorage.getItem(`expiration_v5_${currentId}`));
     } catch (e) {
         console.warn("Failed to read local player cache safely:", e);
     }
@@ -32,7 +31,6 @@ export const loadPlayers = async (activeLeagueId) => {
         ]);
         
         if (!leagueRes.ok) {
-            console.warn(`Sleeper league metadata returned status ${leagueRes.status}. Aborting projection calculation.`);
             return { players: playersInfo || {}, stale: true };
         }
         
@@ -44,11 +42,10 @@ export const loadPlayers = async (activeLeagueId) => {
         const week = nflState.display_week > 0 ? nflState.display_week : 1;
         const year = nflState.season || new Date().getFullYear();
 
-        // Fetch Live Projections to extract Matchup Schedules
         const projRes = await fetch(`https://api.sleeper.com/projections/nfl/${year}/${week}?season_type=regular`);
         const projections = await projRes.json();
-
         const projMap = {};
+
         if (projections && projections.length) {
             for (const proj of projections) {
                 let customPoints = 0;
@@ -69,35 +66,64 @@ export const loadPlayers = async (activeLeagueId) => {
         }
         
         const data = {};
+        const posGroups = {};
+
         for (const id in rawPlayers) {
             const p = rawPlayers[id];
             if (!p) continue;
             
-            data[id] = {
+            const playerObj = {
                 id: p.player_id,
                 fn: p.first_name,
                 ln: p.last_name,
                 pos: p.position,
                 t: p.team || 'FA',
-                wi: {}
+                espn_id: p.espn_id || null,
+                age: p.age || '-',
+                ht: p.height || '-',
+                wt: p.weight || '-',
+                exp: p.years_exp || 0,
+                college: p.college || '-',
+                wi: {},
+                // Capture Native Sleeper Status & Rankings
+                status: p.status || 'Active',
+                injStatus: p.injury_status || null,
+                injNotes: p.injury_notes || null,
+                searchRank: p.search_rank || 999999, 
+                posRank: 999999 
             };
 
             if (projMap[id] !== undefined) {
-                data[id].wi[week] = { 
+                playerObj.wi[week] = { 
                     p: projMap[id].p,
                     opp: projMap[id].opp,
                     date: projMap[id].date
                 };
             }
+
+            data[id] = playerObj;
+
+            if (p.position) {
+                if (!posGroups[p.position]) posGroups[p.position] = [];
+                posGroups[p.position].push(playerObj);
+            }
         }
+
+        // Calculate Positional Rankings based on Sleeper's Overall Search Rank
+        Object.values(posGroups).forEach(group => {
+            group.sort((a, b) => a.searchRank - b.searchRank);
+            group.forEach((p, idx) => {
+                data[p.id].posRank = idx + 1;
+            });
+        });
         
         try {
-            localStorage.setItem(`playersInfo_${currentId}`, JSON.stringify(data));
-            localStorage.setItem(`expiration_${currentId}`, (now + (24 * 3600)).toString());
+            localStorage.setItem(`playersInfo_v5_${currentId}`, JSON.stringify(data));
+            localStorage.setItem(`expiration_v5_${currentId}`, (now + (24 * 3600)).toString());
         } catch (storageError) {
             localStorage.clear();
-            localStorage.setItem(`playersInfo_${currentId}`, JSON.stringify(data));
-            localStorage.setItem(`expiration_${currentId}`, (now + (24 * 3600)).toString());
+            localStorage.setItem(`playersInfo_v5_${currentId}`, JSON.stringify(data));
+            localStorage.setItem(`expiration_v5_${currentId}`, (now + (24 * 3600)).toString());
         }
 
         return { players: data, stale: false };
@@ -105,4 +131,4 @@ export const loadPlayers = async (activeLeagueId) => {
         console.error("Player fetch failed:", e);
         return { players: playersInfo || {}, stale: true };
     }
-}
+};

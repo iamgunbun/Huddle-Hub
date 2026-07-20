@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
 import { getLeagueRosters, getLeagueTeamManagers, loadPlayers, getLeagueData, getLeagueStandings } from '../utils/helper';
-import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
+import { getTeamFromTeamManagers, formatOpponent } from '../utils/helperFunctions/universalFunctions';
 import PlayerModal from '../components/PlayerModal';
 import styles from './Rosters.module.css';
 
@@ -155,7 +155,7 @@ export default function Rosters() {
         const player = playersInfo[playerId];
         const isPlaceholder = playerId === "0" || !player;
         const activeWeek = getActiveWeek(player);
-        const matchupText = player?.wi?.[activeWeek]?.opp ? `| ${player.wi[activeWeek].opp}` : '';
+        const matchupText = player?.wi?.[activeWeek]?.opp ? `| ${formatOpponent(player.wi[activeWeek].opp)}` : '';
                  
         return (
             <div 
@@ -181,7 +181,7 @@ export default function Rosters() {
                         <div className={styles.playerText}>
                             <span className={styles.pName}>{player.fn} {player.ln}</span>
                             <span className={styles.pMeta}>
-                                {player.pos} - {player.t}
+                                {player.pos} • {(player.t || 'FA').toUpperCase()}
                                 <span style={{ color: '#eebf1c', marginLeft: '6px', fontWeight: '800' }}>
                                     {matchupText}
                                 </span>

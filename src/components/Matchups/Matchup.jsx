@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getTeamFromTeamManagers } from '../../utils/helperFunctions/universalFunctions';
+import { getTeamFromTeamManagers, formatOpponent } from '../../utils/helperFunctions/universalFunctions';
 import PlayerModal from '../PlayerModal';
 import styles from './Matchup.module.css';
 
@@ -190,9 +190,9 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                                             <div className={styles.pInfoLeft}>
                                                 <span className={styles.pName}>{playerA.fn ? playerA.fn.charAt(0) + '.' : ''} {playerA.ln || 'Unknown'}</span>
                                                 <span className={styles.pMeta}>
-                                                    {playerA.pos} • {playerA.t || 'FA'} 
+                                                    {playerA.pos} • {(playerA.t || 'FA').toUpperCase()} 
                                                     <span style={{ color: '#eebf1c', marginLeft: '6px', fontWeight: '800' }}>
-                                                        {playerA.wi?.[week]?.opp ? `| ${playerA.wi[week].opp}` : ''}
+                                                        {playerA.wi?.[week]?.opp ? `| ${formatOpponent(playerA.wi[week].opp)}` : ''}
                                                     </span>
                                                 </span>
                                             </div>
@@ -229,9 +229,9 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                                                 <span className={styles.pName}>{playerB.fn ? playerB.fn.charAt(0) + '.' : ''} {playerB.ln || 'Unknown'}</span>
                                                 <span className={styles.pMeta}>
                                                     <span style={{ color: '#eebf1c', marginRight: '6px', fontWeight: '800' }}>
-                                                        {playerB.wi?.[week]?.opp ? `${playerB.wi[week].opp} |` : ''}
+                                                        {playerB.wi?.[week]?.opp ? `${formatOpponent(playerB.wi[week].opp)} |` : ''}
                                                     </span>
-                                                    {playerB.t || 'FA'} • {playerB.pos} 
+                                                    {(playerB.t || 'FA').toUpperCase()} • {playerB.pos} 
                                                 </span>
                                             </div>
                                         </>

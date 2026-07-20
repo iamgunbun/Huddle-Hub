@@ -1,9 +1,44 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLeague } from '../context/LeagueContext';
-import { loadPlayers, getLeagueRosters, getLeagueTeamManagers, getNews } from '../utils/helper';
+import { loadPlayers, getLeagueRosters, getLeagueTeamManagers } from '../utils/helper';
 import { getTeamNameFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
-import PlayerModal from '../components/PlayerModal';
+import PlayerModal from '../components/PlayerModal.jsx';
 import styles from './Players.module.css';
+
+// Unified Matchup Formatter - Forces strict uppercase 'VS' and '@'
+const formatOpponent = (opp) => {
+    if (!opp || opp === '-' || opp === 'BYE' || opp === 'TBD') return (opp || '').toUpperCase();
+    
+    const isAway = opp.includes('@');
+    const cleanOpp = opp.replace(/[@]/g, '').replace(/vs\.?/gi, '').trim().toUpperCase();
+    
+    if (!cleanOpp) return '';
+    return isAway ? `@ ${cleanOpp}` : `VS ${cleanOpp}`;
+};
+
+function PlayerAvatar({ pId, pos, className }) {
+    const primaryUrl = pos === 'DEF' 
+        ? `https://sleepercdn.com/images/team_logos/nfl/${pId.toLowerCase()}.png`
+        : `https://sleepercdn.com/content/nfl/players/thumb/${pId}.jpg`;
+    
+    const fallbackUrl = 'https://sleepercdn.com/images/v2/icons/player_default.webp';
+    const [imgSrc, setImgSrc] = useState(primaryUrl);
+
+    useEffect(() => {
+        setImgSrc(primaryUrl);
+    }, [primaryUrl]);
+
+    return (
+        <div className={className} style={{ backgroundImage: `url(${imgSrc})` }}>
+            <img 
+                src={primaryUrl} 
+                alt="" 
+                style={{ display: 'none' }} 
+                onError={() => setImgSrc(fallbackUrl)} 
+            />
+        </div>
+    );
+}
 
 export default function Players() {
     const { activeLeague } = useLeague();
@@ -15,7 +50,10 @@ export default function Players() {
     const [teamManagers, setTeamManagers] = useState(null);
     const [trendingAdds, setTrendingAdds] = useState([]);
     const [trendingDrops, setTrendingDrops] = useState([]);
-    const [newsArticles, setNewsArticles] = useState([]);
+    
+    const [nflNews, setNflNews] = useState([]);
+    const [fantasyNews, setFantasyNews] = useState([]);
+    const [newsFilter, setNewsFilter] = useState('NFL'); 
 
     const [searchTerm, setSearchTerm] = useState('');
     const [posFilter, setPosFilter] = useState('ALL');
@@ -28,25 +66,58 @@ export default function Players() {
             if (!activeLeague?.sleeper_league_id) return;
             setLoading(true);
             try {
-                const [pData, rData, tmData, newsData] = await Promise.all([
+                const [pData, rData, tmData] = await Promise.all([
                     loadPlayers(activeLeague.sleeper_league_id),
                     getLeagueRosters(activeLeague.sleeper_league_id),
-                    getLeagueTeamManagers(activeLeague.sleeper_league_id),
-                    getNews() // <-- CRITICAL FIX: Removed the "true" boolean parameter to fix smartFetch error
+                    getLeagueTeamManagers(activeLeague.sleeper_league_id)
                 ]);
 
                 setPlayersMap(pData?.players || {});
                 setRosters(rData?.rosters || {});
                 setTeamManagers(tmData);
-                setNewsArticles(newsData?.articles || []);
 
                 const [addsRes, dropsRes] = await Promise.all([
-                    fetch('https://api.sleeper.app/v1/players/nfl/trending/add?lookback_hours=24&limit=15'),
-                    fetch('https://api.sleeper.app/v1/players/nfl/trending/drop?lookback_hours=24&limit=15')
+                    fetch('https://api.sleeper.app/v1/players/nfl/trending/add?lookback_hours=24&limit=15').catch(()=>null),
+                    fetch('https://api.sleeper.app/v1/players/nfl/trending/drop?lookback_hours=24&limit=15').catch(()=>null)
                 ]);
 
-                if (addsRes.ok) setTrendingAdds(await addsRes.json());
-                if (dropsRes.ok) setTrendingDrops(await dropsRes.json());
+                if (addsRes && addsRes.ok) setTrendingAdds(await addsRes.json());
+                if (dropsRes && dropsRes.ok) setTrendingDrops(await dropsRes.json());
+
+                try {
+                    const eRes = await fetch(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/news?limit=50`).catch(()=>null);
+                    
+                    if (eRes && eRes.ok) {
+                        const eData = await eRes.json();
+                        if (eData.articles && Array.isArray(eData.articles)) {
+                            const espnArticles = eData.articles.map((item, idx) => ({
+                                id: `espn-${item.id || idx}`,
+                                title: item.headline || 'NFL Report',
+                                description: item.description || item.story || '',
+                                source: item.byline || 'ESPN Wire',
+                                date: item.published ? new Date(item.published).toLocaleDateString() : 'Archive',
+                                url: item.links?.web?.href || item.links?.mobile?.href || '',
+                                image: item.images && item.images.length > 0 ? item.images[0].url : ''
+                            }));
+
+                            setNflNews(espnArticles);
+
+                            const fantasyFiltered = espnArticles.filter(a => {
+                                const txt = `${a.title} ${a.description}`.toLowerCase();
+                                return txt.includes('fantasy') || 
+                                       txt.includes('waiver') || 
+                                       txt.includes('rankings') || 
+                                       txt.includes('start') || 
+                                       txt.includes('sit') || 
+                                       txt.includes('roster');
+                            });
+                            
+                            setFantasyNews(fantasyFiltered);
+                        }
+                    }
+                } catch(err) {
+                    console.warn("ESPN global fetch failed:", err);
+                }
 
             } catch (err) {
                 console.error("Failed to sync player page datasets:", err);
@@ -109,12 +180,8 @@ export default function Players() {
         return list.slice(0, 50); 
     }, [playersMap, searchTerm, posFilter, statusFilter, playerOwnershipMap]);
 
-    const getPlayerAvatar = (pId, pos) => {
-        if (pos === 'DEF') return `https://sleepercdn.com/images/team_logos/nfl/${pId.toLowerCase()}.png`;
-        return `https://sleepercdn.com/content/nfl/players/thumb/${pId}.jpg`;
-    };
-
     const getActiveWeek = (p) => p?.wi ? Object.keys(p.wi)[0] : 1;
+    const activeNewsFeed = newsFilter === 'NFL' ? nflNews : fantasyNews;
 
     if (loading) return <div className={styles.loading}>Syncing Player Matrix...</div>;
 
@@ -186,18 +253,18 @@ export default function Players() {
                                         style={{ cursor: 'pointer' }}
                                     >
                                         <div className={styles.playerInfo}>
-                                            <div 
+                                            <PlayerAvatar 
+                                                pId={player.id} 
+                                                pos={player.pos} 
                                                 className={styles.playerAvatar} 
-                                                style={{ 
-                                                    backgroundImage: `url(${getPlayerAvatar(player.id, player.pos)}), url(https://sleepercdn.com/images/v2/icons/player_default.webp)` 
-                                                }}
                                             />
                                             <div className={styles.identityStack}>
                                                 <span className={styles.playerName}>{player.fn} {player.ln}</span>
                                                 <span className={styles.playerMeta}>
-                                                    {player.pos} — {player.t || 'FA'}
+                                                    {/* Forced strictly to uppercase */}
+                                                    {player.pos} — {(player.t || 'FA').toUpperCase()}
                                                     <span style={{ color: '#eebf1c', marginLeft: '6px', fontWeight: '800' }}>
-                                                        {player.wi?.[getActiveWeek(player)]?.opp ? `| ${player.wi[getActiveWeek(player)].opp}` : ''}
+                                                        {player.wi?.[getActiveWeek(player)]?.opp ? `| ${formatOpponent(player.wi[getActiveWeek(player)].opp)}` : ''}
                                                     </span>
                                                 </span>
                                             </div>
@@ -232,7 +299,8 @@ export default function Players() {
                                         <span className={styles.trendRank}>{idx + 1}</span>
                                         <div className={styles.trendIdentity}>
                                             <span className={styles.trendName}>{p.fn} {p.ln}</span>
-                                            <span className={styles.trendMeta}>{p.pos} — {p.t || 'FA'}</span>
+                                            {/* Forced strictly to uppercase */}
+                                            <span className={styles.trendMeta}>{p.pos} — {(p.t || 'FA').toUpperCase()}</span>
                                         </div>
                                         <span className={styles.countBadgeAdd}>+{item.count}</span>
                                     </div>
@@ -257,7 +325,8 @@ export default function Players() {
                                         <span className={styles.trendRank}>{idx + 1}</span>
                                         <div className={styles.trendIdentity}>
                                             <span className={styles.trendName}>{p.fn} {p.ln}</span>
-                                            <span className={styles.trendMeta}>{p.pos} — {p.t || 'FA'}</span>
+                                            {/* Forced strictly to uppercase */}
+                                            <span className={styles.trendMeta}>{p.pos} — {(p.t || 'FA').toUpperCase()}</span>
                                         </div>
                                         <span className={styles.countBadgeDrop}>-{item.count}</span>
                                     </div>
@@ -269,27 +338,90 @@ export default function Players() {
             )}
 
             {subTab === 'news' && (
-                <div className={styles.newsContainer}>
-                    {newsArticles.length === 0 ? (
-                        <div className={styles.emptyResults}>No current NFL updates available.</div>
-                    ) : (
-                        newsArticles.map((article, idx) => (
-                            <div key={`art-${idx}`} className={styles.newsCard}>
-                                <div className={styles.newsHeader}>
-                                    <div className={styles.newsSourceGroup}>
-                                        <img src={article.icon} alt="" className={styles.newsIcon} onError={(e) => e.target.src = 'brand.png'} />
-                                        <span className={styles.newsAuthor}>{article.author}</span>
-                                    </div>
-                                    <span className={styles.newsDate}>{article.date}</span>
-                                </div>
-                                <h3 className={styles.newsTitle}>{article.title}</h3>
-                                <div 
-                                    className={styles.newsBody} 
-                                    dangerouslySetInnerHTML={{ __html: article.article }} 
-                                />
-                            </div>
-                        ))
-                    )}
+                <div className={styles.workspace}>
+                    <div className={styles.viewToggles} style={{ marginBottom: '25px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '25px' }}>
+                        <button 
+                            className={`${styles.toggleBtn} ${newsFilter === 'NFL' ? styles.active : ''}`} 
+                            onClick={() => setNewsFilter('NFL')}
+                        >
+                            All NFL News
+                        </button>
+                        <button 
+                            className={`${styles.toggleBtn} ${newsFilter === 'FANTASY' ? styles.active : ''}`} 
+                            onClick={() => setNewsFilter('FANTASY')}
+                        >
+                            Fantasy Analysis
+                        </button>
+                    </div>
+
+                    <div className={styles.newsContainer}>
+                        {activeNewsFeed.length === 0 ? (
+                            <div className={styles.emptyResults}>No current {newsFilter} updates available.</div>
+                        ) : (
+                            activeNewsFeed.map((article, idx) => {
+                                const CardWrapper = article.url ? 'a' : 'div';
+                                const linkProps = article.url ? { 
+                                    href: article.url, 
+                                    target: "_blank", 
+                                    rel: "noopener noreferrer",
+                                    style: { textDecoration: 'none', color: 'inherit', display: 'flex', gap: '16px', alignItems: 'flex-start' }
+                                } : { 
+                                    style: { display: 'flex', gap: '16px', alignItems: 'flex-start' } 
+                                };
+
+                                return (
+                                    <CardWrapper 
+                                        key={`art-${article.id || idx}`} 
+                                        className={styles.newsCard} 
+                                        {...linkProps}
+                                    >
+                                        {article.image && (
+                                            <div style={{ flexShrink: 0, width: '120px', height: '120px', borderRadius: '8px', overflow: 'hidden', backgroundColor: '#0f172a' }}>
+                                                <img 
+                                                    src={article.image} 
+                                                    alt="Thumbnail" 
+                                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                                />
+                                            </div>
+                                        )}
+
+                                        <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+                                            <div className={styles.newsHeader} style={{ marginBottom: '6px' }}>
+                                                <span className={styles.newsAuthor} style={{ fontSize: '0.85em', color: '#94a3b8' }}>
+                                                    {article.date ? `${article.date} via ` : 'via '}{article.source}
+                                                </span>
+                                            </div>
+                                            
+                                            <h3 className={styles.newsTitle} style={{ margin: '0 0 8px 0', fontSize: '1.1em' }}>
+                                                {article.title}
+                                            </h3>
+                                            
+                                            <div 
+                                                className={styles.newsBody} 
+                                                style={{ 
+                                                    margin: 0, 
+                                                    fontSize: '0.9em', 
+                                                    lineHeight: '1.4', 
+                                                    display: '-webkit-box', 
+                                                    WebkitLineClamp: '2', 
+                                                    WebkitBoxOrient: 'vertical', 
+                                                    overflow: 'hidden' 
+                                                }}
+                                            >
+                                                {article.description}
+                                            </div>
+
+                                            {article.url && (
+                                                <div style={{ marginTop: '10px', fontSize: '0.85em', color: '#eebf1c', fontWeight: 'bold' }}>
+                                                    Read Full Article ↗
+                                                </div>
+                                            )}
+                                        </div>
+                                    </CardWrapper>
+                                );
+                            })
+                        )}
+                    </div>
                 </div>
             )}
 
