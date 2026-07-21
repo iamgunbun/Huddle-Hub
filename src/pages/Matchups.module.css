@@ -1,10 +1,343 @@
-.viewToggles { display: flex; justify-content: center; gap: 15px; margin: 20px 0 30px; }
-.toggleBtn { padding: 10px 25px; border-radius: 20px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; transition: 0.2s; }
-.toggleBtn.active { background: #eebf1c; color: #0b0e14; border-color: #eebf1c; }
-.claimBox { background: rgba(11, 14, 20, 0.8); border: 1px solid rgba(238, 191, 28, 0.4); border-radius: 12px; padding: 30px; text-align: center; max-width: 500px; margin: 40px auto; box-sizing: border-box; width: 100%; }
-.claimBox select { width: 100%; padding: 12px; background: #000; border: 1px solid #333; border-radius: 8px; color: #fff; font-size: 1em; margin-top: 15px; outline: none; box-sizing: border-box; }
+.container {
+    padding: 15px 5px; 
+    max-width: 900px;
+    margin: 0 auto;
+    color: #f8fafc;
+}
 
-@media (max-width: 1100px) {
-    .viewToggles { flex-wrap: wrap; }
-    .claimBox { padding: 20px; }
+.loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 60vh;
+    color: #eebf1c;
+    font-size: 1.2em;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+/* HEADER & TOGGLE BAR */
+.controlsHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 0 10px;
+}
+
+.toggleContainer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+}
+
+.toggleLabel {
+    color: #94a3b8;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 0.85em;
+    user-select: none;
+}
+
+.toggleWrapper {
+    width: 50px;
+    height: 25px;
+    background: #1e293b;
+    border-radius: 15px;
+    position: relative;
+    border: 1px solid #334155;
+    flex-shrink: 0;
+}
+
+.toggleSwitch {
+    width: 20px;
+    height: 20px;
+    background: #94a3b8;
+    border-radius: 50%;
+    position: absolute;
+    top: 1px;
+    left: 2px;
+    transition: left 0.3s ease, background 0.3s ease;
+}
+
+.toggleSwitch.active {
+    left: 26px;
+    background: #eebf1c;
+}
+
+.weekDropdown {
+    background: #0f172a;
+    color: #eebf1c;
+    border: 1px solid #eebf1c;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.allMatchupsGrid {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* MATCHUP CARD & SLEEPER BANNER */
+.matchupCard {
+    background: #0b0e14;
+    border: 1px solid #1e293b;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+.matchupBanner {
+    background: #0f172a;
+    padding: 18px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.clickableBanner {
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.clickableBanner:hover {
+    background: #1e293b;
+}
+
+.bannerTeam {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.avatarRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.bannerAvatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px solid #eebf1c;
+    object-fit: cover;
+}
+
+/* DYNAMIC ODDS STYLES */
+.winBadge {
+    font-size: 0.7em;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 4px;
+}
+
+.goldOdd {
+    background: rgba(238, 191, 28, 0.15);
+    color: #eebf1c;
+    border: 1px solid rgba(238, 191, 28, 0.3);
+}
+
+.redOdd {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* REAL-TIME SCORES & PROJECTIONS */
+.scoreGroup {
+    display: flex;
+    flex-direction: column;
+    margin: 4px 0;
+}
+
+.teamLiveScore {
+    font-size: 1.6em;
+    font-weight: 900;
+    color: #f8fafc;
+    line-height: 1;
+}
+
+.teamProjSub {
+    font-size: 0.75em;
+    color: #94a3b8;
+    margin-top: 4px;
+    font-weight: 600;
+}
+
+.bannerTeamName {
+    font-weight: 800;
+    font-size: 0.95em;
+    color: #f8fafc;
+    margin-top: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bannerVsBadge {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #1e293b;
+    color: #eebf1c;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #334155;
+    flex-shrink: 0;
+    margin: 0 10px;
+}
+
+/* STARTERS & BENCH SECTION */
+.startersSection {
+    padding: 15px;
+    background: #0b0e14;
+}
+
+.startersHeader {
+    color: #f8fafc;
+    font-size: 1em;
+    margin: 0 5px 12px 5px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #1e293b;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.matchupGrid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* NO SIDE BORDERS / PUSH TO EDGE */
+.starterRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    padding: 10px 8px;
+    border-radius: 8px;
+    gap: 4px;
+}
+
+.leftPlayer, .rightPlayer {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    min-width: 0;
+}
+
+/* TRIPLE STACKED PLAYER INFO */
+.playerMetaColLeft, .playerMetaColRight {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.playerMetaColLeft { align-items: flex-start; text-align: left; }
+.playerMetaColRight { align-items: flex-end; text-align: right; }
+
+.pNameText {
+    color: #f8fafc;
+    font-size: 0.95em;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.posText {
+    color: #64748b;
+    font-size: 0.7em;
+    margin-top: 3px;
+    font-weight: 600;
+}
+
+.schedText {
+    color: #eebf1c;
+    font-weight: 800;
+    font-size: 0.75em;
+    margin-top: 2px;
+    text-transform: uppercase;
+}
+
+/* COMPACT SCORE BLOCK (NO "Proj" LABEL) */
+.scoreBlock {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 6px;
+    min-width: 45px;
+}
+
+.playerLivePts {
+    font-size: 1.05em;
+    font-weight: 900;
+    color: #f8fafc;
+    line-height: 1.1;
+}
+
+.playerProjSub {
+    font-size: 0.75em;
+    color: #64748b;
+    font-weight: 700;
+    margin-top: 4px;
+}
+
+.centerPosBadge {
+    width: 38px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    color: #0b0e14;
+    font-size: 0.75em;
+    font-weight: 900;
+    flex-shrink: 0;
+    margin: 0 4px;
+}
+
+.benchToggleBtn {
+    width: calc(100% - 10px);
+    margin: 15px 5px 5px 5px;
+    padding: 10px;
+    background: #1e293b;
+    color: #f8fafc;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.8em;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.benchToggleBtn:hover {
+    background: #334155;
+}
+
+@media (max-width: 600px) {
+    .container { padding: 10px 0; }
+    .matchupBanner { padding: 12px; }
+    .matchupCard { border-radius: 0; border-left: none; border-right: none; }
+    .starterRow { padding: 8px 4px; border-radius: 0; border-left: none; border-right: none; }
+    .teamLiveScore { font-size: 1.3em; }
+    .pNameText { font-size: 0.85em; }
+    .playerLivePts { font-size: 0.95em; }
+    .centerPosBadge { width: 34px; margin: 0 2px; }
 }

@@ -1,274 +1,369 @@
+/* PADDING DROPPED TO WIDEN FULLY ON MOBILE */
 .container {
-    padding: 20px;
+    padding: 15px 5px;
     max-width: 1400px;
     margin: 0 auto;
 }
 
 .loading {
-    text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 60vh;
     color: #eebf1c;
     font-size: 1.2em;
-    font-weight: bold;
+    font-weight: 800;
     text-transform: uppercase;
-    margin-top: 100px;
     letter-spacing: 2px;
 }
 
-/* Toggles & Claiming */
-.viewToggles {
+.controlsHeader {
     display: flex;
-    justify-content: center;
-    gap: 15px;
-    margin: 10px 0 30px;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 0 10px 20px 10px;
 }
 
-.toggleBtn {
-    padding: 10px 25px;
-    border-radius: 20px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+.toggleContainer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+}
+
+.toggleLabel {
     color: #94a3b8;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1px;
-    cursor: pointer;
-    transition: 0.2s;
+    font-size: 0.85em;
+    user-select: none;
 }
 
-.toggleBtn.active {
+.toggleWrapper {
+    width: 50px;
+    height: 25px;
+    background: #1e293b;
+    border-radius: 15px;
+    position: relative;
+    border: 1px solid #334155;
+    flex-shrink: 0;
+}
+
+.toggleSwitch {
+    width: 20px;
+    height: 20px;
+    background: #94a3b8;
+    border-radius: 50%;
+    position: absolute;
+    top: 1px;
+    left: 2px;
+    transition: left 0.3s ease, background 0.3s ease;
+}
+
+.toggleSwitch.active {
+    left: 26px;
     background: #eebf1c;
-    color: #0b0e14;
-    border-color: #eebf1c;
 }
 
-.claimBox {
-    background: rgba(11, 14, 20, 0.8);
-    border: 1px solid rgba(238, 191, 28, 0.4);
-    border-radius: 12px;
-    padding: 30px;
-    text-align: center;
-    max-width: 500px;
-    margin: 40px auto;
-}
-
-.claimBox select {
-    width: 100%;
-    padding: 12px;
-    background: #000;
-    border: 1px solid #333;
-    border-radius: 8px;
-    color: #fff;
-    font-size: 1em;
-    margin-top: 15px;
-    outline: none;
-    cursor: pointer;
-}
-
-/* Grids */
 .allTeamsGrid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 30px;
-    align-items: start;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
 }
 
 .rosterCard {
-    background: #1e2530;
+    background: #0b0e14;
+    border: 1px solid #1e293b;
     border-radius: 12px;
-    padding: 25px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
 }
 
 .teamHeader {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    text-align: center;
+    padding: 15px 10px;
+    background: #0f172a;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     gap: 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    padding-bottom: 20px;
-    margin-bottom: 20px;
+    overflow: hidden;
+}
+
+.clickable {
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.clickable:hover {
+    background: #1e293b;
 }
 
 .teamAvatar {
-    width: 85px;
-    height: 85px;
+    width: 45px;
+    height: 45px;
     border-radius: 50%;
-    border: 3px solid #eebf1c;
     object-fit: cover;
-    background: #111;
+    border: 2px solid #eebf1c;
+    flex-shrink: 0;
 }
 
 .teamDetails {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    flex: 1;
+    min-width: 0; 
 }
 
 .teamName {
-    margin: 0 0 6px 0;
+    margin: 0;
     color: #f8fafc;
-    font-size: 1.6em;
-    font-weight: 800;
-}
-
-.teamStats {
-    color: #94a3b8;
-    font-weight: 600;
-    font-size: 0.95em;
-    letter-spacing: 0.5px;
-}
-
-/* Roster Layouts */
-.rosterGrid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 40px;
-}
-
-.rosterGridConsolidated {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
-.sectionTitle {
-    color: #cbd5e1;
-    text-transform: uppercase;
-    font-size: 0.85em;
+    font-size: 1.1em;
     font-weight: 700;
-    letter-spacing: 1px;
-    border-bottom: 1px solid rgba(238, 191, 28, 0.3);
-    padding-bottom: 8px;
-    margin-bottom: 12px;
-    margin-top: 0;
-}
-
-.playerList {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.playerRow {
-    display: flex;
-    align-items: center;
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 8px;
-    padding: 8px 12px;
-    gap: 12px;
-}
-
-.posBadge {
-    font-size: 0.7em;
-    padding: 5px 0;
-    border-radius: 6px;
-    width: 55px;
-    text-align: center;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-}
-
-.playerInfoGroup {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    overflow: hidden;
-}
-
-.playerImg {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background-size: cover;
-    background-position: center;
-    background-color: #111;
-    border: 1px solid #334155;
-    flex-shrink: 0;
-}
-
-.playerText {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-.pName {
-    color: #f8fafc;
-    font-size: 0.9em;
-    font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.pMeta {
+.teamStats {
     color: #94a3b8;
-    font-size: 0.7em;
-    text-transform: uppercase;
+    font-size: 0.8em;
     margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.weekDropdown {
+    background: transparent;
+    color: #eebf1c;
+    border: 1px solid #334155;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-weight: 800;
+    margin-top: 6px;
+    cursor: pointer;
+    font-size: 0.8em;
+    width: max-content;
+    flex-shrink: 0;
+}
+
+.teamProjBar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    background: rgba(30, 41, 59, 0.5);
+    backdrop-filter: blur(4px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.teamProjText {
+    color: #94a3b8;
+    font-size: 0.8em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+}
+
+.teamProjValue {
+    color: #eebf1c;
+    font-weight: 800;
+    font-size: 0.95em;
+}
+
+.rosterGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    padding: 15px 0;
+}
+
+.rosterGridConsolidated {
+    display: flex;
+    flex-direction: column;
+    padding: 15px 0;
+}
+
+.rosterColumn {
+    display: flex;
+    flex-direction: column;
+}
+
+.sectionTitle {
+    color: #64748b;
+    text-transform: uppercase;
+    font-size: 0.75em;
+    letter-spacing: 1px;
+    padding: 0;
+    margin: 15px 0 5px 10px;
+}
+
+/* NO SIDE BORDERS ON PLAYER CONTAINER */
+.playerList {
+    display: flex;
+    flex-direction: column;
+    background: rgba(15, 23, 42, 0.4); 
+    border-radius: 0;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-left: none;
+    border-right: none;
+    overflow: hidden;
+}
+
+.playerRow {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    transition: background 0.2s;
+}
+
+.playerRow:last-child {
+    border-bottom: none;
+}
+
+.playerRow:hover {
+    background: rgba(238, 191, 28, 0.05);
+}
+
+.posBadge {
+    width: 40px;
+    text-align: center;
+    border-radius: 4px;
+    font-size: 0.7em;
+    font-weight: 800;
+    flex-shrink: 0;
+    padding: 3px 0;
+    margin-right: 10px;
+}
+
+.playerInfoGroup {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+
+.playerImg {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-size: cover;
+    background-position: top;
+    background-color: #1e293b;
+    flex-shrink: 0;
+}
+
+/* MATCHUPS STYLE: TRIPLE VERTICAL TEXT */
+.playerMetaColLeft {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+}
+
+.pNameText {
+    color: #f8fafc;
+    font-size: 0.95em;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.posText {
+    color: #64748b;
+    font-size: 0.7em;
+    margin-top: 3px;
+    font-weight: 600;
+}
+
+.schedText {
+    color: #eebf1c;
+    font-weight: 800;
+    font-size: 0.75em;
+    margin-top: 2px;
+    text-transform: uppercase;
+}
+
+.injTag {
+    background: #ef4444; 
+    color: #fff;
+    font-size: 0.65em;
+    font-weight: 800;
+    padding: 1px 4px;
+    border-radius: 4px;
+    line-height: 1;
+}
+
+/* COMPACT SCORE STACKED BLOCK */
+.scoreBlock {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 6px;
+    min-width: 45px;
+}
+
+.playerLivePts {
+    font-size: 1.05em;
+    font-weight: 900;
+    color: #f8fafc;
+    line-height: 1.1;
+}
+
+.playerProjSub {
+    font-size: 0.75em;
+    color: #64748b;
+    font-weight: 700;
+    margin-top: 4px;
 }
 
 .toggleBenchBtn {
-    width: 100%;
-    margin-top: 10px;
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #94a3b8;
+    width: calc(100% - 20px);
+    margin: 15px 10px 5px 10px;
     padding: 10px;
+    background: #1e293b;
+    color: #f8fafc;
+    border: 1px solid #334155;
     border-radius: 8px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    font-size: 0.85em;
     cursor: pointer;
-    transition: 0.2s;
+    text-transform: uppercase;
+    font-size: 0.8em;
+    font-weight: 700;
+    letter-spacing: 1px;
+    transition: background 0.2s;
 }
 
 .toggleBenchBtn:hover {
-    background: rgba(255, 255, 255, 0.05);
-    color: #f8fafc;
-    border-color: #eebf1c;
+    background: #334155;
 }
 
-/* Responsive Rules */
-@media (max-width: 1200px) {
-    .allTeamsGrid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
+/* EDGE TO EDGE ON MOBILE */
 @media (max-width: 1100px) {
-    .mobileClickable {
-        flex-direction: row;
-        text-align: left;
-        justify-content: flex-start;
-        cursor: pointer;
-        padding-bottom: 15px;
-        margin-bottom: 10px;
-    }
-    .mobileClickable .teamAvatar {
-        width: 50px;
-        height: 50px;
-        border-width: 2px;
-    }
-    .mobileClickable .teamDetails {
-        align-items: flex-start;
-    }
-    .mobileClickable .teamName {
-        font-size: 1.2em;
-        margin-bottom: 0px;
-    }
-    .mobileClickable .teamStats {
-        font-size: 0.8em;
-    }
-}
-
-@media (max-width: 800px) {
-    .allTeamsGrid {
-        grid-template-columns: 1fr;
+    .container {
+        padding: 10px 0; /* Drops left/right padding to 0 */
     }
     .rosterGrid {
         grid-template-columns: 1fr;
+        padding: 15px 0;
+    }
+    .rosterGridConsolidated {
+        padding: 15px 0;
+    }
+    .allTeamsGrid {
+        grid-template-columns: 1fr;
+    }
+    .rosterCard {
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+    }
+    .controlsHeader {
+        padding: 0 10px 20px 10px;
     }
 }

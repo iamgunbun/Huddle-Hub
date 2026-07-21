@@ -13,7 +13,9 @@ export default function Home() {
          
     const [copyLinkText, setCopyLinkText] = useState('Copy Invite Link');
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 1100);
-    const [activeModal, setActiveModal] = useState(null);
+    
+    // Replaced modal state with Mobile Tab Navigation State
+    const [activeMobileTab, setActiveMobileTab] = useState('feed');
          
     const [authChecking, setAuthChecking] = useState(true);
     const [recentChamp, setRecentChamp] = useState(null);
@@ -76,7 +78,6 @@ export default function Home() {
                         });
                         
                         if (isMounted) {
-                            // Limit to top 5 articles for the dashboard
                             setFantasyNews(fantasyFiltered.slice(0, 5)); 
                         }
                     }
@@ -201,7 +202,6 @@ export default function Home() {
                         const txnFeeCost = dbLeagueMeta?.enable_txn_fees ? (calculatedAddsCount * (dbLeagueMeta?.txn_fee_amount ?? 1)) : 0;
                         const totalGrossOwed = baseDues + txnFeeCost;
                         
-                        // NEW JSON DATA CONNECTION
                         const ledger = dbLeagueMeta?.financial_ledger || {};
                         const collectedAmount = ledger[activeRosterId] || 0;
                         
@@ -281,7 +281,7 @@ export default function Home() {
     
     // Extracted News Feed Component Block
     const renderNewsFeed = () => (
-        <div className={styles.hubCard} style={{ marginTop: '20px' }}>
+        <div className={styles.hubCard}>
             <h3 className={styles.cardHeader}>
                 <i className="material-icons" style={{ fontSize: '1.2em', verticalAlign: 'text-bottom', marginRight: '6px', color: '#eebf1c' }}>article</i>
                 Latest Fantasy News
@@ -369,7 +369,6 @@ export default function Home() {
                                 <span className={styles.infoValue}>{leagueTenure}</span>
                             </div>
 
-                            {/* DYNAMIC HUB TRANSACTION BLOCK MAPPINGS */}
                             <div className={styles.infoRow} style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px', marginTop: '12px' }}>
                                 <span className={styles.infoLabel}>
                                     <i className="material-icons" style={{ fontSize: '1.1em', color: '#ffaa00', marginRight: '8px' }}>swap_calls</i> Add Transactions
@@ -405,44 +404,54 @@ export default function Home() {
                 </div>
             ) : (
                 <div className={styles.mobileLayout}>
-                    <div className={styles.mobileActionGrid}>
-                        <button className={styles.mobileActionBtn} onClick={() => setActiveModal('projections')}>
-                            <i className="material-icons">query_stats</i>
-                            Live Projections
+                    {/* NEW: Sleek Top Navigation Bar for Mobile */}
+                    <div className={styles.mobileTopNav}>
+                        <button 
+                            className={`${styles.navTab} ${activeMobileTab === 'feed' ? styles.activeTab : ''}`}
+                            onClick={() => setActiveMobileTab('feed')}
+                        >
+                            <i className="material-icons">feed</i>
+                            Overview
                         </button>
-                        <button className={styles.mobileActionBtn} onClick={() => setActiveModal('hub')}>
+                        <button 
+                            className={`${styles.navTab} ${activeMobileTab === 'projections' ? styles.activeTab : ''}`}
+                            onClick={() => setActiveMobileTab('projections')}
+                        >
+                            <i className="material-icons">query_stats</i>
+                            Projections
+                        </button>
+                        <button 
+                            className={`${styles.navTab} ${activeMobileTab === 'hub' ? styles.activeTab : ''}`}
+                            onClick={() => setActiveMobileTab('hub')}
+                        >
                             <i className="material-icons">info</i>
                             League Hub
                         </button>
                     </div>
-                    <div className={styles.commishNote}>
-                        <h3 className={styles.cardHeader}>Commissioner's Note</h3>
-                        <div style={{ color: '#f8fafc', whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
-                            {activeLeague.commish_note || 'Welcome to your dynasty hub. The commissioner has not set a message yet.'}
-                        </div>
-                    </div>
-                                         
-                    {renderNewsFeed()}
 
-                    {/* Pop Out Modals */}
-                    {activeModal === 'projections' && (
-                        <div className={styles.mobileModal}>
-                            <div className={styles.modalHeader}>
-                                <h2>Projections</h2>
-                                <button onClick={() => setActiveModal(null)}><i className="material-icons">close</i></button>
-                            </div>
-                            <div className={styles.modalContent}>
+                    {/* NEW: Tab-Driven Content Container */}
+                    <div className={`${styles.mobileTabContent} ${styles.fadeEnter}`} key={activeMobileTab}>
+                        
+                        {activeMobileTab === 'feed' && (
+                            <>
+                                <div className={styles.commishNote}>
+                                    <h3 className={styles.cardHeader}>Commissioner's Note</h3>
+                                    <div style={{ color: '#f8fafc', whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
+                                        {activeLeague.commish_note || 'Welcome to your dynasty hub. The commissioner has not set a message yet.'}
+                                    </div>
+                                </div>
+                                {renderNewsFeed()}
+                            </>
+                        )}
+
+                        {activeMobileTab === 'projections' && (
+                            <div>
                                 <ProjectionsPanel />
                             </div>
-                        </div>
-                    )}
-                    {activeModal === 'hub' && (
-                        <div className={styles.mobileModal}>
-                            <div className={styles.modalHeader}>
-                                <h2>League Hub</h2>
-                                <button onClick={() => setActiveModal(null)}><i className="material-icons">close</i></button>
-                            </div>
-                            <div className={styles.modalContent}>
+                        )}
+
+                        {activeMobileTab === 'hub' && (
+                            <>
                                 <div className={styles.hubCard}>
                                     <h3 className={styles.cardHeader}>League Hub Info</h3>
                                     <div className={styles.infoRow}>
@@ -471,8 +480,9 @@ export default function Home() {
 
                                     <button className={styles.fullWidthBtn} onClick={copyInviteLink}>{copyLinkText}</button>
                                 </div>
+                                
                                 {champTeam && (
-                                    <div className={styles.hubCard} style={{ textAlign: 'center', marginTop: '20px' }}>
+                                    <div className={styles.hubCard} style={{ textAlign: 'center' }}>
                                         <h3 className={styles.cardHeader} style={{ border: 'none', marginBottom: 0 }}>{recentChamp.year} Champion</h3>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px' }}>
                                             <div style={{ color: '#eebf1c', fontSize: '1.2em', fontWeight: 800, textTransform: 'uppercase' }}>{champTeam.name}</div>
@@ -480,9 +490,10 @@ export default function Home() {
                                         </div>
                                     </div>
                                 )}
-                            </div>
-                        </div>
-                    )}
+                            </>
+                        )}
+                        
+                    </div>
                 </div>
             )}
         </div>

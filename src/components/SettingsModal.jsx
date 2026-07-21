@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
@@ -7,47 +7,21 @@ import styles from './SettingsModal.module.css';
 export default function SettingsModal({ onClose }) {
     const navigate = useNavigate();
     const { activeLeague } = useLeague();
-    
-    const [ticketType, setTicketType] = useState('bug');
-    const [ticketMessage, setTicketMessage] = useState('');
-    const [status, setStatus] = useState(''); 
+    const [user, setUser] = useState(null);
+
+    useEffect(() => {
+        const fetchUser = async () => {
+            const { data: sessionData } = await supabase.auth.getSession();
+            if (sessionData?.session?.user) {
+                setUser(sessionData.session.user);
+            }
+        };
+        fetchUser();
+    }, []);
 
     const handleNavigation = (path) => {
         navigate(path);
         onClose();
-    };
-
-    const handleSubmitTicket = async (e) => {
-        e.preventDefault();
-        if (!ticketMessage.trim()) return;
-
-        setStatus('submitting');
-
-        try {
-            const { data: sessionData } = await supabase.auth.getSession();
-            const user = sessionData?.session?.user;
-
-            const { error } = await supabase
-                .from('support_tickets')
-                .insert([
-                    {
-                        user_id: user?.id,
-                        league_id: activeLeague?.id,
-                        type: ticketType,
-                        message: ticketMessage,
-                        status: 'open'
-                    }
-                ]);
-
-            if (error) throw error;
-
-            setStatus('success');
-            setTicketMessage('');
-            setTimeout(() => setStatus(''), 3000);
-        } catch (err) {
-            console.error("Failed to submit ticket:", err);
-            setStatus('error');
-        }
     };
 
     return (
@@ -88,28 +62,40 @@ export default function SettingsModal({ onClose }) {
 
                 <div className={`${styles.settingsSection} ${styles.divider}`}>
                     <h3 className={styles.sectionTitle}>Submit a Ticket</h3>
-                    <form onSubmit={handleSubmitTicket} className={styles.ticketForm}>
+                    
+                    {/* STANDARD HTML FORM ENDPOINT */}
+                    {/* Replace the action URL with your free Formspree or Web3Forms endpoint connected to chatbyte12@gmail.com */}
+                    <form 
+                        action="https://formspree.io/f/mdaqzvnw" 
+                        method="POST" 
+                        className={styles.ticketForm}
+                    >
+                        {/* Hidden fields pass valuable debugging data to your email without the user typing it */}
+                        <input type="hidden" name="user_id" value={user?.id || 'Unknown User'} />
+                        <input type="hidden" name="user_email" value={user?.email || 'Unknown Email'} />
+                        <input type="hidden" name="league_id" value={activeLeague?.id || 'Unknown League'} />
+                        <input type="hidden" name="_subject" value="New Huddle Support Ticket" />
+                        
                         <select 
+                            name="ticket_type"
                             className={styles.dropdown}
-                            value={ticketType} 
-                            onChange={(e) => setTicketType(e.target.value)}
+                            required
                         >
                             <option value="bug">Report a Bug</option>
                             <option value="question">General Question</option>
                             <option value="feature">Feature Request</option>
                         </select>
+                        
                         <textarea 
+                            name="message"
                             className={styles.textArea}
-                            value={ticketMessage}
-                            onChange={(e) => setTicketMessage(e.target.value)}
                             placeholder="Describe the issue or ask your question here..."
                             required
                         />
-                        <button type="submit" className={styles.submitBtn} disabled={status === 'submitting'}>
-                            {status === 'submitting' ? 'Sending...' : 'Submit Ticket'}
+                        
+                        <button type="submit" className={styles.submitBtn}>
+                            Submit Ticket
                         </button>
-                        {status === 'success' && <div className={styles.successMsg}>Ticket submitted successfully!</div>}
-                        {status === 'error' && <div className={styles.errorMsg}>Failed to submit. Please try again.</div>}
                     </form>
                 </div>
 
