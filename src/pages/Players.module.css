@@ -1,288 +1,326 @@
 .container {
-    padding: 20px;
-    max-width: 1400px;
+    padding: 10px 0;
+    max-width: 900px;
     margin: 0 auto;
-    font-family: 'Montserrat', sans-serif;
-    box-sizing: border-box;
+    color: #f8fafc;
 }
 
 .loading {
-    text-align: center;
-    color: #eebf1c;
-    font-size: 1.2em;
-    font-weight: bold;
-    text-transform: uppercase;
-    margin-top: 100px;
-    letter-spacing: 2px;
-}
-
-/* Tab Filter Toggles */
-.viewToggles {
     display: flex;
     justify-content: center;
-    gap: 15px;
-    margin-bottom: 30px;
-}
-
-.toggleBtn {
-    padding: 10px 25px;
-    border-radius: 20px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #94a3b8;
-    font-weight: 700;
+    align-items: center;
+    height: 60vh;
+    color: #eebf1c;
+    font-size: 1.2em;
+    font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    cursor: pointer;
-    transition: 0.2s;
 }
 
-.toggleBtn.active {
+/* TOP HEADER NAV WITH SEARCH ICON ON LEFT */
+.topHeader {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 10px 12px 10px;
+    border-bottom: 1px solid #1e293b;
+    margin-bottom: 15px;
+}
+
+.searchToggleBtn {
+    background: #0f172a;
+    border: 1px solid #334155;
+    color: #eebf1c;
+    border-radius: 6px;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+}
+
+.searchToggleBtn:hover {
+    background: #1e293b;
+    border-color: #eebf1c;
+}
+
+.navTabs {
+    display: flex;
+    gap: 6px;
+    flex: 1;
+}
+
+/* SMALLER & BLOCKIER NAV TABS (MATCHES HOME UI) */
+.navTab {
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    color: #94a3b8;
+    font-size: 0.8em;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    padding: 8px 14px;
+    transition: all 0.2s ease;
+}
+
+.activeNavTab {
+    background: #1e293b;
+    color: #eebf1c;
+    border-color: #eebf1c;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* EXPANDABLE SEARCH BAR */
+.searchContainer {
+    padding: 0 10px;
+    margin-bottom: 15px;
+    animation: slideDown 0.2s ease-out forwards;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.searchInput {
+    width: 100%;
+    padding: 10px 12px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #f8fafc;
+    font-size: 0.9em;
+    outline: none;
+}
+
+.searchInput:focus {
+    border-color: #eebf1c;
+}
+
+/* HORIZONTAL FILTERS */
+.posFilterBar, .trendToggleBar {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 0 10px 15px 10px;
+    scrollbar-width: none;
+}
+
+.posFilterBar::-webkit-scrollbar, .trendToggleBar::-webkit-scrollbar {
+    display: none;
+}
+
+.posFilterBtn {
+    background: #0f172a;
+    color: #94a3b8;
+    border: 1px solid #1e293b;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 0.75em;
+    font-weight: 800;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.activePosBtn {
     background: #eebf1c;
     color: #0b0e14;
     border-color: #eebf1c;
-    box-shadow: 0 0 15px rgba(238, 191, 28, 0.3);
 }
 
-/* Controls Grid System */
-.searchBarRow {
-    display: flex;
-    gap: 20px;
-    margin-bottom: 25px;
-}
-
-.searchContainer {
+.trendToggleBtn {
     flex: 1;
     display: flex;
     align-items: center;
-    background: rgba(0, 0, 0, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    padding: 0 15px;
-    gap: 10px;
-}
-
-.searchContainer i { color: #64748b; }
-
-.searchInput {
-    flex: 1;
-    background: transparent;
-    border: none;
-    color: #fff;
-    padding: 12px 0;
-    font-family: inherit;
-    font-size: 1em;
-    outline: none;
-}
-
-.posDropdown {
-    padding: 0 20px;
-    background: #1e2530;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #fff;
-    border-radius: 8px;
-    font-family: inherit;
-    font-weight: 700;
-    outline: none;
+    justify-content: center;
+    gap: 6px;
+    background: #0f172a;
+    color: #94a3b8;
+    border: 1px solid #1e293b;
+    padding: 8px;
+    border-radius: 6px;
+    font-size: 0.8em;
+    font-weight: 800;
+    text-transform: uppercase;
     cursor: pointer;
 }
 
-/* Market List Deck */
-.marketList {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+.activeTrendUp {
+    background: rgba(0, 206, 184, 0.15);
+    color: #00ceb8;
+    border-color: rgba(0, 206, 184, 0.3);
 }
 
-.playerCard {
+.activeTrendDown {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+/* EDGE-TO-EDGE PLAYER LIST */
+.playerListContainer {
+    display: flex;
+    flex-direction: column;
+}
+
+.playerRow {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: #1e2530;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 10px;
-    padding: 15px 20px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    background: #0b0e14;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    padding: 10px 12px;
     cursor: pointer;
-    transition: transform 0.15s ease, border-color 0.15s ease;
+    transition: background 0.2s;
 }
 
-.playerCard:hover {
-    transform: translateX(4px);
-    border-color: rgba(238, 191, 28, 0.3);
+.playerRow:hover {
+    background: rgba(238, 191, 28, 0.05);
 }
 
-.playerInfo {
+.playerInfoGroup {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
 }
 
-.playerAvatar {
-    width: 44px;
-    height: 44px;
+.playerImg {
+    width: 38px;
+    height: 38px;
     border-radius: 50%;
     background-size: cover;
-    background-position: center;
-    background-color: #111;
-    border: 2px solid #334155;
+    background-position: top;
+    background-color: #1e293b;
+    border: 1px solid #334155;
+    flex-shrink: 0;
 }
 
-.identityStack {
+.playerMetaColLeft {
     display: flex;
     flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
 }
 
-.playerName {
+.pNameText {
     color: #f8fafc;
-    font-weight: 700;
-    font-size: 1em;
+    font-size: 0.95em;
+    font-weight: 800;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.playerMeta {
-    color: #64748b;
-    font-size: 0.8em;
+.posText {
+    color: #94a3b8;
+    font-size: 0.7em;
+    margin-top: 2px;
     font-weight: 600;
+}
+
+.schedText {
+    color: #eebf1c;
+    font-weight: 800;
+    font-size: 0.7em;
+    margin-top: 2px;
     text-transform: uppercase;
+}
+
+.scoreBlock {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    padding-left: 10px;
+    min-width: 45px;
+}
+
+.playerLivePts {
+    font-size: 1.05em;
+    font-weight: 900;
+    color: #f8fafc;
+    line-height: 1.1;
+}
+
+.playerProjSub {
+    font-size: 0.65em;
+    color: #64748b;
+    font-weight: 700;
     margin-top: 2px;
 }
 
-.ownershipTag {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 14px;
-    border-radius: 6px;
-    font-size: 0.8em;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+.emptyState {
+    text-align: center;
+    padding: 40px 20px;
+    color: #64748b;
+    font-size: 0.9em;
 }
 
-.ownershipTag i { font-size: 16px; }
-
-.freeAgent { background: rgba(0, 206, 184, 0.1); color: #00ceb8; border: 1px solid rgba(0, 206, 184, 0.2); }
-.owned { background: rgba(238, 191, 28, 0.1); color: #eebf1c; border: 1px solid rgba(238, 191, 28, 0.2); }
-
-/* Trending Grid System */
-.trendingGrid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 30px;
-}
-
-.trendingCard {
-    background: #1e2530;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    padding: 20px;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-}
-
-.trendingHeaderAdd, .trendingHeaderDrop {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 0;
-    margin-bottom: 20px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    font-size: 1.1em;
-    text-transform: uppercase;
-}
-
-.trendingHeaderAdd { color: #00ceb8; }
-.trendingHeaderDrop { color: #ff2a6d; }
-
-.trendingList {
+/* NEWS FEED UI */
+.newsFeed {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-}
-
-.trendRow {
-    display: flex;
-    align-items: center;
-    background: rgba(0,0,0,0.2);
-    padding: 10px 15px;
-    border-radius: 8px;
-}
-
-.trendRank {
-    font-weight: 800;
-    color: #475569;
-    width: 30px;
-}
-
-.trendIdentity {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-}
-
-.trendName { color: #cbd5e1; font-weight: 700; font-size: 0.9em; }
-.trendMeta { color: #64748b; font-size: 0.75em; text-transform: uppercase; font-weight: 600; }
-
-.countBadgeAdd, .countBadgeDrop {
-    font-weight: 800;
-    font-size: 0.85em;
-    padding: 4px 8px;
-    border-radius: 4px;
-}
-
-.countBadgeAdd { background: rgba(0, 206, 184, 0.1); color: #00ceb8; }
-.countBadgeDrop { background: rgba(255, 42, 109, 0.1); color: #ff2a6d; }
-
-
-/* News Layout Deck */
-.newsContainer {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
+    gap: 12px;
+    padding: 0 10px;
 }
 
 .newsCard {
-    background: #1e2530;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 12px;
-    padding: 25px;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    padding: 12px;
 }
 
 .newsHeader {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 15px;
+    margin-bottom: 8px;
 }
 
-.newsSourceGroup { display: flex; align-items: center; gap: 8px; }
-.newsIcon { width: 20px; height: 20px; border-radius: 4px; object-fit: cover; }
-.newsAuthor { color: #eebf1c; font-weight: 700; font-size: 0.8em; text-transform: uppercase; }
-.newsDate { color: #64748b; font-size: 0.75em; font-weight: 600; }
-
-.newsTitle { margin: 0 0 12px 0; color: #f8fafc; font-size: 1.25em; font-weight: 800; line-height: 1.3; }
-
-.newsBody {
-    color: #cbd5e1;
-    font-size: 0.95em;
-    line-height: 1.6;
+.newsTag {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    font-size: 0.65em;
+    font-weight: 800;
+    padding: 3px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
 }
 
-.newsBody a { color: #eebf1c; text-decoration: underline; }
+.newsTagFantasy {
+    background: rgba(238, 191, 28, 0.15);
+    color: #eebf1c;
+    font-size: 0.65em;
+    font-weight: 800;
+    padding: 3px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
 
-.emptyResults {
-    text-align: center;
+.newsTime {
     color: #64748b;
-    padding: 40px 0;
-    font-style: italic;
+    font-size: 0.7em;
+    font-weight: 600;
 }
 
-/* Media Breakpoint Rules Overrides */
-@media (max-width: 900px) {
-    .searchBarRow { flex-direction: column; gap: 10px; }
-    .posDropdown { padding: 12px; width: 100%; box-sizing: border-box; }
-    .playerCard { flex-direction: column; align-items: flex-start; gap: 15px; }
-    .ownershipTag { width: 100%; justify-content: center; box-sizing: border-box; }
-    .trendingGrid { grid-template-columns: 1fr; gap: 20px; }
+.newsTitle {
+    margin: 0 0 6px 0;
+    font-size: 0.95em;
+    font-weight: 700;
+    color: #f8fafc;
+    line-height: 1.3;
+}
+
+.newsDesc {
+    margin: 0;
+    font-size: 0.8em;
+    color: #94a3b8;
+    line-height: 1.4;
 }

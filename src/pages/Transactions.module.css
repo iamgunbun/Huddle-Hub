@@ -1,215 +1,415 @@
 .container {
-    padding: 30px 20px;
+    padding: 10px 0;
     max-width: 900px;
     margin: 0 auto;
-    font-family: 'Montserrat', sans-serif;
+    color: #f8fafc;
 }
 
 .loading {
-    text-align: center;
-    color: #eebf1c;
-    font-size: 1.2em;
-    font-weight: bold;
-    text-transform: uppercase;
-    margin-top: 100px;
-    letter-spacing: 2px;
-}
-
-/* SLEEK WHITE HEADER */
-.headerTitle {
-    color: #f8fafc;
-    text-transform: uppercase;
-    font-size: 2em;
-    letter-spacing: 2px;
-    margin-bottom: 30px;
-    font-weight: 500;
-    text-align: center;
-}
-
-.filters {
     display: flex;
     justify-content: center;
-    gap: 15px;
-    margin-bottom: 40px;
-    flex-wrap: wrap;
+    align-items: center;
+    height: 60vh;
+    color: #eebf1c;
+    font-size: 1.2em;
+    font-weight: 800;
+    text-transform: uppercase;
 }
 
-.filterBtn {
-    padding: 10px 25px;
-    border-radius: 24px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #94a3b8;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+.topHeader {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 10px 12px 10px;
+    border-bottom: 1px solid #1e293b;
+    margin-bottom: 15px;
+}
+
+.searchToggleBtn {
+    background: #0f172a;
+    border: 1px solid #334155;
+    color: #eebf1c;
+    border-radius: 6px;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
+    flex-shrink: 0;
     transition: all 0.2s ease;
 }
 
-.filterBtn:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #f8fafc;
-}
-
-.filterBtn.active {
-    background: #eebf1c;
-    color: #0b0e14;
+.searchToggleBtn:hover {
+    background: #1e293b;
     border-color: #eebf1c;
 }
 
-.feed {
+.navTabs {
     display: flex;
-    flex-direction: column;
+    gap: 6px;
+    flex: 1;
 }
 
-/* --- THE BRACKET CARD STYLE --- */
-.bracketCard {
-    display: flex;
-    background: #11141c; /* Very dark background to match screenshot */
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
-    padding: 20px 15px;
-    margin-bottom: 20px;
-}
-
-.bracketDecor {
-    width: 15px;
-    border: 1.5px solid #eebf1c; /* The gold bracket line */
-    border-right: none;
-    border-radius: 12px 0 0 12px;
-    margin-right: 20px;
-    margin-top: 10px;
-    margin-bottom: 10px;
-}
-
-.cardMain {
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-}
-
-.teamNameLabel {
-    color: #f8fafc;
-    font-weight: 800;
-    font-size: 1.1em;
-    padding-bottom: 12px;
-    border-bottom: 1px solid rgba(238, 191, 28, 0.4); /* Gold divider line */
-    margin-bottom: 15px;
-    width: 100%;
-}
-
-.assetContainer {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
-.assetRow {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    position: relative;
-    padding-right: 150px; /* Space for absolute timestamp */
-}
-
-.avatarWrapper {
-    position: relative;
-    width: 50px;
-    height: 50px;
-}
-
-.avatarImg {
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    background-size: cover;
-    background-position: center;
-    background-color: #111;
-    border: 2px solid transparent;
-}
-
-.avatarAdd { border-color: #22c55e; }
-.avatarDrop { border-color: #ff2a6d; }
-
-.badge {
-    position: absolute;
-    bottom: -2px;
-    right: -2px;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    border: 2px solid #11141c; /* Creates the cut-out overlap look */
-}
-
-.badge i { font-size: 14px; font-weight: 900; }
-.badgeAdd { background: #22c55e; }
-.badgeDrop { background: #ff2a6d; }
-
-.assetText {
-    display: flex;
-    flex-direction: column;
-}
-
-.assetName {
-    color: #f8fafc;
-    font-weight: 700;
-    font-size: 1em;
-}
-
-.assetMeta {
+.navTab {
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
     color: #94a3b8;
     font-size: 0.8em;
-    margin-top: 2px;
-}
-
-.txnTimestamp {
-    position: absolute;
-    right: 0;
-    bottom: 5px;
-    color: #64748b;
-    font-size: 0.75em;
-    font-style: italic;
-    font-weight: 500;
-}
-
-@media (max-width: 600px) {
-    .assetRow { padding-right: 0; flex-wrap: wrap; }
-    .txnTimestamp { position: relative; width: 100%; text-align: left; padding-left: 65px; margin-top: -5px; }
-}
-
-.noData {
-    text-align: center;
-    color: #64748b;
-    padding: 40px;
-    font-style: italic;
-}
-
-/* --- LOAD MORE --- */
-.loadMoreWrapper {
-    display: flex;
-    justify-content: center;
-    margin-top: 30px;
-}
-
-.loadMoreBtn {
-    background: transparent;
-    color: #eebf1c;
-    border: 2px solid #eebf1c;
-    padding: 10px 30px;
-    border-radius: 24px;
-    font-weight: 700;
-    font-size: 0.9em;
+    font-weight: 800;
     text-transform: uppercase;
+    letter-spacing: 0.5px;
     cursor: pointer;
+    padding: 8px 14px;
     transition: all 0.2s ease;
 }
 
-.loadMoreBtn:hover {
-    background: #eebf1c;
-    color: #0b0e14;
+.activeNavTab {
+    background: #1e293b;
+    color: #eebf1c;
+    border-color: #eebf1c;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.weekDropdown {
+    background: #0f172a;
+    color: #eebf1c;
+    border: 1px solid #334155;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-weight: 800;
+    font-size: 0.8em;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.weekDropdown:focus {
+    border-color: #eebf1c;
+    outline: none;
+}
+
+.searchContainer {
+    padding: 0 10px;
+    margin-bottom: 15px;
+    animation: slideDown 0.2s ease-out forwards;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.searchInput {
+    width: 100%;
+    padding: 10px 12px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #f8fafc;
+    font-size: 0.9em;
+    outline: none;
+}
+
+.searchInput:focus {
+    border-color: #eebf1c;
+}
+
+.txFeed {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* THICK GOLD BORDER ON TRADE CARDS */
+.txCardTrade {
+    background: #0b0e14;
+    border-top: 1px solid #1e293b;
+    border-bottom: 1px solid #1e293b;
+    border-left: 4px solid #eebf1c; 
+    padding: 12px;
+}
+
+/* SUBTLE BORDER ON STANDARD CARDS */
+.txCard {
+    background: #0b0e14;
+    border-top: 1px solid #1e293b;
+    border-bottom: 1px solid #1e293b;
+    border-left: 4px solid #334155; 
+    padding: 12px;
+}
+
+.txCardHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+}
+
+.headerLeftGroup {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* GOLD TRADE TAG */
+.tradeTag {
+    background: rgba(238, 191, 28, 0.15);
+    color: #eebf1c;
+    border: 1px solid rgba(238, 191, 28, 0.3);
+    font-size: 0.65em;
+    font-weight: 900;
+    padding: 3px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+}
+
+/* GOLD WAIVER TAG */
+.waiverTag {
+    background: rgba(238, 191, 28, 0.15);
+    color: #eebf1c;
+    border: 1px solid rgba(238, 191, 28, 0.3);
+    font-size: 0.65em;
+    font-weight: 900;
+    padding: 3px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+}
+
+.faabBadge {
+    background: rgba(238, 191, 28, 0.15);
+    color: #eebf1c;
+    border: 1px solid rgba(238, 191, 28, 0.3);
+    font-size: 0.65em;
+    font-weight: 800;
+    padding: 3px 6px;
+    border-radius: 4px;
+}
+
+.txTime {
+    color: #64748b;
+    font-size: 0.7em;
+    font-weight: 700;
+}
+
+.tradeGrid {
+    display: grid;
+    grid-template-columns: 1fr 30px 1fr;
+    gap: 8px;
+    align-items: center;
+}
+
+.tradeColumn {
+    display: flex;
+    flex-direction: column;
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 8px;
+    padding: 10px;
+    min-width: 0;
+}
+
+.teamHeaderRow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.teamAvatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid #eebf1c;
+    flex-shrink: 0;
+}
+
+.teamName {
+    color: #eebf1c;
+    font-weight: 800;
+    font-size: 0.8em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.receivedLabel {
+    color: #64748b;
+    font-size: 0.65em;
+    font-weight: 800;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+
+.assetsList {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.tradeDivider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #eebf1c;
+}
+
+.tradeDivider i {
+    font-size: 1.2em;
+}
+
+.pickBadge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    padding: 4px 6px;
+    color: #eebf1c;
+    font-size: 0.7em;
+    font-weight: 800;
+}
+
+.pickBadge i {
+    font-size: 1.1em;
+}
+
+.noneText {
+    color: #64748b;
+    font-size: 0.75em;
+    font-style: italic;
+}
+
+.waiverBody {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.teamHeaderRowSingle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.actionList {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.playerMiniRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 6px;
+    padding: 6px 8px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.playerMiniRow:hover {
+    background: #1e293b;
+}
+
+.addBadge {
+    background: rgba(0, 206, 184, 0.2);
+    color: #00ceb8;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.addBadge i {
+    font-size: 0.9em;
+    font-weight: 900;
+}
+
+.dropBadge {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.dropBadge i {
+    font-size: 0.9em;
+    font-weight: 900;
+}
+
+.miniAvatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background-size: cover;
+    background-position: top;
+    background-color: #1e293b;
+    border: 1px solid #334155;
+    flex-shrink: 0;
+}
+
+.miniMeta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.miniName {
+    color: #f8fafc;
+    font-weight: 800;
+    font-size: 0.85em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.miniSub {
+    color: #94a3b8;
+    font-size: 0.65em;
+    font-weight: 700;
+}
+
+.emptyState {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 60px 20px;
+    color: #64748b;
+}
+
+.emptyState i {
+    font-size: 3em;
+    margin-bottom: 10px;
+}
+
+@media (min-width: 768px) {
+    .txCard, .txCardTrade {
+        border-radius: 12px;
+        border: 1px solid #1e293b;
+    }
+    .txCardTrade {
+        border-left: 4px solid #eebf1c; 
+    }
+    .txCard {
+        border-left: 4px solid #334155; 
+    }
 }

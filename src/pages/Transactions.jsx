@@ -1,211 +1,148 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLeague } from '../context/LeagueContext';
-import { loadPlayers, getLeagueTeamManagers } from '../utils/helper';
-import styles from './Transactions.module.css'; 
+import { getLeagueData, getLeagueTeamManagers, loadPlayers } from '../utils/helper';
+import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
+import PlayerModal from '../components/PlayerModal';
+import styles from './Transactions.module.css';
 
 export default function Transactions() {
     const { activeLeague } = useLeague();
-    const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [playersMap, setPlayersMap] = useState({});
+    const [leagueData, setLeagueData] = useState(null);
     const [teamManagers, setTeamManagers] = useState(null);
-    
-    // State for your toggle buttons
-    const [filter, setFilter] = useState('all'); 
-    const [visibleCount, setVisibleCount] = useState(30);
+    const [playersInfo, setPlayersInfo] = useState({});
+    const [transactions, setTransactions] = useState([]);
 
+    // Navigation & Filters
+    const [activeTab, setActiveTab] = useState('all'); // 'all', 'trades', 'waivers'
+    const [activeWeek, setActiveWeek] = useState(1);
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    
+    const [selectedPlayer, setSelectedPlayer] = useState(null);
+
+    const getPlayerObj = (pId) => {
+        if (!pId || pId === "0") return null;
+        return playersInfo[pId] || playersInfo[String(pId)] || null;
+    };
+
+    // 1. Initial Load
     useEffect(() => {
-        const fetchTransactions = async () => {
+        let isMounted = true;
+        const load = async () => {
             if (!activeLeague?.sleeper_league_id) return;
             setLoading(true);
             try {
-                const [pData, tmData] = await Promise.all([
-                    loadPlayers(),
-                    getLeagueTeamManagers(activeLeague.sleeper_league_id)
+                const sleeperId = activeLeague.sleeper_league_id;
+                const [lData, tmData, pData] = await Promise.all([
+                    getLeagueData(sleeperId),
+                    getLeagueTeamManagers(sleeperId),
+                    loadPlayers()
                 ]);
-                setPlayersMap(pData?.players || {});
-                setTeamManagers(tmData);
 
-                let allTxns = [];
-                for (let i = 1; i <= 18; i++) {
-                    const res = await fetch(`https://api.sleeper.app/v1/league/${activeLeague.sleeper_league_id}/transactions/${i}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        allTxns = [...allTxns, ...data];
-                    }
-                }
-                
-                const validTxns = allTxns
-                    .filter(t => t.status === 'complete')
-                    .sort((a, b) => b.status_updated - a.status_updated);
-                    
-                setTransactions(validTxns);
-            } catch (err) {
-                console.error("Failed to load transactions:", err);
+                if (!isMounted) return;
+                setLeagueData(lData);
+                setTeamManagers(tmData);
+                setPlayersInfo(pData.players || pData || {});
+                if (lData?.display_week) setActiveWeek(lData.display_week);
+
+            } catch (e) {
+                console.error("Error loading base transaction data:", e);
             } finally {
-                setLoading(false);
+                if (isMounted) setLoading(false);
             }
         };
-        fetchTransactions();
+        load();
+        return () => { isMounted = false; };
     }, [activeLeague]);
 
-    const handleFilterChange = (type) => {
-        setFilter(type);
-        setVisibleCount(30);
-    };
+    // 2. Fetch Transactions for Selected Week
+    useEffect(() => {
+        if (!activeLeague?.sleeper_league_id) return;
+        let isMounted = true;
 
-    const getTeamInfo = (rosterId) => {
-        if (!teamManagers || !teamManagers.teamManagersMap) return { name: 'Unknown', avatar: '' };
-        const roster = teamManagers.teamManagersMap[teamManagers.currentSeason]?.[rosterId];
-        if (roster && roster.team) {
-            return { name: roster.team.name };
+        fetch(`https://api.sleeper.app/v1/league/${activeLeague.sleeper_league_id}/transactions/${activeWeek}`)
+            .then(res => res.ok ? res.json() : [])
+            .then(data => {
+                if (isMounted) setTransactions(Array.isArray(data) ? data : []);
+            })
+            .catch(err => console.error("Error fetching transactions:", err));
+
+        return () => { isMounted = false; };
+    }, [activeLeague, activeWeek]);
+
+    const currentSeason = teamManagers?.currentSeason;
+
+    // Filter Transactions
+    const filteredTransactions = useMemo(() => {
+        let list = [...transactions];
+
+        if (activeTab === 'trades') {
+            list = list.filter(t => t.type === 'trade');
+        } else if (activeTab === 'waivers') {
+            list = list.filter(t => t.type === 'waiver' || t.type === 'free_agent');
         }
-        return { name: `Team ${rosterId}` };
-    };
 
-    const formatDateTime = (timestamp) => {
-        const date = new Date(timestamp);
-        const options = { month: 'short', day: 'numeric', year: 'numeric' };
-        const timeOptions = { hour: 'numeric', minute: '2-digit' };
-        return `${date.toLocaleDateString('en-US', options)}, ${date.toLocaleTimeString('en-US', timeOptions)}`;
-    };
+        if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase().trim();
+            list = list.filter(t => {
+                const playerIds = [
+                    ...Object.keys(t.adds || {}),
+                    ...Object.keys(t.drops || {})
+                ];
+                const matchesPlayer = playerIds.some(pId => {
+                    const p = getPlayerObj(pId);
+                    if (!p) return false;
+                    const fn = (p.fn || p.first_name || '').toLowerCase();
+                    const ln = (p.ln || p.last_name || '').toLowerCase();
+                    return fn.includes(q) || ln.includes(q) || `${fn} ${ln}`.includes(q);
+                });
 
-    const renderWaiverCard = (txn) => {
-        const teamMovements = {};
+                const matchesTeam = (t.roster_ids || []).some(rId => {
+                    const teamMeta = getTeamFromTeamManagers(teamManagers, rId, currentSeason);
+                    return (teamMeta?.name || '').toLowerCase().includes(q);
+                });
 
-        if (txn.adds) {
-            Object.entries(txn.adds).forEach(([pId, rId]) => {
-                if (!teamMovements[rId]) teamMovements[rId] = { adds: [], drops: [], picks: [] };
-                teamMovements[rId].adds.push(pId);
+                return matchesPlayer || matchesTeam;
             });
         }
-        if (txn.drops) {
-            Object.entries(txn.drops).forEach(([pId, rId]) => {
-                if (!teamMovements[rId]) teamMovements[rId] = { adds: [], drops: [], picks: [] };
-                teamMovements[rId].drops.push(pId);
-            });
-        }
 
-        return Object.keys(teamMovements).map((rId, index) => {
-            const team = getTeamInfo(rId);
-            const moves = teamMovements[rId];
-            
-            return (
-                <div key={`${txn.transaction_id}-${rId}-${index}`} className={styles.bracketCard}>
-                    <div className={styles.bracketDecor}></div>
-                    
-                    <div className={styles.cardMain}>
-                        <div className={styles.teamNameLabel}>{team.name}</div>
-                        
-                        <div className={styles.assetContainer}>
-                            {moves.adds.map(pId => {
-                                const player = playersMap[pId];
-                                const isDef = player?.pos === 'DEF';
-                                const avatarUrl = isDef ? `https://sleepercdn.com/images/team_logos/nfl/${pId.toLowerCase()}.png` : `https://sleepercdn.com/content/nfl/players/thumb/${pId}.jpg`;
-                                const fallback = 'https://sleepercdn.com/images/v2/icons/player_default.webp';
-                                
-                                return (
-                                    <div key={`add-${pId}`} className={styles.assetRow}>
-                                        <div className={styles.avatarWrapper}>
-                                            <div className={`${styles.avatarImg} ${styles.avatarAdd}`} style={{ backgroundImage: `url(${avatarUrl}), url(${fallback})` }}></div>
-                                            <div className={`${styles.badge} ${styles.badgeAdd}`}><i className="material-icons">add</i></div>
-                                        </div>
-                                        <div className={styles.assetText}>
-                                            <div className={styles.assetName}>{player?.fn} {player?.ln}</div>
-                                            <div className={styles.assetMeta}>{player?.pos} - {player?.t || 'FA'}</div>
-                                        </div>
-                                        <div className={styles.txnTimestamp}>{formatDateTime(txn.status_updated)}</div>
-                                    </div>
-                                );
-                            })}
+        return list.sort((a, b) => b.status_updated - a.status_updated);
+    }, [transactions, activeTab, searchQuery, playersInfo, teamManagers, currentSeason]);
 
-                            {moves.drops.map(pId => {
-                                const player = playersMap[pId];
-                                const isDef = player?.pos === 'DEF';
-                                const avatarUrl = isDef ? `https://sleepercdn.com/images/team_logos/nfl/${pId.toLowerCase()}.png` : `https://sleepercdn.com/content/nfl/players/thumb/${pId}.jpg`;
-                                const fallback = 'https://sleepercdn.com/images/v2/icons/player_default.webp';
-                                
-                                return (
-                                    <div key={`drop-${pId}`} className={styles.assetRow}>
-                                        <div className={styles.avatarWrapper}>
-                                            <div className={`${styles.avatarImg} ${styles.avatarDrop}`} style={{ backgroundImage: `url(${avatarUrl}), url(${fallback})` }}></div>
-                                            <div className={`${styles.badge} ${styles.badgeDrop}`}><i className="material-icons">remove</i></div>
-                                        </div>
-                                        <div className={styles.assetText}>
-                                            <div className={styles.assetName}>{player?.fn} {player?.ln}</div>
-                                            <div className={styles.assetMeta}>{player?.pos} - {player?.t || 'FA'}</div>
-                                        </div>
-                                        <div className={styles.txnTimestamp}>{formatDateTime(txn.status_updated)}</div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
-            );
-        });
+    const getAvatar = (pId, pos) => pos === 'DEF' 
+        ? `https://sleepercdn.com/images/team_logos/nfl/${String(pId).toLowerCase()}.png` 
+        : `https://sleepercdn.com/content/nfl/players/thumb/${pId}.jpg`;
+
+    const formatTimestamp = (ts) => {
+        if (!ts) return '';
+        const date = new Date(ts);
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
 
-    const renderTradeCard = (txn) => {
+    const renderCompactPlayer = (pId, actionType) => {
+        const p = getPlayerObj(pId);
+        if (!p) return <div key={pId} className={styles.playerMiniRow}>Player #{pId}</div>;
+
+        const isAdd = actionType === 'add';
+        const firstName = p.fn || p.first_name || '';
+        const lastName = p.ln || p.last_name || '';
+        const teamDisplay = p.t || p.team;
+
         return (
-            <div key={txn.transaction_id} className={styles.bracketCard}>
-                <div className={styles.bracketDecor} style={{ background: '#eebf1c' }}></div>
-                <div className={styles.cardMain}>
-                    <div className={styles.teamNameLabel} style={{ color: '#eebf1c', marginBottom: '10px' }}>TRADE</div>
-                    
-                    {txn.roster_ids.map((rId, index) => {
-                        const team = getTeamInfo(rId);
-                        
-                        const addedPlayers = Object.keys(txn.adds || {}).filter(pId => txn.adds[pId] === rId);
-                        const addedPicks = (txn.draft_picks || []).filter(pick => pick.owner_id === rId);
-
-                        if (addedPlayers.length === 0 && addedPicks.length === 0) return null;
-
-                        return (
-                            <div key={rId} style={{ marginTop: index > 0 ? '15px' : '0' }}>
-                                <div className={styles.teamNameLabel} style={{ fontSize: '0.85em', color: '#94a3b8', marginBottom: '8px' }}>
-                                    {team.name} Received:
-                                </div>
-                                <div className={styles.assetContainer}>
-                                    
-                                    {addedPlayers.map(pId => {
-                                        const player = playersMap[pId];
-                                        const isDef = player?.pos === 'DEF';
-                                        const avatarUrl = isDef ? `https://sleepercdn.com/images/team_logos/nfl/${pId.toLowerCase()}.png` : `https://sleepercdn.com/content/nfl/players/thumb/${pId}.jpg`;
-                                        const fallback = 'https://sleepercdn.com/images/v2/icons/player_default.webp';
-                                        
-                                        return (
-                                            <div key={`trade-add-${pId}`} className={styles.assetRow}>
-                                                <div className={styles.avatarWrapper}>
-                                                    <div className={`${styles.avatarImg} ${styles.avatarAdd}`} style={{ backgroundImage: `url(${avatarUrl}), url(${fallback})` }}></div>
-                                                </div>
-                                                <div className={styles.assetText}>
-                                                    <div className={styles.assetName}>{player?.fn} {player?.ln}</div>
-                                                    <div className={styles.assetMeta}>{player?.pos} - {player?.t || 'FA'}</div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-
-                                    {addedPicks.map((pick, i) => (
-                                        <div key={`trade-pick-${i}`} className={styles.assetRow}>
-                                            <div className={styles.avatarWrapper}>
-                                                <div className={`${styles.avatarImg} ${styles.avatarAdd}`} style={{ background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <i className="material-icons" style={{ color: '#eebf1c', fontSize: '18px' }}>stars</i>
-                                                </div>
-                                            </div>
-                                            <div className={styles.assetText}>
-                                                <div className={styles.assetName}>{pick.season} Round {pick.round}</div>
-                                                <div className={styles.assetMeta}>Draft Pick</div>
-                                            </div>
-                                        </div>
-                                    ))}
-
-                                </div>
-                            </div>
-                        );
-                    })}
-                    <div className={styles.txnTimestamp} style={{ marginTop: '15px' }}>{formatDateTime(txn.status_updated)}</div>
+            <div key={pId} className={styles.playerMiniRow} onClick={() => setSelectedPlayer(p)}>
+                <span className={isAdd ? styles.addBadge : styles.dropBadge}>
+                    <i className="material-icons">{isAdd ? 'add' : 'remove'}</i>
+                </span>
+                <div 
+                    className={styles.miniAvatar} 
+                    style={{ backgroundImage: `url(${getAvatar(pId, p.pos)}), url(https://sleepercdn.com/images/v2/icons/player_default.webp)` }}
+                ></div>
+                <div className={styles.miniMeta}>
+                    <span className={styles.miniName}>{firstName.charAt(0)}. {lastName}</span>
+                    <span className={styles.miniSub}>
+                        {p.pos} {teamDisplay && teamDisplay !== 'FA' ? `• ${teamDisplay}` : ''}
+                    </span>
                 </div>
             </div>
         );
@@ -213,64 +150,171 @@ export default function Transactions() {
 
     if (loading) return <div className={styles.loading}>Loading Transactions...</div>;
 
-    // Apply the active filter state
-    const filteredTxns = transactions.filter(txn => {
-        if (filter === 'trades') return txn.type === 'trade';
-        if (filter === 'waivers') return txn.type === 'waiver' || txn.type === 'free_agent';
-        return true; // 'all'
-    });
-
-    const displayedTransactions = filteredTxns.slice(0, visibleCount);
-
     return (
         <div className={styles.container}>
-            
-            <h1 className={styles.headerTitle}>Transactions Log</h1>
-            
-            {/* Filter Buttons */}
-            <div className={styles.filterToggle} style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '40px' }}>
-                <button 
-                    style={{ padding: '8px 20px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', fontWeight: 'bold', background: filter === 'all' ? '#eebf1c' : 'transparent', color: filter === 'all' ? '#000' : '#94a3b8' }}
-                    onClick={() => handleFilterChange('all')}
-                >
-                    ALL
+            <div className={styles.topHeader}>
+                <button className={styles.searchToggleBtn} onClick={() => setIsSearchOpen(!isSearchOpen)}>
+                    <i className="material-icons">{isSearchOpen ? 'close' : 'search'}</i>
                 </button>
-                <button 
-                    style={{ padding: '8px 20px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', fontWeight: 'bold', background: filter === 'trades' ? '#eebf1c' : 'transparent', color: filter === 'trades' ? '#000' : '#94a3b8' }}
-                    onClick={() => handleFilterChange('trades')}
+                <div className={styles.navTabs}>
+                    <button className={`${styles.navTab} ${activeTab === 'all' ? styles.activeNavTab : ''}`} onClick={() => setActiveTab('all')}>All</button>
+                    <button className={`${styles.navTab} ${activeTab === 'trades' ? styles.activeNavTab : ''}`} onClick={() => setActiveTab('trades')}>Trades</button>
+                    <button className={`${styles.navTab} ${activeTab === 'waivers' ? styles.activeNavTab : ''}`} onClick={() => setActiveTab('waivers')}>Waivers</button>
+                </div>
+                <select 
+                    className={styles.weekDropdown} 
+                    value={activeWeek} 
+                    onChange={(e) => setActiveWeek(parseInt(e.target.value))}
                 >
-                    TRADES
-                </button>
-                <button 
-                    style={{ padding: '8px 20px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', fontWeight: 'bold', background: filter === 'waivers' ? '#eebf1c' : 'transparent', color: filter === 'waivers' ? '#000' : '#94a3b8' }}
-                    onClick={() => handleFilterChange('waivers')}
-                >
-                    WAIVERS
-                </button>
+                    {[...Array(18).keys()].map(i => (
+                        <option key={i+1} value={i+1}>Wk {i+1}</option>
+                    ))}
+                </select>
             </div>
 
-            <div className={styles.feed}>
-                {displayedTransactions.length === 0 ? (
-                    <div className={styles.noData}>No transactions found for this category.</div>
-                ) : (
-                    displayedTransactions.map(txn => {
-                        if (txn.type === 'trade') return renderTradeCard(txn);
-                        return renderWaiverCard(txn);
+            {isSearchOpen && (
+                <div className={styles.searchContainer}>
+                    <input 
+                        type="text" 
+                        placeholder="Search manager or player..." 
+                        className={styles.searchInput}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        autoFocus
+                    />
+                </div>
+            )}
+
+            <div className={styles.txFeed}>
+                {filteredTransactions.length > 0 ? (
+                    filteredTransactions.map((tx) => {
+                        const isTrade = tx.type === 'trade';
+                        const isWaiver = tx.type === 'waiver';
+                        const isFA = tx.type === 'free_agent';
+
+                        // TRADE CARD RENDER
+                        if (isTrade) {
+                            const rosterIds = tx.roster_ids || [];
+                            const teamA = getTeamFromTeamManagers(teamManagers, rosterIds[0], currentSeason);
+                            const teamB = getTeamFromTeamManagers(teamManagers, rosterIds[1], currentSeason);
+
+                            const teamAAdds = [];
+                            const teamBAdds = [];
+                            
+                            Object.entries(tx.adds || {}).forEach(([pId, rId]) => {
+                                if (rId === rosterIds[0]) teamAAdds.push(pId);
+                                else if (rId === rosterIds[1]) teamBAdds.push(pId);
+                            });
+
+                            const teamAPicks = (tx.draft_picks || []).filter(p => p.owner_id === rosterIds[0]);
+                            const teamBPicks = (tx.draft_picks || []).filter(p => p.owner_id === rosterIds[1]);
+
+                            return (
+                                <div key={tx.transaction_id} className={styles.txCardTrade}>
+                                    <div className={styles.txCardHeader}>
+                                        <span className={styles.tradeTag}>TRADE</span>
+                                        <span className={styles.txTime}>{formatTimestamp(tx.status_updated)}</span>
+                                    </div>
+
+                                    <div className={styles.tradeGrid}>
+                                        <div className={styles.tradeColumn}>
+                                            <div className={styles.teamHeaderRow}>
+                                                <img src={teamA?.avatar || 'https://sleepercdn.com/images/v2/icons/league_default.webp'} alt="" className={styles.teamAvatar} />
+                                                <span className={styles.teamName}>{teamA?.name || 'Team 1'}</span>
+                                            </div>
+                                            <div className={styles.receivedLabel}>Received:</div>
+                                            <div className={styles.assetsList}>
+                                                {teamAAdds.map(pId => renderCompactPlayer(pId, 'add'))}
+                                                {teamAPicks.map((pick, idx) => (
+                                                    <div key={idx} className={styles.pickBadge}>
+                                                        <i className="material-icons">confirmation_number</i>
+                                                        <span>{pick.season} R{pick.round}</span>
+                                                    </div>
+                                                ))}
+                                                {teamAAdds.length === 0 && teamAPicks.length === 0 && (
+                                                    <span className={styles.noneText}>Nothing</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className={styles.tradeDivider}>
+                                            <i className="material-icons">sync</i>
+                                        </div>
+
+                                        <div className={styles.tradeColumn}>
+                                            <div className={styles.teamHeaderRow}>
+                                                <img src={teamB?.avatar || 'https://sleepercdn.com/images/v2/icons/league_default.webp'} alt="" className={styles.teamAvatar} />
+                                                <span className={styles.teamName}>{teamB?.name || 'Team 2'}</span>
+                                            </div>
+                                            <div className={styles.receivedLabel}>Received:</div>
+                                            <div className={styles.assetsList}>
+                                                {teamBAdds.map(pId => renderCompactPlayer(pId, 'add'))}
+                                                {teamBPicks.map((pick, idx) => (
+                                                    <div key={idx} className={styles.pickBadge}>
+                                                        <i className="material-icons">confirmation_number</i>
+                                                        <span>{pick.season} R{pick.round}</span>
+                                                    </div>
+                                                ))}
+                                                {teamBAdds.length === 0 && teamBPicks.length === 0 && (
+                                                    <span className={styles.noneText}>Nothing</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        }
+
+                        // WAIVER / FA CARD RENDER
+                        const rosterId = (tx.roster_ids || [])[0];
+                        const teamMeta = getTeamFromTeamManagers(teamManagers, rosterId, currentSeason);
+                        const adds = Object.keys(tx.adds || {});
+                        const drops = Object.keys(tx.drops || {});
+
+                        return (
+                            <div key={tx.transaction_id} className={styles.txCard}>
+                                <div className={styles.txCardHeader}>
+                                    <div className={styles.headerLeftGroup}>
+                                        {(isWaiver || isFA) && (
+                                            <span className={styles.waiverTag}>
+                                                WAIVER
+                                            </span>
+                                        )}
+                                        {tx.settings?.waiver_bid !== undefined && tx.settings?.waiver_bid > 0 && (
+                                            <span className={styles.faabBadge}>${tx.settings.waiver_bid} FAAB</span>
+                                        )}
+                                    </div>
+                                    <span className={styles.txTime}>{formatTimestamp(tx.status_updated)}</span>
+                                </div>
+
+                                <div className={styles.waiverBody}>
+                                    <div className={styles.teamHeaderRowSingle}>
+                                        <img src={teamMeta?.avatar || 'https://sleepercdn.com/images/v2/icons/league_default.webp'} alt="" className={styles.teamAvatar} />
+                                        <span className={styles.teamName}>{teamMeta?.name || 'Manager'}</span>
+                                    </div>
+
+                                    <div className={styles.actionList}>
+                                        {adds.map(pId => renderCompactPlayer(pId, 'add'))}
+                                        {drops.map(pId => renderCompactPlayer(pId, 'drop'))}
+                                    </div>
+                                </div>
+                            </div>
+                        );
                     })
+                ) : (
+                    <div className={styles.emptyState}>
+                        <i className="material-icons">swap_horiz</i>
+                        <p>No transactions found for Week {activeWeek}.</p>
+                    </div>
                 )}
             </div>
 
-            {/* Load More Button */}
-            {visibleCount < filteredTxns.length && (
-                <div className={styles.loadMoreWrapper} style={{ display: 'flex', justifyContent: 'center', marginTop: '30px' }}>
-                    <button 
-                        className={styles.loadMoreBtn} 
-                        onClick={() => setVisibleCount(prev => prev + 30)}
-                        style={{ background: 'transparent', color: '#eebf1c', border: '2px solid #eebf1c', padding: '10px 30px', borderRadius: '24px', fontWeight: '700', textTransform: 'uppercase', cursor: 'pointer' }}
-                    >
-                        Load More
-                    </button>
-                </div>
+            {selectedPlayer && (
+                <PlayerModal 
+                    player={selectedPlayer} 
+                    week={activeWeek} 
+                    onClose={() => setSelectedPlayer(null)} 
+                />
             )}
         </div>
     );
