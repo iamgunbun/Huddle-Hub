@@ -15,6 +15,9 @@ export default function Rivalry() {
 
     const [managerA, setManagerA] = useState('');
     const [managerB, setManagerB] = useState('');
+    
+    // Tab State for Mobile Optimization
+    const [activeTab, setActiveTab] = useState('allTime'); // 'allTime', 'matchups'
 
     const normalizeStr = (str) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -178,7 +181,10 @@ export default function Rivalry() {
 
     return (
         <div className={styles.container}>
-            <h1 className={styles.headerTitle}>Head-to-Head Rivalry</h1>
+            {/* Replaced Text Header with Helmets Image */}
+            <div className={styles.headerImageContainer}>
+                <img src="/helmets.png" alt="Rivalry Helmets" className={styles.headerImage} />
+            </div>
 
             <div className={styles.selectorWrapper}>
                 <div className={styles.teamSelector}>
@@ -220,107 +226,130 @@ export default function Rivalry() {
                     <p>These two franchises have never faced each other.</p>
                 </div>
             ) : (
-                <div className={styles.contentGrid}>
-                    <div className={styles.statsColumn}>
+                <>
+                    {/* Tab Navigation */}
+                    <div className={styles.navTabs}>
+                        <button 
+                            className={`${styles.tabBtn} ${activeTab === 'allTime' ? styles.activeTab : ''}`}
+                            onClick={() => setActiveTab('allTime')}
+                        >
+                            ALL-TIME
+                        </button>
+                        <button 
+                            className={`${styles.tabBtn} ${activeTab === 'matchups' ? styles.activeTab : ''}`}
+                            onClick={() => setActiveTab('matchups')}
+                        >
+                            MATCHUPS
+                        </button>
+                    </div>
+
+                    <div className={styles.contentArea}>
                         
-                        <div className={styles.statCard}>
-                            <h3 className={styles.cardHeader}>All-Time Series</h3>
-                            <div className={styles.seriesRecord}>
-                                <div className={styles.recordCol}>
-                                    <span className={styles.recordLabel}>W</span>
-                                    <div className={`${styles.recordSide} ${rivalryStats.winsA > rivalryStats.winsB ? styles.winner : ''}`}>
-                                        {rivalryStats.winsA}
+                        {/* ALL-TIME STATS TAB */}
+                        {activeTab === 'allTime' && (
+                            <div className={styles.statsColumn}>
+                                <div className={styles.statCard}>
+                                    <h3 className={styles.cardHeader}>All-Time Series</h3>
+                                    <div className={styles.seriesRecord}>
+                                        <div className={styles.recordCol}>
+                                            <span className={styles.recordLabel}>W</span>
+                                            <div className={`${styles.recordSide} ${rivalryStats.winsA > rivalryStats.winsB ? styles.winner : ''}`}>
+                                                {rivalryStats.winsA}
+                                            </div>
+                                        </div>
+                                        <div className={styles.recordDivider}>-</div>
+                                        <div className={styles.recordCol}>
+                                            <span className={styles.recordLabel}>L</span>
+                                            <div className={`${styles.recordSide} ${rivalryStats.winsB > rivalryStats.winsA ? styles.winner : ''}`}>
+                                                {rivalryStats.winsB}
+                                            </div>
+                                        </div>
+                                        <div className={styles.recordDivider}>-</div>
+                                        <div className={styles.recordCol}>
+                                            <span className={styles.recordLabel}>T</span>
+                                            <div className={styles.recordSide} style={{ color: '#64748b' }}>
+                                                {rivalryStats.ties}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className={styles.barContainer}>
+                                        <div className={styles.barFillA} style={{ width: `${winPctA}%` }}></div>
+                                        <div className={styles.barFillB} style={{ width: `${winPctB}%` }}></div>
                                     </div>
                                 </div>
-                                <div className={styles.recordDivider}>-</div>
-                                <div className={styles.recordCol}>
-                                    <span className={styles.recordLabel}>L</span>
-                                    <div className={`${styles.recordSide} ${rivalryStats.winsB > rivalryStats.winsA ? styles.winner : ''}`}>
-                                        {rivalryStats.winsB}
-                                    </div>
-                                </div>
-                                <div className={styles.recordDivider}>-</div>
-                                <div className={styles.recordCol}>
-                                    <span className={styles.recordLabel}>T</span>
-                                    <div className={styles.recordSide} style={{ color: '#64748b' }}>
-                                        {rivalryStats.ties}
-                                    </div>
-                                </div>
-                            </div>
-                            <div className={styles.barContainer}>
-                                <div className={styles.barFillA} style={{ width: `${winPctA}%` }}></div>
-                                <div className={styles.barFillB} style={{ width: `${winPctB}%` }}></div>
-                            </div>
-                        </div>
 
-                        <div className={styles.statCard}>
-                            <h3 className={styles.cardHeader}>Total Points Scored</h3>
-                            <div className={styles.pointsCompare}>
-                                <div className={`${styles.pointValue} ${rivalryStats.pointsA > rivalryStats.pointsB ? styles.goldText : ''}`}>
-                                    {rivalryStats.pointsA.toFixed(2)}
+                                <div className={styles.statCard}>
+                                    <h3 className={styles.cardHeader}>Total Points Scored</h3>
+                                    <div className={styles.pointsCompare}>
+                                        <div className={`${styles.pointValue} ${rivalryStats.pointsA > rivalryStats.pointsB ? styles.goldText : ''}`}>
+                                            {rivalryStats.pointsA.toFixed(2)}
+                                        </div>
+                                        <div className={styles.pointDivider}>to</div>
+                                        <div className={`${styles.pointValue} ${rivalryStats.pointsB > rivalryStats.pointsA ? styles.goldText : ''}`}>
+                                            {rivalryStats.pointsB.toFixed(2)}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className={styles.pointDivider}>to</div>
-                                <div className={`${styles.pointValue} ${rivalryStats.pointsB > rivalryStats.pointsA ? styles.goldText : ''}`}>
-                                    {rivalryStats.pointsB.toFixed(2)}
-                                </div>
-                            </div>
-                        </div>
 
-                        {rivalryStats.biggestBlowout && (
-                            <div className={styles.statCard}>
-                                <h3 className={styles.cardHeader}>Biggest Blowout</h3>
-                                <div className={styles.highlightData}>
-                                    <span className={styles.highlightDiff}>{rivalryStats.biggestBlowout.diff.toFixed(2)} pts</span>
-                                    <span className={styles.highlightContext}>
-                                        {rivalryStats.biggestBlowout.year} | Week {rivalryStats.biggestBlowout.week} ({rivalryStats.biggestBlowout.type})
-                                    </span>
-                                </div>
+                                {rivalryStats.biggestBlowout && (
+                                    <div className={styles.statCard}>
+                                        <h3 className={styles.cardHeader}>Biggest Blowout</h3>
+                                        <div className={styles.highlightData}>
+                                            <span className={styles.highlightDiff}>{rivalryStats.biggestBlowout.diff.toFixed(2)} pts</span>
+                                            <span className={styles.highlightContext}>
+                                                {rivalryStats.biggestBlowout.year} | Week {rivalryStats.biggestBlowout.week} ({rivalryStats.biggestBlowout.type})
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {rivalryStats.closestMatch && (
+                                    <div className={styles.statCard}>
+                                        <h3 className={styles.cardHeader}>Closest Finish</h3>
+                                        <div className={styles.highlightData}>
+                                            <span className={styles.highlightDiff}>{rivalryStats.closestMatch.diff.toFixed(2)} pts</span>
+                                            <span className={styles.highlightContext}>
+                                                {rivalryStats.closestMatch.year} | Week {rivalryStats.closestMatch.week} ({rivalryStats.closestMatch.type})
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
-                        {rivalryStats.closestMatch && (
-                            <div className={styles.statCard}>
-                                <h3 className={styles.cardHeader}>Closest Finish</h3>
-                                <div className={styles.highlightData}>
-                                    <span className={styles.highlightDiff}>{rivalryStats.closestMatch.diff.toFixed(2)} pts</span>
-                                    <span className={styles.highlightContext}>
-                                        {rivalryStats.closestMatch.year} | Week {rivalryStats.closestMatch.week} ({rivalryStats.closestMatch.type})
-                                    </span>
+                        {/* MATCHUPS HISTORY TAB */}
+                        {activeTab === 'matchups' && (
+                            <div className={styles.historyColumn}>
+                                <h3 className={styles.historyHeader}>Match History ({totalGames} Games)</h3>
+                                <div className={styles.historyList}>
+                                    {rivalryStats.history.map((match, idx) => (
+                                        <div key={idx} className={styles.historyRow}>
+                                            <div className={styles.historyMeta}>
+                                                <span className={styles.hYear}>{match.year}</span>
+                                                <span className={styles.hWeek}>Week {match.week}</span>
+                                                <span className={styles.hType}>{match.type}</span>
+                                            </div>
+
+                                            <div className={styles.historyScores}>
+                                                <div className={`${styles.hScoreBlock} ${match.scoreA > match.scoreB ? styles.winnerBlock : styles.loserBlock}`}>
+                                                    <img src={metaA.avatar} alt="A" className={styles.hAvatar} />
+                                                    <span className={styles.hScore}>{match.scoreA.toFixed(2)}</span>
+                                                </div>
+                                                
+                                                <div className={styles.hScoreDivider}>vs</div>
+
+                                                <div className={`${styles.hScoreBlock} ${match.scoreB > match.scoreA ? styles.winnerBlock : styles.loserBlock}`}>
+                                                    <span className={styles.hScore}>{match.scoreB.toFixed(2)}</span>
+                                                    <img src={metaB.avatar} alt="B" className={styles.hAvatar} />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         )}
                     </div>
-
-                    <div className={styles.historyColumn}>
-                        <h3 className={styles.historyHeader}>Match History ({totalGames} Games)</h3>
-                        <div className={styles.historyList}>
-                            {rivalryStats.history.map((match, idx) => (
-                                <div key={idx} className={styles.historyRow}>
-                                    <div className={styles.historyMeta}>
-                                        <span className={styles.hYear}>{match.year}</span>
-                                        <span className={styles.hWeek}>Week {match.week}</span>
-                                        <span className={styles.hType}>{match.type}</span>
-                                    </div>
-
-                                    <div className={styles.historyScores}>
-                                        <div className={`${styles.hScoreBlock} ${match.scoreA > match.scoreB ? styles.winnerBlock : styles.loserBlock}`}>
-                                            <img src={metaA.avatar} alt="A" className={styles.hAvatar} />
-                                            <span className={styles.hScore}>{match.scoreA.toFixed(2)}</span>
-                                        </div>
-                                        
-                                        <div className={styles.hScoreDivider}>vs</div>
-
-                                        <div className={`${styles.hScoreBlock} ${match.scoreB > match.scoreA ? styles.winnerBlock : styles.loserBlock}`}>
-                                            <span className={styles.hScore}>{match.scoreB.toFixed(2)}</span>
-                                            <img src={metaB.avatar} alt="B" className={styles.hAvatar} />
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                </div>
+                </>
             )}
         </div>
     );

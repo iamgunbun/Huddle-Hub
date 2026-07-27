@@ -1,12 +1,47 @@
-.container { padding: 20px; max-width: 1200px; margin: 0 auto; box-sizing: border-box;}
+.container { 
+    padding: 20px; 
+    max-width: 900px; /* Reduced max-width since it's a single column now */
+    margin: 0 auto; 
+    box-sizing: border-box;
+}
 
-.loading { text-align: center; color: #eebf1c; font-size: 1.2em; font-weight: bold; text-transform: uppercase; margin-top: 100px; letter-spacing: 2px; }
-.headerTitle { color: #f8fafc; text-transform: uppercase; font-size: 2em; letter-spacing: 2px; margin-bottom: 30px; font-weight: 500; text-align: center; }
+.loading { 
+    text-align: center; 
+    color: #eebf1c; 
+    font-size: 1.2em; 
+    font-weight: bold; 
+    text-transform: uppercase; 
+    margin-top: 100px; 
+    letter-spacing: 2px; 
+}
+
+/* Replaced Header Text with Image Styling */
+.headerImageContainer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 25px;
+}
+
+.headerImage {
+    max-width: 180px; /* Kept relatively small but visible */
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+}
 
 .selectorWrapper {
-    display: flex; justify-content: center; align-items: center; gap: 30px; margin-bottom: 50px;
-    background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 16px; padding: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); box-sizing: border-box;
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    gap: 30px; 
+    margin-bottom: 30px; /* Reduced gap below to make room for tabs */
+    background: rgba(255, 255, 255, 0.02); 
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 16px; 
+    padding: 30px; 
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); 
+    box-sizing: border-box;
 }
 
 .teamSelector { display: flex; flex-direction: column; align-items: center; gap: 15px; width: 250px; }
@@ -17,11 +52,54 @@
 
 .vsBadge { background: #eebf1c; color: #000; font-weight: 900; font-size: 1.2em; padding: 15px 20px; border-radius: 12px; text-transform: uppercase; letter-spacing: 2px; box-shadow: 0 4px 15px rgba(238, 191, 28, 0.3); }
 
+/* Tab Navigation Styles */
+.navTabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 25px;
+    width: 100%;
+}
+
+.tabBtn {
+    flex: 1;
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    color: #94a3b8;
+    font-size: 0.85em;
+    font-weight: 800;
+    padding: 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.2s ease;
+}
+
+.activeTab {
+    background: #1e293b;
+    color: #eebf1c;
+    border-color: #eebf1c;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
 .emptyState { text-align: center; color: #94a3b8; background: rgba(255, 255, 255, 0.02); border: 1px dashed rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 50px 20px; }
 .emptyState h3 { color: #f8fafc; margin: 0 0 10px 0; }
 
-.contentGrid { display: grid; grid-template-columns: 1fr 1.5fr; gap: 40px; box-sizing: border-box; }
-.statsColumn { display: flex; flex-direction: column; gap: 25px; box-sizing: border-box; }
+/* Replaced Grid with Flex Column for Tabs */
+.contentArea { 
+    display: flex; 
+    flex-direction: column; 
+    gap: 20px; 
+    box-sizing: border-box; 
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.statsColumn { display: flex; flex-direction: column; gap: 20px; box-sizing: border-box; }
 .statCard { background: #1e2530; border-radius: 12px; padding: 25px; border: 1px solid rgba(255, 255, 255, 0.05); box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25); text-align: center; box-sizing: border-box; }
 
 .cardHeader { color: #cbd5e1; text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px; margin: 0 0 20px 0; }
@@ -70,15 +148,12 @@
 .hScoreDivider { color: #64748b; font-size: 0.8em; font-weight: 700; text-transform: uppercase; }
 
 @media (max-width: 950px) {
-    .contentGrid { grid-template-columns: 1fr; width: 100%; }
-    
     .selectorWrapper { flex-direction: row; gap: 10px; padding: 15px; justify-content: space-between; width: 100%; box-sizing: border-box;}
     .teamSelector { width: 42%; gap: 10px; }
     .teamSelector .teamAvatar { width: 60px; height: 60px; border-width: 2px; }
     .dropdown { padding: 8px 5px; font-size: 0.75em; }
     .vsBadge { padding: 5px 10px; font-size: 0.9em; }
     
-    /* REVERTED TO STACKED 1 COLUMN */
     .historyList {
         display: flex;
         flex-direction: column;

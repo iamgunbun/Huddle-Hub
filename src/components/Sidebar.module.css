@@ -4,7 +4,6 @@
     background: rgba(0, 0, 0, 0.75);
     backdrop-filter: blur(4px);
     z-index: 10000;
-    /* Changed from display: none to visibility to allow smooth opacity tweening */
     visibility: hidden;
     opacity: 0;
     transition: opacity 0.3s ease, visibility 0.3s ease;
@@ -26,7 +25,6 @@
     box-shadow: 10px 0 40px rgba(0, 0, 0, 0.5);
     box-sizing: border-box;
     transform: translateX(-100%);
-    /* Upgraded the bezier curve for a springier, smoother entrance */
     transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
@@ -73,7 +71,6 @@
     padding-right: 5px;
 }
 
-/* Custom Scrollbar styling for smooth container physics */
 .menuContainer::-webkit-scrollbar { width: 4px; }
 .menuContainer::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
 
@@ -143,7 +140,6 @@
     color: #eebf1c;
 }
 
-/* Smooth Rotation for the dropdown arrows */
 .chevron {
     transition: transform 0.3s ease;
 }
@@ -162,7 +158,6 @@
 
 .commishTrigger i { color: #ffaa00; }
 
-/* Smooth Accordion Logic for Dropdowns */
 .nested {
     padding-left: 15px;
     margin-top: 0;
@@ -257,6 +252,29 @@
     margin-top: auto;
     padding-top: 20px;
     border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.settingsLink {
+    color: #64748b;
+    padding: 12px 15px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9em;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-radius: 8px;
+    transition: all 0.2s;
+    margin-bottom: 5px;
+}
+
+.settingsLink:hover {
+    background: rgba(255, 255, 255, 0.03);
+    color: #f8fafc;
+}
+
+.settingsLink:hover i {
+    color: #eebf1c;
 }
 
 .logoutLink {

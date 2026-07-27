@@ -2,13 +2,41 @@
     height: 70px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 0 30px;
+    justify-content: center; /* Always centers the middle content */
     background: #0b0e14;
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    position: relative;
+    position: relative; /* Crucial for absolute pinning */
     z-index: 999;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden; /* Prevents horizontal scroll */
 }
+
+/* --- ABSOLUTE PINNED ZONES --- */
+/* These will stay glued to the edges no matter what the center title does */
+
+.pinnedLeft {
+    position: absolute;
+    left: 20px;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    z-index: 10;
+}
+
+.pinnedRight {
+    position: absolute;
+    right: 20px;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 10;
+}
+
+/* --- COMPONENTS --- */
 
 .hamburger {
     background: none;
@@ -32,14 +60,13 @@
     background: #eebf1c;
 }
 
-.leagueTitleContainer {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
+.centerContainer {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 12px;
-    max-width: 60%;
+    max-width: 50%; /* Stops the title from overlapping the icons on small phones */
+    z-index: 1;
 }
 
 .leagueLogo {
@@ -48,11 +75,12 @@
     border-radius: 50%;
     border: 1px solid #334155;
     object-fit: cover;
+    flex-shrink: 0;
 }
 
 .leagueTitle {
     font-weight: 700;
-    color: #fff;
+    color: #f8fafc;
     letter-spacing: 1.5px;
     text-transform: uppercase;
     font-size: 1.1em;
@@ -61,6 +89,52 @@
     text-overflow: ellipsis;
 }
 
-.spacer {
-    width: 42px;
+.chatBtn, .settingsBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    transition: color 0.2s;
+}
+
+.chatBtn i, .settingsBtn i {
+    font-size: 26px; /* Scaled cleanly for mobile */
+}
+
+.chatBtn {
+    color: #eebf1c; 
+}
+
+.chatBtn:hover {
+    color: #fff;
+}
+
+.settingsBtn {
+    color: #94a3b8; 
+}
+
+.settingsBtn:hover {
+    color: #eebf1c;
+}
+
+/* --- MOBILE ADJUSTMENTS --- */
+@media (max-width: 768px) {
+    .pinnedLeft {
+        left: 15px; /* Tighter against the edge for mobile */
+    }
+
+    .pinnedRight {
+        right: 15px;
+    }
+
+    .centerContainer {
+        max-width: 45%; /* Shrinks title text if it gets too long */
+    }
+
+    .leagueTitle {
+        font-size: 0.9em; 
+    }
 }
