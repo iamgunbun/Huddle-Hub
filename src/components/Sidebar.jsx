@@ -8,7 +8,7 @@ import styles from './Sidebar.module.css';
 export default function Sidebar({ isOpen, onClose }) {
     const navigate = useNavigate();
     
-    const { activeLeague, userLeaguesList = [], switchActiveLeague, loadLeagueContext } = useLeague() || {};
+    const { activeLeague, userLeagues = [], switchActiveLeague, loadLeagueContext } = useLeague() || {};
     
     const [infoOpen, setInfoOpen] = useState(false);
     const [hoveredLeague, setHoveredLeague] = useState(null);
@@ -60,7 +60,6 @@ export default function Sidebar({ isOpen, onClose }) {
                     <div className={styles.menuContainer} style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: '100px' }}>
                         
                         <div className={styles.section}>
-                            {/* Hidden on mobile, visible on desktop */}
                             <div className="desktopNavOnly">
                                 <h4>Menu</h4>
                                 <div className={styles.link} onClick={() => {navigate('/'); if(onClose) onClose();}}>
@@ -78,7 +77,6 @@ export default function Sidebar({ isOpen, onClose }) {
                                 <div className={styles.link} onClick={() => {navigate('/transactions'); if(onClose) onClose();}}>
                                     <i className="material-icons">swap_horiz</i> Transactions
                                 </div>
-                                {/* Desktop Messages Link */}
                                 <div className={styles.link} onClick={() => {navigate('/messages'); if(onClose) onClose();}}>
                                     <i className="material-icons">chat</i> Messages
                                 </div>
@@ -110,8 +108,23 @@ export default function Sidebar({ isOpen, onClose }) {
                         </div>
 
                         <div className={styles.section}>
+                            <h4>Tools</h4>
+                            <div className={styles.link} onClick={() => {navigate('/start-sit'); if(onClose) onClose();}}>
+                                <i className="material-icons">event_seat</i> Start / Sit
+                            </div>
+                            <div className={styles.link} onClick={() => {navigate('/trade-analyzer'); if(onClose) onClose();}}>
+                                <i className="material-icons">query_stats</i> Trade Analyzer 
+                                <span className={styles.proBadge}>PRO</span>
+                            </div>
+                            <div className={styles.link} onClick={() => {navigate('/draft-analyzer'); if(onClose) onClose();}}>
+                                <i className="material-icons">psychology</i> Draft Analyzer 
+                                <span className={styles.proBadge}>PRO</span>
+                            </div>
+                        </div>
+
+                        <div className={styles.section}>
                             <h4>Switch League</h4>
-                            {userLeaguesList.map(l => (
+                            {userLeagues.map(l => (
                                 <div 
                                     key={l.id} 
                                     className={styles.leagueItem} 
@@ -120,6 +133,7 @@ export default function Sidebar({ isOpen, onClose }) {
                                     onMouseLeave={() => setHoveredLeague(null)}
                                     style={{ position: 'relative' }}
                                 >
+                                    {/* Restored your original Image/Radio Logic */}
                                     {l.avatar ? (
                                         <img 
                                             src={l.avatar} 
@@ -131,6 +145,7 @@ export default function Sidebar({ isOpen, onClose }) {
                                     ) : (
                                         <div className={styles.radio} style={{ backgroundColor: activeLeague?.id === l.id ? '#eebf1c' : 'transparent', borderColor: activeLeague?.id === l.id ? '#eebf1c' : '#475569' }}></div>
                                     )}
+                                    
                                     <span className={activeLeague?.id === l.id ? styles.activeLeagueText : ''}>{l.name || l.league_name}</span>
                                     
                                     {hoveredLeague === l.id && (

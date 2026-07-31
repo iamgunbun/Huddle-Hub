@@ -1,97 +1,61 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useLeague } from '../../context/LeagueContext';
 import { supabase } from '../../supabaseClient';
-import styles from './AdminConstitution.module.css';
+import { useLeague } from '../../context/LeagueContext';
+import BackButton from '../../components/BackButton';
+import styles from '../Settings.module.css';
 
 export default function AdminConstitution() {
-    const { activeLeague, loadLeagueContext } = useLeague();
-    const navigate = useNavigate();
-    
-    const [constitutionText, setConstitutionText] = useState('');
-    const [isSaving, setIsSaving] = useState(false);
-    const [saveMessage, setSaveMessage] = useState(null);
+    const { activeLeague } = useLeague();
+    const [constitution, setConstitution] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [message, setMessage] = useState('');
 
-    // Boot non-commissioners out of the Admin Dashboard
     useEffect(() => {
-        if (activeLeague && !activeLeague.is_commissioner) {
-            navigate('/');
-        } else if (activeLeague) {
-            setConstitutionText(activeLeague.constitution || '');
+        if (activeLeague?.constitution) {
+            setConstitution(activeLeague.constitution);
         }
-    }, [activeLeague, navigate]);
+    }, [activeLeague]);
 
     const handleSave = async () => {
-        setIsSaving(true);
-        setSaveMessage(null);
-
+        if (!activeLeague?.id) return;
+        setSaving(true);
         try {
             const { error } = await supabase
                 .from('leagues')
-                .update({ constitution: constitutionText })
+                .update({ constitution: constitution })
                 .eq('id', activeLeague.id);
-
             if (error) throw error;
-
-            setSaveMessage({ type: 'success', text: 'Constitution updated successfully.' });
-            
-            // Refresh league context to distribute the new constitution across the app
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) {
-                await loadLeagueContext(session.user.id, activeLeague.id);
-            }
-        } catch (error) {
-            console.error("Error saving constitution:", error);
-            setSaveMessage({ type: 'error', text: 'Failed to save. Please try again.' });
+            setMessage('Constitution saved successfully!');
+            setTimeout(() => setMessage(''), 3000);
+        } catch (err) {
+            setMessage('Error saving constitution.');
         } finally {
-            setIsSaving(false);
-            
-            // Clear the success message after 3 seconds
-            setTimeout(() => setSaveMessage(null), 3000);
+            setSaving(false);
         }
     };
 
-    if (!activeLeague) return null;
-
     return (
         <div className={styles.container}>
-            <div className={styles.header}>
-                <h1 className={styles.title}>Admin Dashboard</h1>
-                <h2 className={styles.subtitle}>Amend League Constitution</h2>
-            </div>
-
-            <div className={styles.editorCard}>
-                <div className={styles.cardHeader}>
-                    <i className="material-icons">gavel</i> Governing Rules & Bylaws
+            <BackButton />
+            <div className={styles.settingsCard}>
+                <div className={styles.header}>
+                    <i className="material-icons">gavel</i>
+                    <h1 className={styles.title}>League Constitution</h1>
                 </div>
-                
-                <div className={styles.editorBody}>
-                    <p className={styles.instructions}>
-                        Update the official rules, payout structures, and bylaws for <strong>{activeLeague.league_name}</strong> below. Changes will be immediately visible to all managers.
-                    </p>
-                    
-                    <textarea 
+                <div className={styles.infoGroup}>
+                    <label>Update League Rules & Bylaws</label>
+                    <textarea
                         className={styles.textArea}
-                        value={constitutionText}
-                        onChange={(e) => setConstitutionText(e.target.value)}
-                        placeholder="Enter your league constitution here..."
+                        value={constitution}
+                        onChange={(e) => setConstitution(e.target.value)}
+                        placeholder="Paste your complete league rules here..."
+                        rows={15}
                     />
                 </div>
-
-                <div className={styles.cardFooter}>
-                    {saveMessage && (
-                        <div className={`${styles.message} ${saveMessage.type === 'success' ? styles.success : styles.error}`}>
-                            {saveMessage.text}
-                        </div>
-                    )}
-                    <button 
-                        className={styles.saveBtn} 
-                        onClick={handleSave} 
-                        disabled={isSaving}
-                    >
-                        {isSaving ? 'Saving...' : 'Publish Amendments'}
-                    </button>
-                </div>
+                {message && <div className={styles.message}>{message}</div>}
+                <button className={styles.saveBtn} onClick={handleSave} disabled={saving}>
+                    {saving ? 'Saving...' : 'Save Constitution'}
+                </button>
             </div>
         </div>
     );

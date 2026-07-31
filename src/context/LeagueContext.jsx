@@ -1,147 +1,173 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
-import { activeLeague as svelteActiveLeague } from '../stores/leagueContext';
 
 const LeagueContext = createContext();
 
-export const useLeague = () => useContext(LeagueContext);
+export function useLeague() {
+    return useContext(LeagueContext);
+}
 
-export const LeagueProvider = ({ children }) => {
+export function LeagueProvider({ children }) {
     const [activeLeague, setActiveLeague] = useState(null);
-    const [userLeaguesList, setUserLeaguesList] = useState([]); 
+    const [userLeagues, setUserLeagues] = useState([]); 
     const [loading, setLoading] = useState(true);
-    const [userId, setUserId] = useState(null);
+    
+    // Premium & Limits State
+    const [isPremium, setIsPremium] = useState(false);
+    const [showPremiumModal, setShowPremiumModal] = useState(false);
+    const [leagueCount, setLeagueCount] = useState(0);
 
-    const loadLeagueContext = async (uid, specificLeagueId = null) => {
+    const loadLeagueContext = useCallback(async (userId, leagueId = null) => {
+        if (!userId) {
+            setActiveLeague(null);
+            setUserLeagues([]);
+            setIsPremium(false);
+            setLeagueCount(0);
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         try {
-            const { data, error } = await supabase
-                .from('user_leagues')
-                .select('league_id, is_commissioner, team_name, leagues(*)')
-                .eq('user_id', uid);
-
-            if (error) throw error;
-
-            if (data && data.length > 0) {
-                // Dynamically fetch live data from Sleeper to grab missing avatars and updated names
-                const formattedLeagues = await Promise.all(data.map(async (row) => {
-                    let avatarUrl = null;
-                    let leagueName = row.leagues.league_name;
+            try {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', userId)
+                    .maybeSingle();
                     
-                    if (row.leagues.platform === 'sleeper' && row.leagues.sleeper_league_id) {
-                        try {
-                            const res = await fetch(`https://api.sleeper.app/v1/league/${row.leagues.sleeper_league_id}`);
-                            if (res.ok) {
-                                const sleeperData = await res.json();
-                                if (sleeperData.avatar) {
-                                    avatarUrl = `https://sleepercdn.com/avatars/thumbs/${sleeperData.avatar}`;
-                                }
-                                if (sleeperData.name) {
-                                    leagueName = sleeperData.name;
-                                }
-                            }
-                        } catch (e) {
-                            console.warn("Could not fetch sleeper data", e);
-                        }
-                    }
-
-                    return {
-                        ...row.leagues,
-                        id: row.leagues.id,
-                        sleeper_league_id: row.leagues.sleeper_league_id,
-                        name: leagueName, 
-                        league_name: leagueName,
-                        avatar: avatarUrl,
-                        is_commissioner: row.is_commissioner,
-                        my_team_name: row.team_name
-                    };
-                }));
-                
-                setUserLeaguesList(formattedLeagues);
-
-                let selected = formattedLeagues[0];
-                if (specificLeagueId) {
-                    const matched = formattedLeagues.find(l => l.id === specificLeagueId || l.sleeper_league_id === specificLeagueId);
-                    if (matched) selected = matched;
+                if (profile && 'is_premium' in profile) {
+                    setIsPremium(profile.is_premium || false);
                 } else {
-                    const savedLeagueId = localStorage.getItem('activeLeagueId');
-                    if (savedLeagueId) {
-                        const matched = formattedLeagues.find(l => l.id === savedLeagueId || l.sleeper_league_id === savedLeagueId);
-                        if (matched) selected = matched;
-                    }
+                    setIsPremium(false);
                 }
+            } catch (e) {
+                setIsPremium(false);
+            }
 
-                setActiveLeague(selected);
-                svelteActiveLeague.set(selected);
-                localStorage.setItem('activeLeagueId', selected.id);
+            const { data: userLeaguesData, error: ulError } = await supabase
+                .from('user_leagues')
+                .select('*')
+                .eq('user_id', userId);
+
+            if (userLeaguesData && userLeaguesData.length > 0) {
+                
+                const leagueIds = userLeaguesData.map(ul => ul.league_id);
+                
+                const { data: leaguesData, error: leaguesError } = await supabase
+                    .from('leagues')
+                    .select('*')
+                    .in('id', leagueIds);
+
+                // NORMALIZED MAPPING: Guarantees every naming convention exists so the Sidebar can read it
+                const flattenedLeagues = userLeaguesData.map(ul => {
+    const matchedLeague = leaguesData?.find(l => l.id === ul.league_id || l.sleeper_league_id === ul.league_id) || {};
+    const resolvedName = matchedLeague.league_name || matchedLeague.name || ul.team_name || "Unnamed League";
+    
+    return {
+        ...matchedLeague, // Spread global league data first
+        ...ul,            // Spread user data second
+        league_name: resolvedName,
+        name: resolvedName,
+        avatar: ul.avatar || matchedLeague.avatar, // Explicitly preserve the avatar!
+        league_id: ul.league_id || matchedLeague.id,
+        sleeper_league_id: matchedLeague.sleeper_league_id || ul.league_id
+    };
+});
+
+                setUserLeagues(flattenedLeagues); 
+                setLeagueCount(flattenedLeagues.length);
+
+                const targetId = leagueId || flattenedLeagues[0].league_id;
+                const activeConnection = flattenedLeagues.find(ul => ul.league_id === targetId || ul.sleeper_league_id === targetId) || flattenedLeagues[0];
+
+                if (activeConnection) {
+                    setActiveLeague({
+                        ...activeConnection, 
+                        is_commissioner: activeConnection.is_commissioner, 
+                        team_name: activeConnection.team_name
+                    });
+                }
             } else {
+                setUserLeagues([]);
+                setLeagueCount(0);
                 setActiveLeague(null);
-                setUserLeaguesList([]);
-                svelteActiveLeague.set(null);
             }
         } catch (err) {
-            console.error("Error loading league context:", err);
+            console.error("Context Load Error:", err);
             setActiveLeague(null);
-            setUserLeaguesList([]);
-            svelteActiveLeague.set(null);
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     const switchActiveLeague = async (leagueId) => {
-        if (!userLeaguesList.length) return;
-        const matched = userLeaguesList.find(l => l.id === leagueId || l.sleeper_league_id === leagueId);
-        if (matched) {
-            setActiveLeague(matched);
-            svelteActiveLeague.set(matched);
-            localStorage.setItem('activeLeagueId', matched.id);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
+                await loadLeagueContext(session.user.id, leagueId);
+            }
+        } catch (err) {
+            console.error("Switch League Error:", err);
         }
     };
 
     useEffect(() => {
-        let mounted = true;
+        let isMounted = true;
 
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session?.user) {
-                setUserId(session.user.id);
-                loadLeagueContext(session.user.id);
-            } else {
-                if (mounted) setLoading(false);
+        const initAuth = async () => {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (isMounted) {
+                    if (session?.user) {
+                        await loadLeagueContext(session.user.id);
+                    } else {
+                        setLoading(false);
+                    }
+                }
+            } catch (err) {
+                console.error("Auth Init Error:", err);
+                if (isMounted) setLoading(false);
             }
-        });
+        };
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-            if (event === 'SIGNED_IN' && session?.user) {
-                setLoading(true); 
-                setUserId(session.user.id);
-                loadLeagueContext(session.user.id);
-            } else if (event === 'SIGNED_OUT') {
-                setUserId(null);
-                setActiveLeague(null);
-                setUserLeaguesList([]);
-                svelteActiveLeague.set(null);
-                localStorage.removeItem('activeLeagueId');
-                setLoading(false);
+        initAuth();
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            if (isMounted) {
+                if (session?.user) {
+                    loadLeagueContext(session.user.id);
+                } else {
+                    setActiveLeague(null);
+                    setUserLeagues([]);
+                    setIsPremium(false);
+                    setLeagueCount(0);
+                    setLoading(false);
+                }
             }
         });
 
         return () => {
-            mounted = false;
-            if (subscription) subscription.unsubscribe();
+            isMounted = false;
+            subscription.unsubscribe();
         };
-    }, []);
+    }, [loadLeagueContext]);
 
     return (
         <LeagueContext.Provider value={{ 
             activeLeague, 
-            setActiveLeague, 
-            userLeaguesList, 
+            userLeagues, 
             loading, 
-            loadLeagueContext,
-            switchActiveLeague 
+            loadLeagueContext, 
+            switchActiveLeague, 
+            isPremium, 
+            setIsPremium,
+            showPremiumModal, 
+            setShowPremiumModal, 
+            leagueCount,
+            setLeagueCount 
         }}>
             {children}
         </LeagueContext.Provider>
     );
-};
+}

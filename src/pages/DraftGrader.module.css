@@ -1,0 +1,75 @@
+.container { padding: 20px; max-width: 800px; margin: 0 auto; color: #f8fafc; font-family: 'Montserrat', sans-serif; box-sizing: border-box; }
+.loading { text-align: center; color: #eebf1c; font-size: 1.2em; font-weight: bold; text-transform: uppercase; margin-top: 100px; letter-spacing: 2px; }
+
+.header { text-align: center; margin-bottom: 30px; }
+.title { color: #f8fafc; text-transform: uppercase; font-size: 2.2em; letter-spacing: 2px; margin-bottom: 5px; font-weight: 900; }
+.subtitle { color: #eebf1c; font-size: 0.95em; text-transform: uppercase; letter-spacing: 1px; font-weight: 800; margin: 0; }
+
+.controlsGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+.controlGroup { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.controlGroup label { color: #94a3b8; font-size: 0.8em; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+
+.dropdown { 
+    padding: 14px 35px 14px 15px; 
+    background: #0b0e14; 
+    border: 1px solid #1e2530; 
+    color: #f8fafc; 
+    border-radius: 8px; 
+    font-weight: 700; 
+    font-family: inherit; 
+    font-size: 1em; 
+    outline: none; 
+    cursor: pointer; 
+    transition: border-color 0.2s; 
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23EEBF1C%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+    background-repeat: no-repeat;
+    background-position: right 15px top 50%;
+    background-size: 12px auto;
+    width: 100%;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.dropdown:focus { border-color: #eebf1c; }
+
+.draftCard { background: #0b0e14; border: 1px solid #1e2530; border-radius: 12px; padding: 25px; margin-bottom: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
+.cardTitle { color: #eebf1c; font-size: 1.2em; text-transform: uppercase; margin-top: 0; margin-bottom: 20px; border-bottom: 1px solid #1e2530; padding-bottom: 10px; font-weight: 800; }
+
+.picksList { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; }
+.pickItem { display: flex; align-items: center; background: #1e2530; padding: 12px 15px; border-radius: 8px; gap: 12px; border: 1px solid rgba(255,255,255,0.05); transition: transform 0.2s; }
+.pickItem:hover { transform: translateY(-2px); border-color: rgba(255,255,255,0.1); }
+.pickBadge { background: #334155; color: #f8fafc; font-size: 0.75em; font-weight: 900; padding: 6px 10px; border-radius: 6px; letter-spacing: 0.5px; }
+.pickMeta { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.pickName { font-weight: 700; font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #f8fafc; }
+.pickPos { color: #94a3b8; font-size: 0.7em; font-weight: 700; text-transform: uppercase; margin-top: 2px; }
+
+.emptyPicks { color: #64748b; text-align: center; padding: 20px; font-style: italic; font-size: 0.95em; }
+
+.actionContainer { text-align: center; margin-bottom: 30px; }
+.evalButton { background: linear-gradient(90deg, #b8860b, #ffd700, #b8860b); background-size: 200% auto; color: #000; border: none; padding: 16px 40px; border-radius: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; width: 100%; max-width: 400px; font-family: inherit; display: inline-flex; align-items: center; justify-content: center; gap: 10px; transition: 0.5s; }
+.evalButton i { font-size: 1.2em; display: flex; align-items: center; }
+.evalButton:hover:not(:disabled) { background-position: right center; box-shadow: 0 0 20px rgba(238, 191, 28, 0.4); }
+.evalButton:disabled { opacity: 0.5; cursor: not-allowed; }
+.analyzing { opacity: 0.8; cursor: wait; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
+.verdictCard { background: #0b0e14; border-radius: 12px; padding: 30px; border: 1px solid rgba(238,191,28,0.3); animation: fadeIn 0.4s ease-out; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.verdictHeader { display: flex; align-items: center; gap: 20px; border-bottom: 1px solid #1e2530; padding-bottom: 20px; margin-bottom: 20px; }
+.gradeCircle { width: 70px; height: 70px; border-radius: 50%; background: #eebf1c; color: #0b0e14; display: flex; align-items: center; justify-content: center; font-size: 2.2em; font-weight: 900; box-shadow: 0 0 20px rgba(238,191,28,0.4); flex-shrink: 0; }
+.verdictSummary { color: #f8fafc; margin: 0; font-weight: 800; font-size: 1.4em; line-height: 1.3; }
+.verdictAnalysis { color: #cbd5e1; line-height: 1.6; font-size: 1em; margin: 0; }
+
+.errorBox { background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
+.errorHeader { color: #ef4444; font-weight: 800; display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 0.9em; text-transform: uppercase; }
+.errorBox p { color: #f8fafc; margin: 0; font-size: 0.9em; }
+
+@media (max-width: 600px) { 
+    .container { padding-bottom: 100px; }
+    .controlsGrid { grid-template-columns: 1fr; } 
+    .verdictHeader { flex-direction: column; text-align: center; gap: 15px; } 
+    .title { font-size: 1.8em; }
+}

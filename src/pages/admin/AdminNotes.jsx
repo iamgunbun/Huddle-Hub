@@ -1,94 +1,61 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useLeague } from '../../context/LeagueContext';
 import { supabase } from '../../supabaseClient';
-import styles from './AdminConstitution.module.css'; // Reusing the same layout styles for consistency
+import { useLeague } from '../../context/LeagueContext';
+import BackButton from '../../components/BackButton';
+import styles from '../Settings.module.css';
 
 export default function AdminNotes() {
-    const { activeLeague, loadLeagueContext } = useLeague();
-    const navigate = useNavigate();
-    
-    const [noteText, setNoteText] = useState('');
-    const [isSaving, setIsSaving] = useState(false);
-    const [saveMessage, setSaveMessage] = useState(null);
+    const { activeLeague } = useLeague();
+    const [note, setNote] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [message, setMessage] = useState('');
 
     useEffect(() => {
-        if (activeLeague && !activeLeague.is_commissioner) {
-            navigate('/');
-        } else if (activeLeague) {
-            setNoteText(activeLeague.commish_note || '');
+        if (activeLeague?.commish_note) {
+            setNote(activeLeague.commish_note);
         }
-    }, [activeLeague, navigate]);
+    }, [activeLeague]);
 
     const handleSave = async () => {
-        setIsSaving(true);
-        setSaveMessage(null);
-
+        if (!activeLeague?.id) return;
+        setSaving(true);
         try {
             const { error } = await supabase
                 .from('leagues')
-                .update({ commish_note: noteText })
+                .update({ commish_note: note })
                 .eq('id', activeLeague.id);
-
             if (error) throw error;
-
-            setSaveMessage({ type: 'success', text: 'Commissioner note updated.' });
-            
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) {
-                await loadLeagueContext(session.user.id, activeLeague.id);
-            }
-        } catch (error) {
-            console.error("Error saving note:", error);
-            setSaveMessage({ type: 'error', text: 'Failed to save. Please try again.' });
+            setMessage('Note saved successfully!');
+            setTimeout(() => setMessage(''), 3000);
+        } catch (err) {
+            setMessage('Error saving note.');
         } finally {
-            setIsSaving(false);
-            setTimeout(() => setSaveMessage(null), 3000);
+            setSaving(false);
         }
     };
 
-    if (!activeLeague) return null;
-
     return (
         <div className={styles.container}>
-            <div className={styles.header}>
-                <h1 className={styles.title}>Admin Dashboard</h1>
-                <h2 className={styles.subtitle}>Edit Commissioner Note</h2>
-            </div>
-
-            <div className={styles.editorCard}>
-                <div className={styles.cardHeader}>
-                    <i className="material-icons">edit_note</i> League Announcement
+            <BackButton />
+            <div className={styles.settingsCard}>
+                <div className={styles.header}>
+                    <i className="material-icons">edit_note</i>
+                    <h1 className={styles.title}>Commissioner's Note</h1>
                 </div>
-                
-                <div className={styles.editorBody}>
-                    <p className={styles.instructions}>
-                        Broadcast a message to the entire league. This note will be pinned directly to the home dashboard.
-                    </p>
-                    
-                    <textarea 
+                <div className={styles.infoGroup}>
+                    <label>Update Dashboard Message</label>
+                    <textarea
                         className={styles.textArea}
-                        style={{ minHeight: '250px' }}
-                        value={noteText}
-                        onChange={(e) => setNoteText(e.target.value)}
-                        placeholder="Write your league announcement here..."
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                        placeholder="Write a message to your league to be displayed on the home page..."
+                        rows={6}
                     />
                 </div>
-
-                <div className={styles.cardFooter}>
-                    {saveMessage && (
-                        <div className={`${styles.message} ${saveMessage.type === 'success' ? styles.success : styles.error}`}>
-                            {saveMessage.text}
-                        </div>
-                    )}
-                    <button 
-                        className={styles.saveBtn} 
-                        onClick={handleSave} 
-                        disabled={isSaving}
-                    >
-                        {isSaving ? 'Saving...' : 'Pin to Dashboard'}
-                    </button>
-                </div>
+                {message && <div className={styles.message}>{message}</div>}
+                <button className={styles.saveBtn} onClick={handleSave} disabled={saving}>
+                    {saving ? 'Saving...' : 'Save Note'}
+                </button>
             </div>
         </div>
     );

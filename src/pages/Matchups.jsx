@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
 import { getLeagueRosters, getLeagueTeamManagers, loadPlayers, getLeagueData } from '../utils/helper';
-import { getTeamFromTeamManagers, formatOpponent } from '../utils/helperFunctions/universalFunctions';
+import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
 import PlayerModal from '../components/PlayerModal';
 import styles from './Matchups.module.css';
 
@@ -15,14 +15,14 @@ export default function Matchups() {
     const [leagueData, setLeagueData] = useState(null);
     const [myRosterId, setMyRosterId] = useState(null);
     
-    // View & Toggle States
     const [viewMode, setViewMode] = useState('mine'); 
     const [activeWeek, setActiveWeek] = useState(1);
+    
     const [weeklyMatchups, setWeeklyMatchups] = useState([]);
     const [weeklyProjections, setWeeklyProjections] = useState({});
+    const [weeklyStats, setWeeklyStats] = useState({}); 
     const [nflScheduleMap, setNflScheduleMap] = useState({});
     
-    // FIX 1: Restored selectedMatchupId state
     const [selectedMatchupId, setSelectedMatchupId] = useState(null);
     const [expandedMatchups, setExpandedMatchups] = useState({});
     const [selectedPlayer, setSelectedPlayer] = useState(null);
@@ -42,7 +42,6 @@ export default function Matchups() {
         return playersInfo[pId] || playersInfo[String(pId)] || playersInfo[Number(pId)] || null;
     };
 
-    // 1. Initial Load
     useEffect(() => {
         let isMounted = true;
         const load = async () => {
@@ -57,14 +56,14 @@ export default function Matchups() {
                     getLeagueData(sleeperId)
                 ]);
                 if (!isMounted) return;
-                                 
+                
                 setRosters(rData.rosters || {});
                 setTeamManagers(tmData);
                 setPlayersInfo(pData.players || {});
                 setLeagueData(lData);
                 
                 if (lData?.display_week) setActiveWeek(lData.display_week);
-                                 
+                
                 const { data: sessionData } = await supabase.auth.getSession();
                 const user = sessionData?.session?.user;
                 
@@ -93,13 +92,11 @@ export default function Matchups() {
         return () => { isMounted = false; };
     }, [activeLeague]);
 
-    // 2. Fetch Weekly Matchups, Projections, AND Valid Weekly Schedule Endpoint
     useEffect(() => {
         const season = leagueData?.season || new Date().getFullYear();
         if (!activeLeague?.sleeper_league_id) return;
         let isMounted = true;
         
-        // Matchups Fetch
         fetch(`https://api.sleeper.app/v1/league/${activeLeague.sleeper_league_id}/matchups/${activeWeek}`)
             .then(res => res.json())
             .then(mData => {
@@ -116,34 +113,60 @@ export default function Matchups() {
             })
             .catch(err => console.error("Matchups fetch err:", err));
 
-        // Projections Fetch
-        fetch(`https://api.sleeper.app/v1/projections/nfl/regular/${season}/${activeWeek}`)
+        fetch(`https://api.sleeper.com/projections/nfl/${season}/${activeWeek}?season_type=regular`)
             .then(res => res.json())
-            .then(pData => {
-                if (isMounted) setWeeklyProjections(pData || {});
+            .then(data => {
+                if (isMounted) {
+                    if (Array.isArray(data)) {
+                        const map = {};
+                        data.forEach(item => { if (item.player_id) map[item.player_id] = item; });
+                        setWeeklyProjections(map);
+                    } else {
+                        setWeeklyProjections(data || {});
+                    }
+                }
             })
             .catch(err => console.error("Projections fetch err:", err));
 
-        // FIX 2: Valid Weekly Schedule Endpoint (Prevents 404 & JSON Crash)
-        fetch(`https://api.sleeper.app/v1/schedule/nfl/regular/${season}/${activeWeek}`)
+        fetch(`https://api.sleeper.com/stats/nfl/${season}/${activeWeek}?season_type=regular`)
             .then(res => res.json())
-            .then(sData => {
-                if (isMounted && Array.isArray(sData)) {
+            .then(data => {
+                if (isMounted) {
+                    if (Array.isArray(data)) {
+                        const map = {};
+                        data.forEach(item => { if (item.player_id) map[item.player_id] = item; });
+                        setWeeklyStats(map);
+                    } else {
+                        setWeeklyStats(data || {});
+                    }
+                }
+            })
+            .catch(err => console.error("Stats fetch err:", err));
+
+        // PERFECT FIX: ESPN Scoreboard for absolute Home/Away accuracy
+        fetch(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&week=${activeWeek}&dates=${season}`)
+            .then(res => res.json())
+            .then(data => {
+                if (isMounted && data?.events) {
                     const map = {};
-                    sData.forEach(game => {
-                        const homeTeam = game.home_team || game.home;
-                        const awayTeam = game.away_team || game.away;
-                        if (homeTeam && awayTeam) {
-                            const home = normalizeTeam(homeTeam);
-                            const away = normalizeTeam(awayTeam);
-                            map[home] = `VS ${away}`;
-                            map[away] = `@${home}`;
+                    data.events.forEach(event => {
+                        const comp = event.competitions?.[0];
+                        if (comp && comp.competitors) {
+                            const homeTeam = comp.competitors.find(c => c.homeAway === 'home')?.team?.abbreviation;
+                            const awayTeam = comp.competitors.find(c => c.homeAway === 'away')?.team?.abbreviation;
+                            
+                            if (homeTeam && awayTeam) {
+                                const home = normalizeTeam(homeTeam);
+                                const away = normalizeTeam(awayTeam);
+                                map[home] = `VS ${away}`;
+                                map[away] = `@ ${home}`; 
+                            }
                         }
                     });
                     setNflScheduleMap(map);
                 }
             })
-            .catch(err => console.error("Schedule fetch err:", err));
+            .catch(err => console.error("ESPN Schedule fetch err:", err));
 
         return () => { isMounted = false; };
     }, [activeLeague, activeWeek, leagueData?.season, myRosterId]);
@@ -159,55 +182,58 @@ export default function Matchups() {
     const getPlayerProjPts = (pId) => {
         if (!pId || pId === "0") return '0.00';
         const playerObj = getPlayerObj(pId);
-        const proj = weeklyProjections[pId];
+        const proj = weeklyProjections[pId] || weeklyStats[pId]; 
         const scoringSettings = leagueData?.scoring_settings || {};
 
         if (proj) {
             const stats = proj.stats || proj || {};
             let customPts = 0;
             let hasValidStats = false;
-
             for (const [statKey, statMultiplier] of Object.entries(scoringSettings)) {
                 if (stats[statKey] !== undefined && typeof stats[statKey] === 'number') {
                     customPts += (stats[statKey] * statMultiplier);
                     hasValidStats = true;
                 }
             }
-
             if (playerObj?.pos === 'TE' && scoringSettings.bonus_rec_te && stats.rec) {
                 customPts += (stats.rec * scoringSettings.bonus_rec_te);
             }
-
             if (hasValidStats && customPts > 0) return customPts.toFixed(2);
-
+            
             const rec = scoringSettings.rec || 0;
             let key = 'pts_std';
             if (rec === 1) key = 'pts_ppr';
             else if (rec === 0.5) key = 'pts_half_ppr';
-
             const basePts = stats[key] || proj[key] || 0;
             if (basePts > 0) return parseFloat(basePts).toFixed(2);
         }
-
         const cachePts = playerObj?.wi?.[activeWeek]?.p ? parseFloat(playerObj.wi[activeWeek].p) : 0;
         return cachePts > 0 ? cachePts.toFixed(2) : '0.00';
     };
 
     const getMatchupOpp = (pId) => {
         const playerObj = getPlayerObj(pId);
-        if (!playerObj) return '';
-        const team = normalizeTeam(playerObj.t || playerObj.team);
+        const proj = weeklyProjections[pId];
+        const stats = weeklyStats[pId];
         
+        if (!playerObj && !proj && !stats) return '';
+
+        const team = normalizeTeam(playerObj?.t || playerObj?.team);
+
+        // 1. Precise Schedule Map (ESPN Data)
         if (team && nflScheduleMap[team]) {
             return nflScheduleMap[team];
         }
-        if (weeklyProjections[pId]?.opponent) {
-            return formatOpponent(weeklyProjections[pId].opponent);
-        }
-        if (playerObj?.wi?.[activeWeek]?.opp) {
-            return formatOpponent(playerObj.wi[activeWeek].opp);
-        }
-        return 'BYE';
+
+        // 2. Fallbacks
+        let rawOpp = playerObj?.wi?.[activeWeek]?.opp || stats?.opponent || proj?.opponent || '';
+
+        if (!rawOpp || rawOpp === '-' || rawOpp === 'BYE') return 'BYE';
+
+        let isAway = rawOpp.includes('@');
+        let cleanOpp = rawOpp.replace(/[@]/g, '').replace(/vs\.?/gi, '').trim().toUpperCase();
+
+        return isAway ? `@ ${cleanOpp}` : `VS ${cleanOpp}`;
     };
 
     const formatShortName = (pObj) => {
@@ -253,7 +279,6 @@ export default function Matchups() {
 
         let leftProjTotal = 0;
         leftStarters.forEach(id => leftProjTotal += parseFloat(getPlayerProjPts(id)));
-
         let rightProjTotal = 0;
         rightStarters.forEach(id => rightProjTotal += parseFloat(getPlayerProjPts(id)));
 
@@ -312,12 +337,10 @@ export default function Matchups() {
                 {isExpanded && (
                     <div className={styles.startersSection}>
                         <h4 className={styles.startersHeader}>Starters</h4>
-
                         <div className={styles.matchupGrid}>
                             {leftStarters.map((leftPId, idx) => {
                                 const rightPId = rightStarters[idx] || "0";
                                 const posLabel = rosterPositions[idx] || 'FLEX';
-
                                 const leftP = getPlayerObj(leftPId);
                                 const rightP = getPlayerObj(rightPId);
                                 const cleanPos = posLabel.replace('WRRB_FLEX', 'FLEX').replace('SUPER_FLEX', 'S/FLEX');
@@ -375,7 +398,6 @@ export default function Matchups() {
                                     {[...Array(maxBenchLength).keys()].map((idx) => {
                                         const leftPId = leftBench[idx] || "0";
                                         const rightPId = rightBench[idx] || "0";
-
                                         const leftP = getPlayerObj(leftPId);
                                         const rightP = getPlayerObj(rightPId);
 

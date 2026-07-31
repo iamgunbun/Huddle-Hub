@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLeague } from '../context/LeagueContext';
 import { loadPlayers, getLeagueData, getLeagueRosters } from '../utils/helper';
-import { formatOpponent } from '../utils/helperFunctions/universalFunctions';
 import PlayerModal from '../components/PlayerModal';
 import styles from './Players.module.css';
 
@@ -15,31 +14,31 @@ export default function Players() {
     // Live Data
     const [activeWeek, setActiveWeek] = useState(1);
     const [weeklyProjections, setWeeklyProjections] = useState({});
+    const [weeklyStats, setWeeklyStats] = useState({}); 
     const [nflScheduleMap, setNflScheduleMap] = useState({});
     const [trendingUp, setTrendingUp] = useState([]);
     const [trendingDown, setTrendingDown] = useState([]);
     
     // Navigation & Filters
-    const [activeTab, setActiveTab] = useState('available'); // 'available', 'trends', 'news'
+    const [activeTab, setActiveTab] = useState('available');
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [posFilter, setPosFilter] = useState('ALL');
-    const [trendFilter, setTrendFilter] = useState('up'); // 'up', 'down'
-    const [newsFilter, setNewsFilter] = useState('all'); // 'all', 'fantasy'
+    const [trendFilter, setTrendFilter] = useState('up');
+    const [newsFilter, setNewsFilter] = useState('all');
     
     const [selectedPlayer, setSelectedPlayer] = useState(null);
 
     const positions = ['ALL', 'QB', 'RB', 'WR', 'TE', 'DEF', 'K'];
 
-    // Sample News Items
     const rawNewsFeed = [
         { id: 1, tag: 'Breaking', category: 'all', time: '2h ago', title: 'Latest training camp updates around the league', desc: 'Coaches are adjusting depth charts as the preseason games approach. Keep an eye on backup running backs getting first-team reps.' },
-        { id: 2, tag: 'Fantasy', category: 'fantasy', time: '5h ago', title: `Top waiver wire targets for Week ${activeWeek}`, desc: 'A breakdown of the highest projected players currently available in standard formats.' },
+        { id: 2, tag: 'Fantasy', category: 'fantasy', time: '12h ago', title: `Top waiver wire targets for Week ${activeWeek}`, desc: 'A breakdown of the highest projected players currently available in standard formats.' },
         { id: 3, tag: 'Injury Report', category: 'all', time: '1d ago', title: 'Key players questionable heading into the weekend', desc: 'Monitor practice logs closely. Several high-profile starters were limited in Friday\'s sessions.' },
-        { id: 4, tag: 'Fantasy', category: 'fantasy', time: '1d ago', title: 'Start \'Em, Sit \'Em: High upside flex options', desc: 'Analyzing target shares and matchup advantages for upcoming weekly rosters.' }
+        { id: 4, tag: 'Fantasy', category: 'fantasy', time: '2d ago', title: 'Start \'Em, Sit \'Em: High upside flex options', desc: 'Analyzing target shares and matchup advantages for upcoming weekly rosters.' },
+        { id: 5, tag: 'Transactions', category: 'all', time: '3d ago', title: 'Major trades shake up fantasy landscapes', desc: 'Recent blockbuster moves have opened up huge opportunities for rookie WRs.' }
     ];
 
-    // Normalize team names for schedule lookup
     const normalizeTeam = (t) => {
         if (!t) return '';
         const map = { WSH: 'WAS', JAC: 'JAX', LA: 'LAR', NOH: 'NO' };
@@ -47,7 +46,6 @@ export default function Players() {
         return map[upper] || upper;
     };
 
-    // 1. Initial Load
     useEffect(() => {
         let isMounted = true;
         const load = async () => {
@@ -67,61 +65,89 @@ export default function Players() {
                 setRosters(rData.rosters || {});
                 if (lData?.display_week) setActiveWeek(lData.display_week);
                 
-            } catch (e) { 
-                console.error("Failed to load base player data:", e); 
-            } finally { 
-                if (isMounted) setLoading(false); 
+            } catch (e) {
+                console.error("Failed to load base player data:", e);
+            } finally {
+                if (isMounted) setLoading(false);
             }
         };
         load();
         return () => { isMounted = false; };
     }, [activeLeague]);
 
-    // 2. Fetch Projections, Schedule, and Trends
     useEffect(() => {
         const season = leagueData?.season || new Date().getFullYear();
         let isMounted = true;
 
-        // Projections
-        fetch(`https://api.sleeper.app/v1/projections/nfl/regular/${season}/${activeWeek}`)
+        fetch(`https://api.sleeper.com/projections/nfl/${season}/${activeWeek}?season_type=regular`)
             .then(res => res.json())
-            .then(data => { if (isMounted) setWeeklyProjections(data || {}); })
+            .then(data => {
+                if (isMounted) {
+                    if (Array.isArray(data)) {
+                        const map = {};
+                        data.forEach(item => { if (item.player_id) map[item.player_id] = item; });
+                        setWeeklyProjections(map);
+                    } else {
+                        setWeeklyProjections(data || {});
+                    }
+                }
+            })
             .catch(err => console.error("Proj error:", err));
 
-        // Schedule
-        fetch(`https://api.sleeper.app/v1/schedule/nfl/regular/${season}/${activeWeek}`)
+        fetch(`https://api.sleeper.com/stats/nfl/${season}/${activeWeek}?season_type=regular`)
             .then(res => res.json())
-            .then(sData => {
-                if (isMounted && Array.isArray(sData)) {
+            .then(data => {
+                if (isMounted) {
+                    if (Array.isArray(data)) {
+                        const map = {};
+                        data.forEach(item => { if (item.player_id) map[item.player_id] = item; });
+                        setWeeklyStats(map);
+                    } else {
+                        setWeeklyStats(data || {});
+                    }
+                }
+            })
+            .catch(err => console.error("Stats error:", err));
+
+        // PERFECT FIX: ESPN Scoreboard for absolute Home/Away accuracy
+        fetch(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&week=${activeWeek}&dates=${season}`)
+            .then(res => res.json())
+            .then(data => {
+                if (isMounted && data?.events) {
                     const map = {};
-                    sData.forEach(game => {
-                        const home = normalizeTeam(game.home_team || game.home);
-                        const away = normalizeTeam(game.away_team || game.away);
-                        if (home && away) {
-                            map[home] = `VS ${away}`;
-                            map[away] = `@${home}`;
+                    data.events.forEach(event => {
+                        const comp = event.competitions?.[0];
+                        if (comp && comp.competitors) {
+                            const homeTeam = comp.competitors.find(c => c.homeAway === 'home')?.team?.abbreviation;
+                            const awayTeam = comp.competitors.find(c => c.homeAway === 'away')?.team?.abbreviation;
+                            
+                            if (homeTeam && awayTeam) {
+                                const home = normalizeTeam(homeTeam);
+                                const away = normalizeTeam(awayTeam);
+                                map[home] = `VS ${away}`;
+                                map[away] = `@ ${home}`; 
+                            }
                         }
                     });
                     setNflScheduleMap(map);
                 }
-            }).catch(err => console.error("Sched error:", err));
+            })
+            .catch(err => console.error("ESPN Schedule fetch err:", err));
 
-        // Trends
-        fetch('https://api.sleeper.app/v1/players/nfl/trending/add?lookback_hours=24&limit=30')
+        fetch('https://api.sleeper.app/v1/players/nfl/trending/add?lookback_hours=72&limit=30')
             .then(res => res.json())
             .then(data => { if (isMounted) setTrendingUp(data || []); }).catch(console.error);
 
-        fetch('https://api.sleeper.app/v1/players/nfl/trending/drop?lookback_hours=24&limit=30')
+        fetch('https://api.sleeper.app/v1/players/nfl/trending/drop?lookback_hours=72&limit=30')
             .then(res => res.json())
             .then(data => { if (isMounted) setTrendingDown(data || []); }).catch(console.error);
 
         return () => { isMounted = false; };
     }, [activeWeek, leagueData?.season]);
 
-    // Calculate Projected Points
     const getProjPts = (pId) => {
         if (!pId) return '0.00';
-        const proj = weeklyProjections[pId];
+        const proj = weeklyProjections[pId] || weeklyStats[pId];
         if (proj) {
             const stats = proj.stats || proj || {};
             const scoringSettings = leagueData?.scoring_settings || {};
@@ -147,20 +173,34 @@ export default function Players() {
 
     const getMatchupText = (playerObj) => {
         if (!playerObj) return '';
+        const pId = playerObj.player_id || playerObj.id;
+        const proj = weeklyProjections[pId];
+        const stats = weeklyStats[pId];
         const team = normalizeTeam(playerObj.t || playerObj.team);
-        if (team && nflScheduleMap[team]) return nflScheduleMap[team];
-        if (playerObj.wi?.[activeWeek]?.opp) return formatOpponent(playerObj.wi[activeWeek].opp);
-        return 'BYE';
+
+        // 1. Precise Schedule Map (ESPN Data)
+        if (team && nflScheduleMap[team]) {
+            return nflScheduleMap[team];
+        }
+
+        // 2. Fallbacks
+        let rawOpp = playerObj?.wi?.[activeWeek]?.opp || stats?.opponent || proj?.opponent || '';
+
+        if (!rawOpp || rawOpp === '-' || rawOpp === 'BYE') return 'BYE';
+
+        let isAway = rawOpp.includes('@');
+        let cleanOpp = rawOpp.replace(/[@]/g, '').replace(/vs\.?/gi, '').trim().toUpperCase();
+
+        return isAway ? `@ ${cleanOpp}` : `VS ${cleanOpp}`;
     };
 
     const getAvatar = (pId, pos) => pos === 'DEF' 
         ? `https://sleepercdn.com/images/team_logos/nfl/${String(pId).toLowerCase()}.png` 
         : `https://sleepercdn.com/content/nfl/players/thumb/${pId}.jpg`;
 
-    // 3. Robust Available Players Processing
     const availablePlayers = useMemo(() => {
         if (!playersInfo || Object.keys(playersInfo).length === 0) return [];
-
+        
         const ownedSet = new Set();
         if (rosters && typeof rosters === 'object') {
             Object.values(rosters).forEach(r => {
@@ -169,16 +209,15 @@ export default function Players() {
                 }
             });
         }
-
+        
         const validPositions = new Set(['QB', 'RB', 'WR', 'TE', 'DEF', 'K']);
-
         let list = Object.entries(playersInfo).map(([id, p]) => {
             const pId = p.player_id || id;
             const pos = p.pos || p.position;
             const firstName = p.fn || p.first_name || '';
             const lastName = p.ln || p.last_name || '';
             const team = p.t || p.team || 'FA';
-
+            
             return {
                 ...p,
                 player_id: pId,
@@ -208,12 +247,10 @@ export default function Players() {
                 return fn.includes(q) || ln.includes(q) || full.includes(q);
             });
         }
-
-        // Sort by Highest Projected Points first
+        
         return list.sort((a, b) => b.projVal - a.projVal).slice(0, 100);
-    }, [playersInfo, rosters, posFilter, searchQuery, weeklyProjections, nflScheduleMap]);
+    }, [playersInfo, rosters, posFilter, searchQuery, weeklyProjections, weeklyStats, nflScheduleMap]);
 
-    // News Filtered Feed
     const filteredNews = useMemo(() => {
         if (newsFilter === 'fantasy') {
             return rawNewsFeed.filter(item => item.category === 'fantasy');
@@ -221,7 +258,6 @@ export default function Players() {
         return rawNewsFeed;
     }, [newsFilter, activeWeek]);
 
-    // Render Player Row Component
     const renderPlayerRow = (pId, pObj = null, trendCount = null) => {
         const player = pObj || playersInfo[pId] || playersInfo[String(pId)];
         if (!player) return null;
@@ -261,7 +297,6 @@ export default function Players() {
 
     return (
         <div className={styles.container}>
-            {/* TOP HEADER NAV WITH SEARCH ICON ON LEFT */}
             <div className={styles.topHeader}>
                 <button className={styles.searchToggleBtn} onClick={() => setIsSearchOpen(!isSearchOpen)}>
                     <i className="material-icons">{isSearchOpen ? 'close' : 'search'}</i>
@@ -273,7 +308,6 @@ export default function Players() {
                 </div>
             </div>
 
-            {/* EXPANDABLE SEARCH BAR */}
             {isSearchOpen && (
                 <div className={styles.searchContainer}>
                     <input 
@@ -287,10 +321,7 @@ export default function Players() {
                 </div>
             )}
 
-            {/* MAIN CONTENT AREA */}
             <div className={styles.contentArea}>
-                
-                {/* 1. AVAILABLE TAB */}
                 {activeTab === 'available' && (
                     <>
                         <div className={styles.posFilterBar}>
@@ -314,7 +345,6 @@ export default function Players() {
                     </>
                 )}
 
-                {/* 2. TRENDS TAB */}
                 {activeTab === 'trends' && (
                     <>
                         <div className={styles.trendToggleBar}>
@@ -340,7 +370,6 @@ export default function Players() {
                     </>
                 )}
 
-                {/* 3. NEWS TAB WITH WORKING FILTER */}
                 {activeTab === 'news' && (
                     <>
                         <div className={styles.trendToggleBar}>
@@ -374,7 +403,6 @@ export default function Players() {
                         </div>
                     </>
                 )}
-
             </div>
 
             {selectedPlayer && (

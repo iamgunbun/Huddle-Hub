@@ -1,0 +1,18 @@
+.overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(5px); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.modal { background: #0b0e14; border: 1px solid #eebf1c; border-radius: 16px; padding: 40px 30px; max-width: 450px; width: 100%; position: relative; box-shadow: 0 10px 50px rgba(238, 191, 28, 0.2); animation: scaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+@keyframes scaleIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+
+.closeBtn { position: absolute; top: 15px; right: 15px; background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 5px; display: flex; transition: color 0.2s; }
+.closeBtn:hover { color: #f8fafc; }
+
+.header { text-align: center; margin-bottom: 30px; }
+.title { color: #f8fafc; text-transform: uppercase; font-size: 2em; letter-spacing: 2px; margin: 0 0 10px 0; font-weight: 900; }
+.subtitle { color: #eebf1c; font-size: 1em; font-weight: 700; margin: 0; }
+
+.featureList { list-style: none; padding: 0; margin: 0 0 35px 0; display: flex; flex-direction: column; gap: 15px; }
+.featureList li { display: flex; align-items: flex-start; gap: 12px; color: #cbd5e1; font-size: 0.95em; line-height: 1.5; }
+.featureList i { color: #00ceb8; font-size: 1.4em; flex-shrink: 0; margin-top: 2px; }
+.featureList strong { color: #f8fafc; }
+
+.upgradeBtn { width: 100%; padding: 18px; background: #eebf1c; color: #0b0e14; border: none; border-radius: 8px; font-weight: 900; font-size: 1.1em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; transition: all 0.2s; font-family: inherit; }
+.upgradeBtn:hover { background: #facc15; transform: translateY(-3px); box-shadow: 0 5px 20px rgba(238, 191, 28, 0.4); }

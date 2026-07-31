@@ -1,0 +1,30 @@
+.backBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #1e2530;
+    border: 1px solid #334155;
+    color: #cbd5e1;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700;
+    font-size: 0.8em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-bottom: 25px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+}
+
+.backBtn:hover {
+    background: #0b0e14;
+    color: #eebf1c;
+    border-color: #eebf1c;
+    transform: translateX(-3px);
+}
+
+.backBtn i {
+    font-size: 1.4em;
+}

@@ -49,7 +49,13 @@ export default function ChatDrawer() {
             return;
         }
 
-        if (pushEnabled) {
+        // 1. Check if the browser supports web push
+        if (!('Notification' in window)) {
+            alert("This browser or device does not support web notifications.");
+            return;
+        }
+
+        if (pushEnabled || Notification.permission === 'granted') {
             alert("Notifications are already enabled for this device!");
             return;
         }
@@ -57,6 +63,16 @@ export default function ChatDrawer() {
         setIsSubscribing(true);
 
         try {
+            // 2. Explicitly ask for permission FIRST (Crucial for iOS PWAs)
+            const permission = await Notification.requestPermission();
+            
+            if (permission !== 'granted') {
+                alert("Notification permission was denied. You must unblock them in your device settings.");
+                setIsSubscribing(false);
+                return;
+            }
+
+            // 3. Now that permission is granted, run your background subscription helper
             const subscription = await subscribeToWebPush();
             
             if (subscription) {
@@ -68,6 +84,7 @@ export default function ChatDrawer() {
                 if (error) throw error;
                 
                 setPushEnabled(true);
+                alert("Notifications successfully enabled!");
             }
         } catch (err) {
             console.error("Subscription failed:", err);

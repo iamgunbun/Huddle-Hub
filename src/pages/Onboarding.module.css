@@ -1,0 +1,17 @@
+.container { display: flex; flex-direction: column; justify-content: space-between; align-items: center; min-height: 100vh; background: #0b0e14; padding: 40px 20px; box-sizing: border-box; font-family: 'Montserrat', sans-serif; text-align: center; }
+.slideContainer { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; animation: fadeIn 0.4s ease-out; max-width: 400px; }
+@keyframes fadeIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+
+.title { color: #f8fafc; text-transform: uppercase; font-size: 2.2em; letter-spacing: 2px; margin: 0 0 20px 0; font-weight: 900; line-height: 1.2; }
+.desc { color: #94a3b8; font-size: 1.1em; line-height: 1.6; margin: 0; }
+
+.controls { width: 100%; max-width: 400px; display: flex; flex-direction: column; align-items: center; gap: 30px; }
+.dots { display: flex; gap: 10px; }
+.dot { width: 12px; height: 12px; border-radius: 50%; background: #334155; transition: all 0.3s; }
+.activeDot { background: #eebf1c; transform: scale(1.2); }
+
+.actionBtn { width: 100%; padding: 18px; background: #eebf1c; color: #0b0e14; border: none; border-radius: 8px; font-weight: 900; font-size: 1.1em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; transition: all 0.2s; font-family: inherit; }
+.actionBtn:hover { background: #facc15; transform: translateY(-3px); box-shadow: 0 5px 20px rgba(238, 191, 28, 0.4); }
+
+.actionBtnSecondary { width: 100%; padding: 18px; background: transparent; color: #cbd5e1; border: 1px solid #334155; border-radius: 8px; font-weight: 900; font-size: 1.1em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; transition: all 0.2s; font-family: inherit; }
+.actionBtnSecondary:hover { border-color: #eebf1c; color: #eebf1c; }

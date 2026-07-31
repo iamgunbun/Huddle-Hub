@@ -5,6 +5,17 @@ export const tabs = [
     { icon: 'groups', label: 'Players', dest: '/players', key: 'players' },
     { icon: 'swap_horiz', label: 'Transactions', dest: '/transactions', key: 'transactions' },
     {
+        icon: 'build',
+        label: 'Tools & Graders',
+        nest: true,
+        key: 'tools',
+        children: [
+            { icon: 'psychology', label: 'Start / Sit', dest: '/start-sit' },
+            { icon: 'gavel', label: 'Trade Grader', dest: '/trade-analyzer' },
+            { icon: 'school', label: 'Draft Grader', dest: '/draft-analyzer' },
+        ]
+    },
+    {
         icon: 'view_comfy',
         label: 'League Info',
         nest: true,
@@ -21,5 +32,16 @@ export const tabs = [
             { icon: 'sports_football', label: 'Go to Sleeper', dest: `https://sleeper.app/leagues/` }
         ]
     },
-    
+    {
+        icon: 'settings',
+        label: 'Settings',
+        nest: true,
+        key: 'settings',
+        children: [
+            { icon: 'person', label: 'User Account', dest: '/account' },
+            { icon: 'edit_note', label: 'Admin: Notes', dest: '/admin/notes' },
+            { icon: 'payments', label: 'Admin: Fees', dest: '/admin/fees' },
+            { icon: 'gavel', label: 'Admin: Constitution', dest: '/admin/constitution' }
+        ]
+    }
 ];

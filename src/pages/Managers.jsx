@@ -23,18 +23,19 @@ const parseAiResponse = (rawText) => {
 };
 
 export default function Managers() {
-    const { activeLeague } = useLeague();
+    const { activeLeague, isPremium, setShowPremiumModal } = useLeague();
     const [searchParams, setSearchParams] = useSearchParams();
     
     const [loading, setLoading] = useState(true);
     const [mergedManagers, setMergedManagers] = useState([]);
     const [myManagerId, setMyManagerId] = useState(null);
     
+    // Engine State
     const [evaluations, setEvaluations] = useState({});
-    const [regenStatus, setRegenStatus] = useState({});
+    const [evalRecords, setEvalRecords] = useState({}); // Stores the raw DB row to track usage dynamically
     const [evalLoading, setEvalLoading] = useState(false);
     const [uiErrorMessage, setUiErrorMessage] = useState(null);
-          
+    
     const selectedManagerId = searchParams.get('manager');
     const selectedManager = mergedManagers.find(m => m.managerId === selectedManagerId);
     
@@ -99,6 +100,7 @@ export default function Managers() {
                     const rings = [];
                     const runnerUps = [];
                     const toiletBowls = [];
+
                     (podiumsData || []).forEach(p => {
                         const yearRosters = tmData.teamManagersMap[p.year] || {};
                         if (yearRosters[p.champion]?.managers?.includes(primaryManagerId)) rings.push(p.year);
@@ -123,6 +125,7 @@ export default function Managers() {
                 }
                 formatted.sort((a, b) => b.rings.length - a.rings.length);
                 setMergedManagers(formatted);
+
             } catch (e) {
                 console.error("Failed to load managers layout:", e);
             } finally {
@@ -135,6 +138,7 @@ export default function Managers() {
     const runEvaluation = async (manager, forceRegenerate = false, autoCheckOnly = false) => {
         setEvalLoading(true);
         setUiErrorMessage(null);
+        
         try {
             const currentYear = new Date().getFullYear();
             
@@ -146,12 +150,17 @@ export default function Managers() {
                 .eq('year', currentYear)
                 .maybeSingle();
 
+            // Handle legacy rows where 'regenerated' was a boolean instead of a counter
+            const currentRegens = existing?.regen_count ?? (existing?.regenerated ? 1 : 0);
+            const regenLimit = isPremium ? 5 : 1;
+
+            // 1. Initial Cache Load (Silent Auto-Check on page load)
             if (existing && !forceRegenerate) {
-                try { 
+                try {
                     const parsed = parseAiResponse(existing.evaluation_text);
                     setEvaluations(prev => ({ ...prev, [manager.managerId]: parsed }));
-                    setRegenStatus(prev => ({ ...prev, [manager.managerId]: existing.regenerated }));
-                } catch (e) { 
+                    setEvalRecords(prev => ({ ...prev, [manager.managerId]: existing }));
+                } catch (e) {
                     console.error("Cache Parsing Failed:", e);
                     setUiErrorMessage("The cached evaluation was corrupted. Please regenerate.");
                 }
@@ -159,12 +168,20 @@ export default function Managers() {
                 return;
             }
 
-            if (existing && forceRegenerate && existing.regenerated) {
-                alert("This manager's evaluation has already been manually regenerated this season.");
-                setEvalLoading(false);
-                return;
+            // 2. Active Paywall & Limit Check for forced regeneration
+            if (existing && forceRegenerate) {
+                if (currentRegens >= regenLimit) {
+                    if (!isPremium) {
+                        setShowPremiumModal(true);
+                    } else {
+                        alert(`You have reached the absolute maximum of ${regenLimit} scouting reports for this manager this season.`);
+                    }
+                    setEvalLoading(false);
+                    return;
+                }
             }
 
+            // Stop here if we were only passively checking on mount
             if (autoCheckOnly) {
                 setEvalLoading(false);
                 return; 
@@ -206,21 +223,30 @@ export default function Managers() {
             
             let newEvalParsed = parseAiResponse(data.evaluation); 
 
+            // Save to database and instantly update local state so UI unlocks
             if (existing && forceRegenerate) {
-                await supabase.from('ai_evaluations').update({ evaluation_text: data.evaluation, regenerated: true }).eq('id', existing.id);
-                setRegenStatus(prev => ({ ...prev, [manager.managerId]: true }));
+                const updatedRow = await supabase.from('ai_evaluations')
+                    .update({ evaluation_text: data.evaluation, regen_count: currentRegens + 1 })
+                    .eq('id', existing.id)
+                    .select().single();
+                    
+                setEvalRecords(prev => ({ ...prev, [manager.managerId]: updatedRow.data }));
             } else if (!existing) {
-                await supabase.from('ai_evaluations').insert({
-                    manager_id: manager.managerId,
-                    league_id: activeLeague.sleeper_league_id,
-                    year: currentYear,
-                    evaluation_text: data.evaluation,
-                    regenerated: false
-                });
-                setRegenStatus(prev => ({ ...prev, [manager.managerId]: false }));
+                const newRow = await supabase.from('ai_evaluations')
+                    .insert({
+                        manager_id: manager.managerId,
+                        league_id: activeLeague.sleeper_league_id,
+                        year: currentYear,
+                        evaluation_text: data.evaluation,
+                        regen_count: 1
+                    })
+                    .select().single();
+                    
+                setEvalRecords(prev => ({ ...prev, [manager.managerId]: newRow.data }));
             }
 
             setEvaluations(prev => ({ ...prev, [manager.managerId]: newEvalParsed }));
+
         } catch (err) {
             console.error("Scouting Pipeline Root Error:", err);
             setUiErrorMessage(err.message || "Failed to parse system response.");
@@ -239,8 +265,14 @@ export default function Managers() {
 
     if (selectedManager) {
         const evalData = evaluations[selectedManager.managerId];
-        const hasRegenerated = regenStatus[selectedManager.managerId];
         const canRegenerate = activeLeague?.is_commissioner || myManagerId === selectedManager.managerId;
+        
+        // Dynamically calculate remaining limit for UI. If they upgrade to premium, maxRegens instantly becomes 5.
+        const dbRecord = evalRecords[selectedManager.managerId];
+        const usedRegens = dbRecord?.regen_count ?? (dbRecord?.regenerated ? 1 : 0);
+        const maxRegens = isPremium ? 5 : 1;
+        const remainingRegens = Math.max(0, maxRegens - usedRegens);
+        const hasMaxedRegens = usedRegens >= maxRegens;
 
         return (
             <div className={styles.container}>
@@ -262,18 +294,19 @@ export default function Managers() {
                             <h4 className={styles.sectionHeading}>Historical Accolades</h4>
                             <div className={styles.accoladesList}>
                                 <div className={styles.accoladeItem}>
-                                    <span className={styles.emoji}>🏆</span> 
+                                    <span className={styles.emoji}> </span> 
                                     <strong>Championships:</strong> {selectedManager.rings.length > 0 ? selectedManager.rings.join(', ') : 'None'}
                                 </div>
                                 <div className={styles.accoladeItem}>
-                                    <span className={styles.emoji}>🥈</span> 
+                                    <span className={styles.emoji}> </span> 
                                     <strong>Runner-Ups:</strong> {selectedManager.runnerUps.length > 0 ? selectedManager.runnerUps.join(', ') : 'None'}
                                 </div>
                                 <div className={styles.accoladeItem}>
-                                    <span className={styles.emoji}>🚽</span> 
+                                    <span className={styles.emoji}> </span> 
                                     <strong>Toilet Bowls:</strong> {selectedManager.toiletBowls.length > 0 ? selectedManager.toiletBowls.join(', ') : 'None'}
                                 </div>
                             </div>
+
                             <h4 className={styles.sectionHeading} style={{marginTop: '30px'}}>All-Time Record</h4>
                             <div className={styles.recordBox}>
                                 {selectedManager.record.wins}W - {selectedManager.record.losses}L {selectedManager.record.ties > 0 ? `- ${selectedManager.record.ties}T` : ''}
@@ -294,7 +327,7 @@ export default function Managers() {
                                             Generate AI Scouting Report
                                         </button>
                                         <div style={{ fontSize: '0.75em', color: '#94a3b8', lineHeight: '1.5', padding: '0 10px' }}>
-                                            <p style={{ margin: '0 0 6px 0', fontWeight: '500' }}>You are allotted one initial generation and 1 manual regeneration per season.</p>
+                                            <p style={{ margin: '0 0 6px 0', fontWeight: '500' }}>You are allotted {isPremium ? '5 scouting reports' : '1 initial generation and 1 manual regeneration'} per season.</p>
                                             <p style={{ margin: '0', fontStyle: 'italic', color: '#64748b' }}>*For Keeper & Redraft leagues, we highly recommend waiting until after your draft is complete to generate your evaluation for the most accurate results.</p>
                                         </div>
                                     </div>
@@ -310,9 +343,9 @@ export default function Managers() {
                                 
                                 {evalData && !evalLoading && canRegenerate && !uiErrorMessage && (
                                     <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                                        {hasRegenerated ? (
+                                        {hasMaxedRegens ? (
                                             <span className={styles.aiSubtext} style={{ color: '#ef4444' }}>
-                                                You have already used your manual regeneration for this season.
+                                                You have used all {maxRegens} of your evaluations for this manager ({usedRegens}/{maxRegens}).
                                             </span>
                                         ) : (
                                             <div style={{ textAlign: 'center' }}>
@@ -320,7 +353,7 @@ export default function Managers() {
                                                     onClick={() => runEvaluation(selectedManager, true, false)}
                                                     style={{ background: '#1e2530', border: '1px solid #eebf1c', color: '#eebf1c', padding: '8px 15px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85em', fontWeight: 'bold', marginBottom: '8px' }}
                                                 >
-                                                    Regenerate Scouting Report (1 Remaining)
+                                                    Regenerate Scouting Report ({remainingRegens} Remaining)
                                                 </button>
                                                 <p style={{ fontSize: '0.7em', color: '#64748b', fontStyle: 'italic', margin: '0' }}>*Keeper & Redraft leagues: Ensure your draft is complete before using your final regeneration.</p>
                                             </div>
@@ -340,6 +373,7 @@ export default function Managers() {
             <div className={styles.headerControls}>
                 <h2 className={styles.title}>League Managers</h2>
             </div>
+
             <div className={styles.managersGrid}>
                 {mergedManagers.map(manager => (
                     <div 
@@ -368,7 +402,7 @@ export default function Managers() {
                                 )}
                             </div>
                             <div className={styles.ringCount}>
-                                🏆 {manager.rings.length}
+                                  {manager.rings.length}
                             </div>
                         </div>
 

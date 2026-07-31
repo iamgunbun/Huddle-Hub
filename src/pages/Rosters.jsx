@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
 import { getLeagueRosters, getLeagueTeamManagers, loadPlayers, getLeagueData, getLeagueStandings } from '../utils/helper';
-import { getTeamFromTeamManagers, formatOpponent } from '../utils/helperFunctions/universalFunctions';
+import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
 import PlayerModal from '../components/PlayerModal';
 import styles from './Rosters.module.css';
 
@@ -23,6 +23,7 @@ export default function Rosters() {
     const [activeWeek, setActiveWeek] = useState(1);
     const [weeklyMatchups, setWeeklyMatchups] = useState([]);
     const [weeklyProjections, setWeeklyProjections] = useState({});
+    const [weeklyStats, setWeeklyStats] = useState({});
     const [nflScheduleMap, setNflScheduleMap] = useState({});
     
     const [selectedPlayer, setSelectedPlayer] = useState(null);
@@ -94,31 +95,60 @@ export default function Rosters() {
             .then(data => { if (isMounted) setWeeklyMatchups(data || []); })
             .catch(err => console.error("Matchups fetch err:", err));
 
-        fetch(`https://api.sleeper.app/v1/projections/nfl/regular/${season}/${activeWeek}`)
+        fetch(`https://api.sleeper.com/projections/nfl/${season}/${activeWeek}?season_type=regular`)
             .then(res => res.json())
-            .then(data => { if (isMounted) setWeeklyProjections(data || {}); })
+            .then(data => {
+                if (isMounted) {
+                    if (Array.isArray(data)) {
+                        const map = {};
+                        data.forEach(item => { if (item.player_id) map[item.player_id] = item; });
+                        setWeeklyProjections(map);
+                    } else {
+                        setWeeklyProjections(data || {});
+                    }
+                }
+            })
             .catch(err => console.error("Projections fetch err:", err));
 
-        // FIX: Safe Weekly Schedule Request
-        fetch(`https://api.sleeper.app/v1/schedule/nfl/regular/${season}/${activeWeek}`)
+        fetch(`https://api.sleeper.com/stats/nfl/${season}/${activeWeek}?season_type=regular`)
             .then(res => res.json())
-            .then(sData => {
-                if (isMounted && Array.isArray(sData)) {
+            .then(data => {
+                if (isMounted) {
+                    if (Array.isArray(data)) {
+                        const map = {};
+                        data.forEach(item => { if (item.player_id) map[item.player_id] = item; });
+                        setWeeklyStats(map);
+                    } else {
+                        setWeeklyStats(data || {});
+                    }
+                }
+            })
+            .catch(err => console.error("Stats fetch err:", err));
+
+        // PERFECT FIX: ESPN Scoreboard for absolute Home/Away accuracy
+        fetch(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&week=${activeWeek}&dates=${season}`)
+            .then(res => res.json())
+            .then(data => {
+                if (isMounted && data?.events) {
                     const map = {};
-                    sData.forEach(game => {
-                        const homeTeam = game.home_team || game.home;
-                        const awayTeam = game.away_team || game.away;
-                        if (homeTeam && awayTeam) {
-                            const home = normalizeTeam(homeTeam);
-                            const away = normalizeTeam(awayTeam);
-                            map[home] = `VS ${away}`;
-                            map[away] = `@${home}`;
+                    data.events.forEach(event => {
+                        const comp = event.competitions?.[0];
+                        if (comp && comp.competitors) {
+                            const homeTeam = comp.competitors.find(c => c.homeAway === 'home')?.team?.abbreviation;
+                            const awayTeam = comp.competitors.find(c => c.homeAway === 'away')?.team?.abbreviation;
+                            
+                            if (homeTeam && awayTeam) {
+                                const home = normalizeTeam(homeTeam);
+                                const away = normalizeTeam(awayTeam);
+                                map[home] = `VS ${away}`;
+                                map[away] = `@ ${home}`; 
+                            }
                         }
                     });
                     setNflScheduleMap(map);
                 }
             })
-            .catch(err => console.error("Schedule fetch err:", err));
+            .catch(err => console.error("ESPN Schedule fetch err:", err));
 
         return () => { isMounted = false; };
     }, [activeLeague, activeWeek, leagueData?.season]);
@@ -151,7 +181,7 @@ export default function Rosters() {
 
     const getPlayerProjPts = (playerId) => {
         const playerObj = getPlayerObj(playerId);
-        const proj = weeklyProjections[playerId];
+        const proj = weeklyProjections[playerId] || weeklyStats[playerId];
         const scoringSettings = leagueData?.scoring_settings || {};
 
         if (proj) {
@@ -187,19 +217,27 @@ export default function Rosters() {
 
     const getMatchupText = (playerId) => {
         const playerObj = getPlayerObj(playerId);
-        if (!playerObj) return '';
-        const team = normalizeTeam(playerObj.t || playerObj.team);
+        const proj = weeklyProjections[playerId];
+        const stats = weeklyStats[playerId];
         
+        if (!playerObj && !proj && !stats) return '';
+
+        const team = normalizeTeam(playerObj?.t || playerObj?.team);
+
+        // 1. Precise Schedule Map (ESPN Data)
         if (team && nflScheduleMap[team]) {
             return nflScheduleMap[team];
         }
-        if (weeklyProjections[playerId]?.opponent) {
-            return formatOpponent(weeklyProjections[playerId].opponent);
-        }
-        if (playerObj?.wi?.[activeWeek]?.opp) {
-            return formatOpponent(playerObj.wi[activeWeek].opp);
-        }
-        return 'BYE';
+
+        // 2. Fallbacks
+        let rawOpp = playerObj?.wi?.[activeWeek]?.opp || stats?.opponent || proj?.opponent || '';
+
+        if (!rawOpp || rawOpp === '-' || rawOpp === 'BYE') return 'BYE';
+
+        let isAway = rawOpp.includes('@');
+        let cleanOpp = rawOpp.replace(/[@]/g, '').replace(/vs\.?/gi, '').trim().toUpperCase();
+
+        return isAway ? `@ ${cleanOpp}` : `VS ${cleanOpp}`;
     };
 
     const getInjStatus = (status) => {

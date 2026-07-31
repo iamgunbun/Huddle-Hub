@@ -1,0 +1,119 @@
+.container { padding: 20px; max-width: 900px; margin: 0 auto; color: #f8fafc; font-family: 'Montserrat', sans-serif; box-sizing: border-box; }
+.loading { text-align: center; color: #eebf1c; font-size: 1.2em; font-weight: bold; text-transform: uppercase; margin-top: 100px; letter-spacing: 2px; }
+
+.header { text-align: center; margin-bottom: 40px; }
+.title { color: #f8fafc; text-transform: uppercase; font-size: 2.2em; letter-spacing: 2px; margin-bottom: 5px; font-weight: 900; }
+.subtitle { color: #eebf1c; font-size: 0.95em; text-transform: uppercase; letter-spacing: 2px; font-weight: 800; margin: 0; }
+
+.arena { display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 40px; position: relative; }
+
+.playerSlot { flex: 1; background: #0b0e14; border: 1px solid #1e2530; border-radius: 12px; height: 120px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; position: relative; box-shadow: 0 4px 15px rgba(0,0,0,0.4); overflow: hidden; }
+.emptySlot { border: 1px dashed #334155; }
+.emptySlot:hover { border-color: #eebf1c; background: #1e2530; }
+.filledSlot { background: #1e2530; border-color: rgba(238,191,28,0.3); }
+
+.emptyContent { display: flex; flex-direction: column; align-items: center; gap: 10px; color: #64748b; font-weight: 700; text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px; }
+.emptyContent i { font-size: 2em; color: #475569; }
+
+.avatarWrapper { position: absolute; left: 0; top: 0; bottom: 0; width: 100px; background: #0b0e14; border-right: 1px solid #334155; display: flex; align-items: center; justify-content: center; }
+.slotAvatar { width: 80%; height: 80%; object-fit: contain; }
+
+.slotMeta { margin-left: 110px; display: flex; flex-direction: column; gap: 5px; text-align: left; width: 100%; padding-right: 40px; }
+.slotName { font-weight: 800; font-size: 1.1em; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slotDetails { color: #94a3b8; font-size: 0.8em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+
+.swapBtn { position: absolute; right: 10px; top: 10px; background: rgba(11,14,20,0.8); border: 1px solid #334155; color: #ef4444; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; }
+.swapBtn:hover { background: #ef4444; color: #fff; border-color: #ef4444; transform: scale(1.1); }
+.swapBtn i { font-size: 1.1em; }
+
+.vsBadge { width: 40px; height: 40px; border-radius: 50%; background: #eebf1c; color: #0b0e14; display: flex; align-items: center; justify-content: center; font-weight: 900; font-style: italic; z-index: 10; box-shadow: 0 0 15px rgba(238,191,28,0.4); flex-shrink: 0; }
+
+.statComparison { background: #0b0e14; border: 1px solid #1e2530; border-radius: 12px; padding: 20px; margin-bottom: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
+.statHeaderRow { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #1e2530; padding-bottom: 15px; }
+.statAvatarMini { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid #334155; background: #111; }
+.statHeaderTitle { color: #eebf1c; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; font-size: 0.9em; }
+
+.statRow { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.02); }
+.statRow:last-child { border-bottom: none; }
+.statLabel { flex: 1; text-align: center; color: #94a3b8; font-size: 0.8em; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+.statVal { flex: 1; font-weight: 800; font-size: 1.1em; color: #f8fafc; }
+.statVal.left { text-align: left; padding-left: 10px; }
+.statVal.right { text-align: right; padding-right: 10px; }
+.statVal.win { color: #eebf1c; text-shadow: 0 0 10px rgba(238,191,28,0.3); }
+
+/* MATCHING SOLID GOLD BUTTON */
+.actionContainer { text-align: center; margin-bottom: 30px; display: flex; flex-direction: column; align-items: center; }
+.evalButton { 
+    background: #eebf1c; 
+    color: #0b0e14; 
+    border: none; 
+    padding: 16px 40px; 
+    border-radius: 8px; 
+    font-weight: 900; 
+    text-transform: uppercase; 
+    letter-spacing: 1px; 
+    cursor: pointer; 
+    width: 100%; 
+    max-width: 400px; 
+    font-family: inherit; 
+    display: inline-flex; 
+    align-items: center; 
+    justify-content: center; 
+    gap: 10px; 
+    transition: all 0.2s ease-in-out; 
+}
+.evalButton i { font-size: 1.2em; display: flex; align-items: center; }
+.evalButton:hover:not(:disabled) { background: #facc15; transform: translateY(-2px); box-shadow: 0 4px 15px rgba(238, 191, 28, 0.4); }
+.evalButton:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.disabled { opacity: 0.5; cursor: not-allowed; }
+.analyzing { opacity: 0.8; cursor: wait; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
+.resultCard { background: #0b0e14; border: 1px solid rgba(238,191,28,0.3); border-radius: 12px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); animation: slideUp 0.4s ease-out; }
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+.resultHeader { display: flex; align-items: center; gap: 10px; color: #eebf1c; font-weight: 900; font-size: 1em; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #1e2530; padding-bottom: 15px; margin-bottom: 20px; }
+.resultHeader i { font-size: 1.4em; }
+
+.verdictTitle { font-size: 1.8em; font-weight: 900; color: #f8fafc; margin-bottom: 25px; text-transform: uppercase; }
+
+.confidenceBarContainer { background: #1e2530; padding: 15px; border-radius: 8px; margin-bottom: 25px; }
+.confidenceMeta { display: flex; justify-content: space-between; color: #94a3b8; font-weight: 800; font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+.confidenceMeta span:last-child { color: #eebf1c; }
+.confBarBg { height: 8px; background: #0b0e14; border-radius: 4px; overflow: hidden; }
+.confBarFill { height: 100%; background: #eebf1c; box-shadow: 0 0 10px rgba(238,191,28,0.5); transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); }
+
+.reasoningBox { color: #cbd5e1; line-height: 1.6; font-size: 0.95em; }
+.reasoningBox p { margin: 0; }
+
+.searchOverlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(11,14,20,0.85); backdrop-filter: blur(4px); z-index: 1000; display: flex; justify-content: center; padding-top: 80px; }
+.searchModal { background: #0b0e14; border: 1px solid #1e2530; border-radius: 12px; width: 90%; max-width: 450px; max-height: 70vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.6); animation: scaleIn 0.2s ease-out; }
+@keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+.modalHeader { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: #1e2530; }
+.modalHeader h2 { margin: 0; color: #f8fafc; font-size: 1em; text-transform: uppercase; letter-spacing: 1px; }
+.closeModalBtn { background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 0; display: flex; transition: color 0.2s; }
+.closeModalBtn:hover { color: #f8fafc; }
+
+.searchInputWrapper { padding: 15px 20px; border-bottom: 1px solid #1e2530; display: flex; align-items: center; gap: 10px; background: #0b0e14; }
+.searchInputWrapper i { color: #64748b; }
+.searchInput { width: 100%; padding: 10px; background: transparent; border: none; color: #f8fafc; font-family: inherit; font-size: 1em; outline: none; }
+.searchResults { overflow-y: auto; flex: 1; padding: 10px 0; }
+.searchResults::-webkit-scrollbar { width: 6px; }
+.searchResults::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+.searchRow { display: flex; align-items: center; padding: 12px 20px; cursor: pointer; gap: 12px; transition: background 0.2s; }
+.searchRow:hover { background: rgba(238,191,28,0.05); }
+.searchAvatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 1px solid #334155; }
+.searchMeta { display: flex; flex-direction: column; }
+.searchName { font-weight: 700; font-size: 0.95em; color: #f8fafc; }
+.searchTeam { color: #94a3b8; font-size: 0.75em; font-weight: 600; margin-top: 2px; }
+.noResults { text-align: center; padding: 20px; color: #64748b; font-size: 0.9em; font-style: italic; }
+
+@media (max-width: 768px) { 
+    .arena { flex-direction: column; gap: 30px; } 
+    .playerSlot { width: 100%; }
+    .vsBadge { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 4px solid #0b0e14; }
+    .title { font-size: 1.8em; }
+    .container { padding-bottom: 100px; }
+}
