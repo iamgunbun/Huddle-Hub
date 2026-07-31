@@ -49,7 +49,6 @@ export default function ChatDrawer() {
             return;
         }
 
-        // 1. Check if the browser supports web push
         if (!('Notification' in window)) {
             alert("This browser or device does not support web notifications.");
             return;
@@ -63,7 +62,6 @@ export default function ChatDrawer() {
         setIsSubscribing(true);
 
         try {
-            // 2. Explicitly ask for permission FIRST (Crucial for iOS PWAs)
             const permission = await Notification.requestPermission();
             
             if (permission !== 'granted') {
@@ -72,7 +70,6 @@ export default function ChatDrawer() {
                 return;
             }
 
-            // 3. Now that permission is granted, run your background subscription helper
             const subscription = await subscribeToWebPush();
             
             if (subscription) {
@@ -168,10 +165,6 @@ export default function ChatDrawer() {
         };
     }, [activeLeague]);
 
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages, isOpen, showEmojiPicker, showGifPicker]);
-
     const sendPayload = async (payload) => {
         if (!activeLeague || !currentUser) return;
         
@@ -189,20 +182,37 @@ export default function ChatDrawer() {
             return;
         }
 
-        // 2. Fetch the Push Subscriptions of OTHER users in this league
-        const { data: leagueMembers } = await supabase
+        // 2. Fetch OTHER user IDs in this league (Safe Query 1)
+        const { data: leagueMembers, error: membersError } = await supabase
             .from('user_leagues')
-            .select('users(web_push_subscription)')
+            .select('user_id')
             .eq('league_id', activeLeague.id)
             .neq('user_id', currentUser.id);
 
-        const subscriptions = leagueMembers
-            ?.map(member => member.users?.web_push_subscription)
-            .filter(sub => sub != null)
-            .map(sub => typeof sub === 'string' ? JSON.parse(sub) : sub);
+        if (membersError || !leagueMembers || leagueMembers.length === 0) {
+            console.error("Could not fetch league members:", membersError);
+            return;
+        }
 
-        // 3. Ping your Vercel API to dispatch the notifications
-        if (subscriptions && subscriptions.length > 0) {
+        const memberIds = leagueMembers.map(m => m.user_id);
+
+        // 3. Fetch their Push Subscriptions independently (Safe Query 2)
+        const { data: pushUsers, error: pushError } = await supabase
+            .from('users')
+            .select('web_push_subscription')
+            .in('id', memberIds)
+            .not('web_push_subscription', 'is', null);
+
+        if (pushError || !pushUsers) {
+            console.error("Could not fetch push subscriptions:", pushError);
+            return;
+        }
+
+        const subscriptions = pushUsers
+            .map(u => typeof u.web_push_subscription === 'string' ? JSON.parse(u.web_push_subscription) : u.web_push_subscription);
+
+        // 4. Ping your Vercel API to dispatch the notifications
+        if (subscriptions.length > 0) {
             fetch('/api/send-push', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
