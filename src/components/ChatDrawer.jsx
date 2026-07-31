@@ -73,7 +73,6 @@ export default function ChatDrawer() {
             const subscription = await subscribeToWebPush();
             
             if (subscription) {
-                // FIXED: Saving the token to the 'profiles' table instead of 'users'
                 const { error } = await supabase
                     .from('profiles') 
                     .update({ web_push_subscription: JSON.stringify(subscription) })
@@ -106,7 +105,7 @@ export default function ChatDrawer() {
                         .from('user_leagues')
                         .select('team_name')
                         .eq('user_id', session.user.id)
-                        .eq('league_id', activeLeague.id)
+                        .eq('league_id', activeLeague.league_id) // Fixed to league_id
                         .single();
                         
                     if (ulData?.team_name) setAuthorName(ulData.team_name);
@@ -126,11 +125,11 @@ export default function ChatDrawer() {
                 }
             }
 
-            if (activeLeague?.id) {
+            if (activeLeague?.league_id) { // Fixed to league_id
                 const { data, error } = await supabase
                     .from('messages')
                     .select('*')
-                    .eq('league_id', activeLeague.id)
+                    .eq('league_id', activeLeague.league_id) // Fixed to league_id
                     .order('created_at', { ascending: true })
                     .limit(100);
                 
@@ -139,11 +138,12 @@ export default function ChatDrawer() {
                     data.forEach(msg => processedMessagesRef.current.add(msg.id));
                 }
 
-                const uniqueChannelName = `league_chat_${activeLeague.id}_${Math.random()}`;
+                // Fixed to league_id
+                const uniqueChannelName = `league_chat_${activeLeague.league_id}_${Math.random()}`;
                 
                 channel = supabase.channel(uniqueChannelName)
                     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
-                        if (payload.new.league_id === activeLeague.id) {
+                        if (payload.new.league_id === activeLeague.league_id) { // Fixed to league_id
                             if (processedMessagesRef.current.has(payload.new.id)) return;
                             processedMessagesRef.current.add(payload.new.id);
                             
@@ -171,7 +171,7 @@ export default function ChatDrawer() {
         
         // 1. Save the message to Supabase
         const { error: insertError } = await supabase.from('messages').insert({
-            league_id: activeLeague.id,
+            league_id: activeLeague.league_id, // Fixed to league_id
             user_id: currentUser.id,
             author_name: authorName,
             author_avatar: authorAvatar,
@@ -186,8 +186,8 @@ export default function ChatDrawer() {
         // 2. Fetch OTHER user IDs in this league
         const { data: leagueMembers, error: membersError } = await supabase
             .from('user_leagues')
-            .select('user_id')
-            .eq('league_id', activeLeague.id)
+            .select('*') // Selected all to prevent projection syntax issues
+            .eq('league_id', activeLeague.league_id) // Fixed to league_id
             .neq('user_id', currentUser.id);
 
         if (membersError) {
@@ -202,7 +202,7 @@ export default function ChatDrawer() {
 
         const memberIds = leagueMembers.map(m => m.user_id);
 
-        // 3. Fetch their Push Subscriptions independently (FIXED: Querying 'profiles')
+        // 3. Fetch their Push Subscriptions independently
         const { data: pushUsers, error: pushError } = await supabase
             .from('profiles')
             .select('id, web_push_subscription')
@@ -229,7 +229,7 @@ export default function ChatDrawer() {
                     payload: {
                         title: `New message from ${authorName}`,
                         body: payload.content || (payload.image_url ? 'Sent an image' : 'Sent a GIF'),
-                        url: `/?league=${activeLeague.id}` 
+                        url: `/?league=${activeLeague.league_id}` // Fixed to league_id
                     }
                 })
             }).catch(err => console.error("Step 4 Failed - Push API Trigger Error:", err));
@@ -254,7 +254,7 @@ export default function ChatDrawer() {
         setUploadingImage(true);
         const fileExt = file.name.split('.').pop();
         const fileName = `${Date.now()}_${Math.random()}.${fileExt}`;
-        const filePath = `${activeLeague.id}/${fileName}`;
+        const filePath = `${activeLeague.league_id}/${fileName}`; // Fixed to league_id
 
         const { error: uploadError } = await supabase.storage
             .from('chat_images')
