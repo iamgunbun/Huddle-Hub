@@ -39,3 +39,10 @@ self.addEventListener('notificationclick', function(event) {
         })
     );
 });
+
+// REQUIRED BY CHROME FOR PWA INSTALLATION
+// Even if empty, a fetch listener tells the browser this is a legitimate, installable app.
+self.addEventListener('fetch', function(event) {
+    // We are just letting the network handle the request normally
+    return;
+});
