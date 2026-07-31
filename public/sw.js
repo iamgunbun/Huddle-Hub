@@ -1,27 +1,41 @@
 // public/sw.js
 
 self.addEventListener('push', function(event) {
-    // Parse the payload sent from your backend
-    const data = event.data ? event.data.json() : {};
-    const title = data.title || 'Huddle FF';
-    
-    const options = {
-        body: data.body || 'New league activity!',
-        icon: '/logo.png', // The large icon next to the text
-        badge: '/logo.png', // The tiny monochrome icon in the top status bar
-        data: data.url || '/', // URL to open when tapped
-        vibrate: [200, 100, 200]
-    };
+    if (event.data) {
+        const data = event.data.json();
+        
+        const options = {
+            body: data.body || 'New message in league chat!',
+            icon: '/brand.png', // Ensure this points to your logo
+            badge: '/brand.png',
+            vibrate: [100, 50, 100],
+            data: {
+                url: data.url || '/'
+            }
+        };
 
-    event.waitUntil(self.registration.showNotification(title, options));
+        // This is what actually forces the phone to show the banner
+        event.waitUntil(
+            self.registration.showNotification(data.title || 'Huddle FF', options)
+        );
+    }
 });
 
-// Listen for the user tapping the notification
 self.addEventListener('notificationclick', function(event) {
     event.notification.close();
     
-    // Open the app to the specific URL sent in the payload
+    // When they tap the banner, open the app to the correct league
     event.waitUntil(
-        clients.openWindow(event.notification.data)
+        clients.matchAll({ type: 'window' }).then(windowClients => {
+            for (let i = 0; i < windowClients.length; i++) {
+                let client = windowClients[i];
+                if (client.url === '/' && 'focus' in client) {
+                    return client.focus();
+                }
+            }
+            if (clients.openWindow) {
+                return clients.openWindow(event.notification.data.url);
+            }
+        })
     );
 });

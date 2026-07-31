@@ -7,6 +7,18 @@ import App from './App.jsx'
 // Android WebViews do not have the Notification object globally defined.
 // If any third-party package or React component calls "Notification.permission",
 // it causes a fatal crash. This safely polyfills it globally before React even loads.
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(registration => {
+                console.log('Service Worker registered successfully:', registration.scope);
+            })
+            .catch(error => {
+                console.error('Service Worker registration failed:', error);
+            });
+    });
+}
+
 if (typeof window !== 'undefined' && !window.Notification) {
     window.Notification = {
         permission: 'denied',
