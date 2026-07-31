@@ -73,8 +73,9 @@ export default function ChatDrawer() {
             const subscription = await subscribeToWebPush();
             
             if (subscription) {
+                // FIXED: Saving the token to the 'profiles' table instead of 'users'
                 const { error } = await supabase
-                    .from('users') 
+                    .from('profiles') 
                     .update({ web_push_subscription: JSON.stringify(subscription) })
                     .eq('id', currentUser.id);
                 
@@ -169,7 +170,7 @@ export default function ChatDrawer() {
         if (!activeLeague || !currentUser) return;
         
         // 1. Save the message to Supabase
-        const { error } = await supabase.from('messages').insert({
+        const { error: insertError } = await supabase.from('messages').insert({
             league_id: activeLeague.id,
             user_id: currentUser.id,
             author_name: authorName,
@@ -177,42 +178,49 @@ export default function ChatDrawer() {
             ...payload
         });
 
-        if (error) {
-            console.error("Message error:", error);
+        if (insertError) {
+            console.error("Step 1 Failed - Insert Message Error:", insertError);
             return;
         }
 
-        // 2. Fetch OTHER user IDs in this league (Safe Query 1)
+        // 2. Fetch OTHER user IDs in this league
         const { data: leagueMembers, error: membersError } = await supabase
             .from('user_leagues')
             .select('user_id')
             .eq('league_id', activeLeague.id)
             .neq('user_id', currentUser.id);
 
-        if (membersError || !leagueMembers || leagueMembers.length === 0) {
-            console.error("Could not fetch league members:", membersError);
+        if (membersError) {
+            console.error("Step 2 Failed - Fetch Members Error:", membersError);
+            return;
+        }
+
+        if (!leagueMembers || leagueMembers.length === 0) {
+            console.log("No other users found in this league to notify.");
             return;
         }
 
         const memberIds = leagueMembers.map(m => m.user_id);
 
-        // 3. Fetch their Push Subscriptions independently (Safe Query 2)
+        // 3. Fetch their Push Subscriptions independently (FIXED: Querying 'profiles')
         const { data: pushUsers, error: pushError } = await supabase
-            .from('users')
-            .select('web_push_subscription')
-            .in('id', memberIds)
-            .not('web_push_subscription', 'is', null);
+            .from('profiles')
+            .select('id, web_push_subscription')
+            .in('id', memberIds);
 
-        if (pushError || !pushUsers) {
-            console.error("Could not fetch push subscriptions:", pushError);
+        if (pushError) {
+            console.error("Step 3 Failed - Fetch Push Subscriptions Error:", pushError);
             return;
         }
 
+        // Safely filter out the nulls using Javascript instead of the database query
         const subscriptions = pushUsers
+            .filter(u => u.web_push_subscription != null)
             .map(u => typeof u.web_push_subscription === 'string' ? JSON.parse(u.web_push_subscription) : u.web_push_subscription);
 
         // 4. Ping your Vercel API to dispatch the notifications
         if (subscriptions.length > 0) {
+            console.log("Step 4 - Sending Push to Tokens:", subscriptions);
             fetch('/api/send-push', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -224,7 +232,9 @@ export default function ChatDrawer() {
                         url: `/?league=${activeLeague.id}` 
                     }
                 })
-            }).catch(err => console.error("Failed to trigger push API:", err));
+            }).catch(err => console.error("Step 4 Failed - Push API Trigger Error:", err));
+        } else {
+            console.log("Users were found, but none of them have Push Notifications enabled.");
         }
     };
 
