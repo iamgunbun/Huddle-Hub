@@ -77,9 +77,6 @@ export default function Sidebar({ isOpen, onClose }) {
                                 <div className={styles.link} onClick={() => {navigate('/transactions'); if(onClose) onClose();}}>
                                     <i className="material-icons">swap_horiz</i> Transactions
                                 </div>
-                                <div className={styles.link} onClick={() => {navigate('/messages'); if(onClose) onClose();}}>
-                                    <i className="material-icons">chat</i> Messages
-                                </div>
                             </div>
                             
                             <div className={`${styles.dropdown} ${infoOpen ? styles.activeDropdown : ''}`} onClick={() => setInfoOpen(!infoOpen)} style={{ marginTop: '10px' }}>

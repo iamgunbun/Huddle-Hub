@@ -7,6 +7,21 @@ export function useLeague() {
     return useContext(LeagueContext);
 }
 
+// Helper to securely format the Sleeper avatar without double-encoding it
+const formatAvatarUrl = (avatar) => {
+    if (!avatar || typeof avatar !== 'string' || avatar.trim() === '' || avatar === 'null') {
+        return '/brand.png';
+    }
+    
+    // If it's already a fully qualified URL, return it directly
+    if (avatar.startsWith('http') || avatar.startsWith('/')) {
+        return avatar;
+    }
+    
+    // Otherwise, append the Sleeper CDN
+    return `https://sleepercdn.com/avatars/thumbs/${avatar}`;
+};
+
 export function LeagueProvider({ children }) {
     const [activeLeague, setActiveLeague] = useState(null);
     const [userLeagues, setUserLeagues] = useState([]); 
@@ -59,21 +74,44 @@ export function LeagueProvider({ children }) {
                     .select('*')
                     .in('id', leagueIds);
 
-                // NORMALIZED MAPPING: Guarantees every naming convention exists so the Sidebar can read it
-                const flattenedLeagues = userLeaguesData.map(ul => {
-    const matchedLeague = leaguesData?.find(l => l.id === ul.league_id || l.sleeper_league_id === ul.league_id) || {};
-    const resolvedName = matchedLeague.league_name || matchedLeague.name || ul.team_name || "Unnamed League";
-    
-    return {
-        ...matchedLeague, // Spread global league data first
-        ...ul,            // Spread user data second
-        league_name: resolvedName,
-        name: resolvedName,
-        avatar: ul.avatar || matchedLeague.avatar, // Explicitly preserve the avatar!
-        league_id: ul.league_id || matchedLeague.id,
-        sleeper_league_id: matchedLeague.sleeper_league_id || ul.league_id
-    };
-});
+                // Fetch live Sleeper data for each league to guarantee we have the correct avatar hash
+                const flattenedLeagues = await Promise.all(userLeaguesData.map(async (ul) => {
+                    const matchedLeague = leaguesData?.find(l => l.id === ul.league_id || l.sleeper_league_id === ul.league_id) || {};
+                    const sleeperId = matchedLeague.sleeper_league_id || ul.league_id;
+                    
+                    let sleeperAvatar = null;
+                    let sleeperName = null;
+
+                    if (sleeperId) {
+                        try {
+                            const res = await fetch(`https://api.sleeper.app/v1/league/${sleeperId}`);
+                            if (res.ok) {
+                                const sData = await res.json();
+                                sleeperAvatar = sData.avatar;
+                                sleeperName = sData.name;
+                            }
+                        } catch (e) {
+                            console.warn("Failed to fetch live sleeper data for", sleeperId);
+                        }
+                    }
+
+                    const resolvedName = sleeperName || matchedLeague.league_name || matchedLeague.name || ul.team_name || "Unnamed League";
+                    
+                    // Prioritize the live Sleeper API avatar, then fallback to DB, then user avatar
+                    const rawAvatar = sleeperAvatar || matchedLeague.avatar || matchedLeague.league_avatar || ul.avatar;
+                    const formattedAvatar = formatAvatarUrl(rawAvatar);
+
+                    return {
+                        ...matchedLeague, 
+                        ...ul,            
+                        league_name: resolvedName,
+                        name: resolvedName,
+                        avatar: formattedAvatar, // Guaranteed full, clean image URL
+                        league_avatar: formattedAvatar,
+                        league_id: ul.league_id || matchedLeague.id,
+                        sleeper_league_id: sleeperId
+                    };
+                }));
 
                 setUserLeagues(flattenedLeagues); 
                 setLeagueCount(flattenedLeagues.length);
@@ -85,7 +123,8 @@ export function LeagueProvider({ children }) {
                     setActiveLeague({
                         ...activeConnection, 
                         is_commissioner: activeConnection.is_commissioner, 
-                        team_name: activeConnection.team_name
+                        team_name: activeConnection.team_name,
+                        avatar: activeConnection.avatar || '/brand.png'
                     });
                 }
             } else {

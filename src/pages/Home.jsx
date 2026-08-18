@@ -14,7 +14,7 @@ export default function Home() {
     const [copyLinkText, setCopyLinkText] = useState('Copy Invite Link');
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 1100);
     
-    // Replaced modal state with Mobile Tab Navigation State
+    // Mobile Tab Navigation State
     const [activeMobileTab, setActiveMobileTab] = useState('feed');
          
     const [authChecking, setAuthChecking] = useState(true);
@@ -278,6 +278,14 @@ export default function Home() {
     }
 
     const champTeam = (recentChamp && teamManagers) ? getTeamFromTeamManagers(teamManagers, recentChamp.champion, recentChamp.year) : null;
+
+    const formatChampAvatar = (avatar) => {
+        if (!avatar) return '/brand.png';
+        if (avatar.startsWith('http://') || avatar.startsWith('https://') || avatar.startsWith('/')) {
+            return avatar;
+        }
+        return `https://sleepercdn.com/avatars/thumbs/${avatar}`;
+    };
     
     // Extracted News Feed Component Block
     const renderNewsFeed = () => (
@@ -389,12 +397,20 @@ export default function Home() {
                         </div>
                         {champTeam && (
                             <div className={styles.hubCard} style={{ textAlign: 'center', marginTop: '20px' }}>
-                                <h3 className={styles.cardHeader} style={{ border: 'none', marginBottom: 0 }}>{recentChamp.year} Champion</h3>
-                                <img 
-                                     src={champTeam.avatar} 
-                                     alt="Champ" 
-                                     style={{ width: '80px', height: '80px', borderRadius: '50%', border: '3px solid #eebf1c', margin: '15px auto', display: 'block', objectFit: 'cover' }} 
-                                 />
+                                <h3 className={styles.cardHeader} style={{ border: 'none', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                    <span>{recentChamp.year} Champion</span>
+                                </h3>
+                                <div style={{ position: 'relative', width: '80px', height: '80px', margin: '15px auto' }}>
+                                    <img 
+                                         src={formatChampAvatar(champTeam.avatar)} 
+                                         alt="Champ" 
+                                         style={{ width: '80px', height: '80px', borderRadius: '50%', border: '3px solid #eebf1c', display: 'block', objectFit: 'cover' }} 
+                                         onError={(e) => { e.target.src = '/brand.png'; }}
+                                     />
+                                    <span style={{ position: 'absolute', bottom: '-4px', right: '-4px', background: '#eebf1c', borderRadius: '50%', width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.5)' }}>
+                                        <i className="material-icons" style={{ fontSize: '16px', color: '#000' }}>emoji_events</i>
+                                    </span>
+                                </div>
                                 <div style={{ color: '#eebf1c', fontSize: '1.3em', fontWeight: 800, textTransform: 'uppercase' }}>
                                     {champTeam.name}
                                 </div>
@@ -404,7 +420,7 @@ export default function Home() {
                 </div>
             ) : (
                 <div className={styles.mobileLayout}>
-                    {/* NEW: Sleek Top Navigation Bar for Mobile */}
+                    {/* Top Navigation Bar for Mobile */}
                     <div className={styles.mobileTopNav}>
                         <button 
                             className={`${styles.navTab} ${activeMobileTab === 'feed' ? styles.activeTab : ''}`}
@@ -429,7 +445,7 @@ export default function Home() {
                         </button>
                     </div>
 
-                    {/* NEW: Tab-Driven Content Container */}
+                    {/* Tab-Driven Content Container */}
                     <div className={`${styles.mobileTabContent} ${styles.fadeEnter}`} key={activeMobileTab}>
                         
                         {activeMobileTab === 'feed' && (
@@ -483,10 +499,20 @@ export default function Home() {
                                 
                                 {champTeam && (
                                     <div className={styles.hubCard} style={{ textAlign: 'center' }}>
-                                        <h3 className={styles.cardHeader} style={{ border: 'none', marginBottom: 0 }}>{recentChamp.year} Champion</h3>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px' }}>
-                                            <div style={{ color: '#eebf1c', fontSize: '1.2em', fontWeight: 800, textTransform: 'uppercase' }}>{champTeam.name}</div>
-                                            <img src={champTeam.avatar} alt="Champ" style={{ width: '60px', height: '60px', borderRadius: '50%', border: '2px solid #eebf1c', objectFit: 'cover' }} />
+                                        <h3 className={styles.cardHeader} style={{ border: 'none', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                            <span>{recentChamp.year} Champion</span>
+                                        </h3>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px', background: 'rgba(238, 191, 28, 0.08)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(238, 191, 28, 0.2)' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <i className="material-icons" style={{ color: '#eebf1c', fontSize: '24px' }}>emoji_events</i>
+                                                <div style={{ color: '#eebf1c', fontSize: '1.2em', fontWeight: 800, textTransform: 'uppercase', textAlign: 'left' }}>{champTeam.name}</div>
+                                            </div>
+                                            <img 
+                                                src={formatChampAvatar(champTeam.avatar)} 
+                                                alt="Champ" 
+                                                style={{ width: '60px', height: '60px', borderRadius: '50%', border: '2px solid #eebf1c', objectFit: 'cover' }} 
+                                                onError={(e) => { e.target.src = '/brand.png'; }}
+                                            />
                                         </div>
                                     </div>
                                 )}

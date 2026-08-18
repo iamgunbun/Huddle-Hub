@@ -332,8 +332,19 @@ export default function StartSit() {
         const oppB = getMatchupOpp(pIdB);
         const projB = parseFloat(getPlayerProjPts(pIdB));
 
+        // Array of analytical angles to randomly inject variety into responses
+        const analyticalPerspectives = [
+            "Focus heavily on Floor vs. Ceiling volatility, assessing risk tolerance for fantasy managers.",
+            "Analyze through the lens of Game Script, expected team pacing, and projected point total / game flow.",
+            "Prioritize matchup metrics, trench play, defensive DVOA, and position-specific coverage trends.",
+            "Take a contrarian fantasy analyst perspective, highlighting hidden red flags and workload traps.",
+            "Emphasize recent usage trends, target/carries share, and high-value touch opportunities (red zone/goal line)."
+        ];
+
+        const selectedAngle = analyticalPerspectives[Math.floor(Math.random() * analyticalPerspectives.length)];
+
         const pipelinePrompt = `
-            You are an expert NFL fantasy football analyst. Evaluate this Week ${activeWeek} Start/Sit decision for the ${leagueData?.season || 2026} season using custom league scoring settings.
+            You are an elite, highly engaging NFL fantasy football analyst. Evaluate this Week ${activeWeek} Start/Sit decision for the ${leagueData?.season || 2026} season using custom league scoring settings.
             
             PLAYER A: ${nameA} (${posA} - ${teamA})
             - Matchup: ${oppA}
@@ -343,17 +354,19 @@ export default function StartSit() {
             - Matchup: ${oppB}
             - Projected Custom FPTS: ${projB.toFixed(2)}
 
+            ANALYTICAL ANGLE FOR THIS EVALUATION: ${selectedAngle}
+
             YOUR TASK:
-            1. Analyze the defensive matchups based on the exact opponents provided. State the defensive ranks of those opponents against the ${posA} and ${posB} positions.
-            2. Break down the game conditions (e.g., shootout vs defensive struggle, weather conditions, offensive line health, injury factors).
-            3. Provide a definitive verdict comparing their projected ceilings and floors based on the real data provided.
+            1. Evaluate both players with fresh, natural, and varied writing. Avoid repetitive cookie-cutter introductory formulas.
+            2. Explicitly reference their specific opponents (${oppA} and ${oppB}) and key matchup factors.
+            3. Provide a clear, definitive recommendation on who to start and why.
 
             Return strictly in JSON format:
             {
-                "recommendedId": "Player ID of the winner",
-                "confidence": "Integer between 0-100 based on matchup clarity",
+                "recommendedId": "${pIdA} or ${pIdB}",
+                "confidence": 85,
                 "verdict": "Start [Winner Name]",
-                "reasoning": "A highly detailed, 4-5 sentence analysis that MUST explicitly name the opposing teams they are playing against, MUST state the defensive rank of those opponents against the players position, MUST detail the game conditions (weather/game script), and explain why the recommended player is the better start."
+                "reasoning": "A compelling, sharp 4-5 sentence analysis focusing on the assigned analytical angle (${selectedAngle}). Must mention both players' opponents, key game conditions/matchups, and why the recommended player offers the superior fantasy outcome this week."
             }
         `;
         
