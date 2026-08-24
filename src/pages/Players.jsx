@@ -25,19 +25,10 @@ export default function Players() {
     const [searchQuery, setSearchQuery] = useState('');
     const [posFilter, setPosFilter] = useState('ALL');
     const [trendFilter, setTrendFilter] = useState('up');
-    const [newsFilter, setNewsFilter] = useState('all');
     
     const [selectedPlayer, setSelectedPlayer] = useState(null);
 
     const positions = ['ALL', 'QB', 'RB', 'WR', 'TE', 'DEF', 'K'];
-
-    const rawNewsFeed = [
-        { id: 1, tag: 'Breaking', category: 'all', time: '2h ago', title: 'Latest training camp updates around the league', desc: 'Coaches are adjusting depth charts as the preseason games approach. Keep an eye on backup running backs getting first-team reps.' },
-        { id: 2, tag: 'Fantasy', category: 'fantasy', time: '12h ago', title: `Top waiver wire targets for Week ${activeWeek}`, desc: 'A breakdown of the highest projected players currently available in standard formats.' },
-        { id: 3, tag: 'Injury Report', category: 'all', time: '1d ago', title: 'Key players questionable heading into the weekend', desc: 'Monitor practice logs closely. Several high-profile starters were limited in Friday\'s sessions.' },
-        { id: 4, tag: 'Fantasy', category: 'fantasy', time: '2d ago', title: 'Start \'Em, Sit \'Em: High upside flex options', desc: 'Analyzing target shares and matchup advantages for upcoming weekly rosters.' },
-        { id: 5, tag: 'Transactions', category: 'all', time: '3d ago', title: 'Major trades shake up fantasy landscapes', desc: 'Recent blockbuster moves have opened up huge opportunities for rookie WRs.' }
-    ];
 
     const normalizeTeam = (t) => {
         if (!t) return '';
@@ -109,7 +100,6 @@ export default function Players() {
             })
             .catch(err => console.error("Stats error:", err));
 
-        // PERFECT FIX: ESPN Scoreboard for absolute Home/Away accuracy
         fetch(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&week=${activeWeek}&dates=${season}`)
             .then(res => res.json())
             .then(data => {
@@ -178,12 +168,10 @@ export default function Players() {
         const stats = weeklyStats[pId];
         const team = normalizeTeam(playerObj.t || playerObj.team);
 
-        // 1. Precise Schedule Map (ESPN Data)
         if (team && nflScheduleMap[team]) {
             return nflScheduleMap[team];
         }
 
-        // 2. Fallbacks
         let rawOpp = playerObj?.wi?.[activeWeek]?.opp || stats?.opponent || proj?.opponent || '';
 
         if (!rawOpp || rawOpp === '-' || rawOpp === 'BYE') return 'BYE';
@@ -251,13 +239,6 @@ export default function Players() {
         return list.sort((a, b) => b.projVal - a.projVal).slice(0, 100);
     }, [playersInfo, rosters, posFilter, searchQuery, weeklyProjections, weeklyStats, nflScheduleMap]);
 
-    const filteredNews = useMemo(() => {
-        if (newsFilter === 'fantasy') {
-            return rawNewsFeed.filter(item => item.category === 'fantasy');
-        }
-        return rawNewsFeed;
-    }, [newsFilter, activeWeek]);
-
     const renderPlayerRow = (pId, pObj = null, trendCount = null) => {
         const player = pObj || playersInfo[pId] || playersInfo[String(pId)];
         if (!player) return null;
@@ -304,7 +285,6 @@ export default function Players() {
                 <div className={styles.navTabs}>
                     <button className={`${styles.navTab} ${activeTab === 'available' ? styles.activeNavTab : ''}`} onClick={() => setActiveTab('available')}>Available</button>
                     <button className={`${styles.navTab} ${activeTab === 'trends' ? styles.activeNavTab : ''}`} onClick={() => setActiveTab('trends')}>Trends</button>
-                    <button className={`${styles.navTab} ${activeTab === 'news' ? styles.activeNavTab : ''}`} onClick={() => setActiveTab('news')}>News</button>
                 </div>
             </div>
 
@@ -366,40 +346,6 @@ export default function Players() {
                                 ? trendingUp.map(t => renderPlayerRow(t.player_id, null, t.count))
                                 : trendingDown.map(t => renderPlayerRow(t.player_id, null, t.count))
                             }
-                        </div>
-                    </>
-                )}
-
-                {activeTab === 'news' && (
-                    <>
-                        <div className={styles.trendToggleBar}>
-                            <button 
-                                className={`${styles.trendToggleBtn} ${newsFilter === 'all' ? styles.activeTrendUp : ''}`}
-                                onClick={() => setNewsFilter('all')}
-                            >
-                                All NFL
-                            </button>
-                            <button 
-                                className={`${styles.trendToggleBtn} ${newsFilter === 'fantasy' ? styles.activeTrendUp : ''}`}
-                                onClick={() => setNewsFilter('fantasy')}
-                            >
-                                Fantasy
-                            </button>
-                        </div>
-                        
-                        <div className={styles.newsFeed}>
-                            {filteredNews.map(item => (
-                                <div key={item.id} className={styles.newsCard}>
-                                    <div className={styles.newsHeader}>
-                                        <span className={item.category === 'fantasy' ? styles.newsTagFantasy : styles.newsTag}>
-                                            {item.tag}
-                                        </span>
-                                        <span className={styles.newsTime}>{item.time}</span>
-                                    </div>
-                                    <h3 className={styles.newsTitle}>{item.title}</h3>
-                                    <p className={styles.newsDesc}>{item.desc}</p>
-                                </div>
-                            ))}
                         </div>
                     </>
                 )}

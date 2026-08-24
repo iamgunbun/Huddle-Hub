@@ -72,8 +72,12 @@ export default function PremiumModal({ onClose }) {
                 </button>
                 
                 <div className={styles.header}>
-                    <i className="material-icons" style={{ fontSize: '48px', color: '#eebf1c', marginBottom: '15px' }}>workspace_premium</i>
-                    <h2 className={styles.title}>Huddle Premium</h2>
+                    {/* REPLACED BASIC ICON AND TEXT WITH THE LARGE PRO BANNER */}
+                    <img 
+                        src="/pro-banner.png" 
+                        alt="Huddle Pro" 
+                        style={{ height: '70px', objectFit: 'contain', display: 'block', margin: '0 auto 15px auto' }} 
+                    />
                     <p className={styles.subtitle}>Unlock the ultimate dynasty experience.</p>
                 </div>
 

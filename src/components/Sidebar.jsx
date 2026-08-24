@@ -77,6 +77,9 @@ export default function Sidebar({ isOpen, onClose }) {
                                 <div className={styles.link} onClick={() => {navigate('/transactions'); if(onClose) onClose();}}>
                                     <i className="material-icons">swap_horiz</i> Transactions
                                 </div>
+                                <div className={styles.link} onClick={() => {navigate('/messages'); if(onClose) onClose();}}>
+                                    <i className="material-icons">chat</i> Messages
+                                </div>
                             </div>
                             
                             <div className={`${styles.dropdown} ${infoOpen ? styles.activeDropdown : ''}`} onClick={() => setInfoOpen(!infoOpen)} style={{ marginTop: '10px' }}>
@@ -111,11 +114,13 @@ export default function Sidebar({ isOpen, onClose }) {
                             </div>
                             <div className={styles.link} onClick={() => {navigate('/trade-analyzer'); if(onClose) onClose();}}>
                                 <i className="material-icons">query_stats</i> Trade Analyzer 
-                                <span className={styles.proBadge}>PRO</span>
+                                {/* INCREASED HEIGHT TO 30px */}
+                                <img src="/pro-banner.png" alt="PRO" style={{ height: '30px', marginLeft: '10px', verticalAlign: 'middle', objectFit: 'contain' }} />
                             </div>
                             <div className={styles.link} onClick={() => {navigate('/draft-analyzer'); if(onClose) onClose();}}>
                                 <i className="material-icons">psychology</i> Draft Analyzer 
-                                <span className={styles.proBadge}>PRO</span>
+                                {/* INCREASED HEIGHT TO 30px */}
+                                <img src="/pro-banner.png" alt="PRO" style={{ height: '30px', marginLeft: '10px', verticalAlign: 'middle', objectFit: 'contain' }} />
                             </div>
                         </div>
 
@@ -130,7 +135,6 @@ export default function Sidebar({ isOpen, onClose }) {
                                     onMouseLeave={() => setHoveredLeague(null)}
                                     style={{ position: 'relative' }}
                                 >
-                                    {/* Restored your original Image/Radio Logic */}
                                     {l.avatar ? (
                                         <img 
                                             src={l.avatar} 
