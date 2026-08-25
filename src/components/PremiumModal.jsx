@@ -48,8 +48,8 @@ export default function PremiumModal({ onClose }) {
             }
         } else {
             // WEB CHECKOUT FLOW (Stripe)
-            // Properly appends the user ID to the Stripe link so your webhook knows who paid
-            const stripePaymentUrl = `https://buy.stripe.com/test_5kQ3cocYZ0dagfH81CeUU00?client_reference_id=${user.id}`;
+            // Using an environment variable so Vercel can automatically swap in your Live link!
+            const stripePaymentUrl = `${import.meta.env.VITE_STRIPE_PAYMENT_URL}?client_reference_id=${user.id}`;
             window.location.href = stripePaymentUrl;
         }
     };
