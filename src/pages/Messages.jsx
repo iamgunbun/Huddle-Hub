@@ -3,29 +3,21 @@ import styles from './Messages.module.css';
 
 export default function Messages() {
     return (
-        <div className={styles.messagesContainer}>
-            <div className={styles.sidebar}>
-                <div className={styles.sidebarHeader}>
-                    <h2>Messages</h2>
-                </div>
-                <div className={styles.chatList}>
-                    <div className={styles.chatCard}>
-                        <div className={styles.avatarPlaceholder}>
-                            <i className="material-icons">groups</i>
-                        </div>
-                        <div className={styles.chatDetails}>
-                            <h4 className={styles.chatTitle}>Global League Chat</h4>
-                            <p className={styles.chatPreview}>Click here to open league banter...</p>
-                        </div>
-                    </div>
+        <div className={styles.pageContainer}>
+            <div className={styles.header}>
+                <i className="material-icons" style={{ fontSize: '32px', color: '#eebf1c' }}>forum</i>
+                <div>
+                    <h1 className={styles.title}>League Chat</h1>
+                    <p className={styles.subtitle}>Coordinate trades and talk trash.</p>
                 </div>
             </div>
-            
-            <div className={styles.chatWindow}>
+
+            <div className={styles.chatContainer}>
                 <div className={styles.emptyState}>
-                    <i className="material-icons" style={{ fontSize: '48px', color: '#334155', marginBottom: '15px' }}>chat</i>
-                    <h2>Select a conversation</h2>
-                    <p>Choose a DM or the League Chat to start messaging.</p>
+                    <i className="material-icons" style={{ fontSize: '64px', color: '#eebf1c', marginBottom: '10px' }}>construction</i>
+                    <h3>Under Construction</h3>
+                    <p>We are currently building out the ultimate real-time league chat.</p>
+                    <p style={{ marginTop: '5px', fontSize: '0.85em', color: '#64748b', fontWeight: '600' }}>Check back later this season!</p>
                 </div>
             </div>
         </div>

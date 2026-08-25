@@ -16,6 +16,7 @@ import Projections from './pages/Projections';
 import Transactions from './pages/Transactions';
 import Matchups from './pages/Matchups';
 import Players from './pages/Players';
+import Messages from './pages/Messages';
 
 // Tools
 import StartSit from './pages/StartSit';
@@ -40,6 +41,9 @@ import AdminNotes from './pages/admin/AdminNotes';
 import AdminFees from './pages/admin/AdminFees';
 import AdminConstitution from './pages/admin/AdminConstitution';
 
+// Terms and Privacy
+import Terms from './pages/Terms';
+import Privacy from './pages/Privacy';
 const RequireOnboarding = ({ children }) => {
     const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
     if (!hasSeenOnboarding) return <Navigate to="/onboarding" replace />;
@@ -101,6 +105,9 @@ function App() {
                         <Route path="/admin/constitution" element={<AdminConstitution />} />
                         <Route path="/admin/notes" element={<AdminNotes />} />
                         <Route path="/admin/fees" element={<AdminFees />} />
+                        <Route path="/messages" element={<Messages />} />
+<Route path="/terms" element={<Terms />} />
+<Route path="/privacy" element={<Privacy />} />
                     </Route>
                 </Routes>
             </Router>
