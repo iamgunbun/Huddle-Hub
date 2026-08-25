@@ -1,48 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { Capacitor } from '@capacitor/core';
 import { Purchases } from '@revenuecat/purchases-capacitor';
 import styles from './PremiumModal.module.css';
 
 export default function PremiumModal({ onClose }) {
-    const [userId, setUserId] = useState(null);
     const [processing, setProcessing] = useState(false);
 
-    useEffect(() => {
-        const fetchUser = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) setUserId(user.id);
-        };
-        fetchUser();
-    }, []);
-
     const handleUpgrade = async () => {
-        if (!userId) {
+        setProcessing(true);
+        
+        // 1. Fetch the user directly at the exact moment of the click
+        const { data: { user }, error } = await supabase.auth.getUser();
+        
+        if (error || !user) {
             alert("Please log in to upgrade your account.");
+            setProcessing(false);
             return;
         }
-
-        setProcessing(true);
 
         // NATIVE CHECKOUT FLOW (Google Play / App Store via RevenueCat)
         if (Capacitor.isNativePlatform()) {
             try {
-                // Link the purchase directly to the user's Supabase ID
-                await Purchases.logIn({ appUserID: userId });
+                await Purchases.logIn({ appUserID: user.id });
                 
-                // Fetch the $9.99 subscription package from RevenueCat
                 const offerings = await Purchases.getOfferings();
                 if (offerings.current !== null && offerings.current.availablePackages.length !== 0) {
                     
-                    // Trigger the native bottom-sheet checkout
                     const { customerInfo } = await Purchases.purchasePackage({ 
                         package: offerings.current.availablePackages[0] 
                     });
                     
-                    // Check if the payment successfully unlocked your "premium" tier
                     if (typeof customerInfo.entitlements.active['premium'] !== "undefined") {
-                        // Immediately flip their status in Supabase so the web app syncs instantly
-                        await supabase.from('profiles').update({ is_premium: true }).eq('id', userId);
+                        await supabase.from('profiles').update({ is_premium: true }).eq('id', user.id);
                         alert("Welcome to Huddle Premium!");
                         window.location.reload(); 
                     }
@@ -58,8 +48,8 @@ export default function PremiumModal({ onClose }) {
             }
         } else {
             // WEB CHECKOUT FLOW (Stripe)
-            // Passes the user's Supabase ID in the URL to the webhook
-            const stripePaymentUrl = `https://buy.stripe.com/test_5kQ3cocYZ0dagfH81CeUU00`;
+            // Properly appends the user ID to the Stripe link so your webhook knows who paid
+            const stripePaymentUrl = `https://buy.stripe.com/test_5kQ3cocYZ0dagfH81CeUU00?client_reference_id=${user.id}`;
             window.location.href = stripePaymentUrl;
         }
     };
@@ -72,7 +62,6 @@ export default function PremiumModal({ onClose }) {
                 </button>
                 
                 <div className={styles.header}>
-                    {/* REPLACED BASIC ICON AND TEXT WITH THE LARGE PRO BANNER */}
                     <img 
                         src="/pro-banner.png" 
                         alt="Huddle Pro" 
@@ -82,7 +71,6 @@ export default function PremiumModal({ onClose }) {
                 </div>
 
                 <ul className={styles.featureList}>
-                    <li><i className="material-icons">check_circle</i> <span><strong>Ad-Free Experience:</strong> Zero interruptions.</span></li>
                     <li><i className="material-icons">check_circle</i> <span><strong>Unlimited Leagues:</strong> Connect as many leagues as you want (Free tier is limited to 2).</span></li>
                     <li><i className="material-icons">check_circle</i> <span><strong>Scouting Pipelines:</strong> Full access to the Trade and Draft Graders.</span></li>
                     <li><i className="material-icons">check_circle</i> <span><strong>Start/Sit Verdicts:</strong> Deep-dive tactical verdicts for your toughest lineup decisions.</span></li>

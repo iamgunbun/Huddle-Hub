@@ -114,12 +114,10 @@ export default function Sidebar({ isOpen, onClose }) {
                             </div>
                             <div className={styles.link} onClick={() => {navigate('/trade-analyzer'); if(onClose) onClose();}}>
                                 <i className="material-icons">query_stats</i> Trade Analyzer 
-                                {/* INCREASED HEIGHT TO 30px */}
                                 <img src="/pro-banner.png" alt="PRO" style={{ height: '30px', marginLeft: '10px', verticalAlign: 'middle', objectFit: 'contain' }} />
                             </div>
                             <div className={styles.link} onClick={() => {navigate('/draft-analyzer'); if(onClose) onClose();}}>
                                 <i className="material-icons">psychology</i> Draft Analyzer 
-                                {/* INCREASED HEIGHT TO 30px */}
                                 <img src="/pro-banner.png" alt="PRO" style={{ height: '30px', marginLeft: '10px', verticalAlign: 'middle', objectFit: 'contain' }} />
                             </div>
                         </div>
@@ -178,7 +176,13 @@ export default function Sidebar({ isOpen, onClose }) {
                     </div>
 
                     <div className={styles.footer}>
-                        <div className={styles.settingsLink} onClick={() => setIsSettingsOpen(true)}>
+                        <div 
+                            className={styles.settingsLink} 
+                            onClick={() => { 
+                                setIsSettingsOpen(true); 
+                                if (onClose) onClose(); 
+                            }}
+                        >
                             <i className="material-icons">settings</i> Settings
                         </div>
                         <div className={styles.logoutLink} onClick={handleSignOut}>
