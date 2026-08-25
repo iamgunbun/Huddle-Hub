@@ -188,6 +188,29 @@ export default function Sidebar({ isOpen, onClose }) {
                         <div className={styles.logoutLink} onClick={handleSignOut}>
                             <i className="material-icons">logout</i> Log Out
                         </div>
+
+                        {/* LEGAL LINKS - PERFECTLY CENTERED AT THE BOTTOM */}
+                        <div style={{ 
+                            display: 'flex', 
+                            justifyContent: 'center', 
+                            gap: '20px', 
+                            marginTop: '15px', 
+                            borderTop: '1px solid rgba(255, 255, 255, 0.05)', 
+                            paddingTop: '15px' 
+                        }}>
+                            <span 
+                                onClick={() => { navigate('/terms'); if (onClose) onClose(); }} 
+                                style={{ fontSize: '0.7em', color: '#64748b', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '1px' }}
+                            >
+                                Terms
+                            </span>
+                            <span 
+                                onClick={() => { navigate('/privacy'); if (onClose) onClose(); }} 
+                                style={{ fontSize: '0.7em', color: '#64748b', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '1px' }}
+                            >
+                                Privacy
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>
