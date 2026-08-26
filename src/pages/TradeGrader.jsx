@@ -131,7 +131,13 @@ export default function TradeGrader() {
 
     const formatAssetForPrompt = (asset) => {
         if (asset.assetType === 'pick') return `- ${asset.year} Round ${asset.round} Draft Pick`;
-        return `- ${asset.fn || asset.first_name} ${asset.ln || asset.last_name} (${asset.pos || asset.position} - ${asset.t || asset.team || 'FA'})`;
+        const name = `${asset.fn || asset.first_name} ${asset.ln || asset.last_name}`;
+        const team = asset.t || asset.team || 'FA';
+        const position = asset.pos || asset.position || 'Unknown';
+        const status = asset.injury_status || asset.status || 'Active';
+        
+        // Injects the live current team and status explicitly into the list of assets
+        return `- ${name} | Position: ${position} | CURRENT TEAM: ${team} | Status: ${status}`;
     };
 
     const runTradeEvaluation = async () => {
@@ -156,6 +162,9 @@ export default function TradeGrader() {
         const pipelinePrompt = `
             You are an expert NFL fantasy football analyst for a ${leagueType} format league. Evaluate this exact trade proposal.
             
+            CRITICAL ROSTER OVERRIDE:
+            Do not rely on historical training data for player teams, depth charts, or injury statuses. Treat the "CURRENT TEAM" and "Status" provided below as absolute, up-to-date facts for the ${new Date().getFullYear()} season. Base your evaluation strictly on this current context.
+
             SIDE A RECEIVES:
             ${formatSideA || '- Nothing'}
 
@@ -163,7 +172,7 @@ export default function TradeGrader() {
             ${formatSideB || '- Nothing'}
 
             YOUR TASK:
-            1. Assess the value gained and lost by both sides.
+            1. Assess the value gained and lost by both sides based strictly on their CURRENT TEAMS provided above.
             2. Critically factor in the specific league format (${leagueType}). Draft picks hold massive weight in Dynasty, moderate in Keeper, and zero in Redraft.
             3. Assign a strict letter grade to both sides.
             4. Declare a winner or 'Even'.
@@ -173,7 +182,7 @@ export default function TradeGrader() {
                 "gradeA": "Letter grade for Side A",
                 "gradeB": "Letter grade for Side B",
                 "winner": "State which side wins, or 'Even'",
-                "analysis": "Detailed 4-5 sentence analysis explaining the grades based on the format."
+                "analysis": "Detailed 4-5 sentence analysis explaining the grades based on the format and the players' current teams."
             }
         `;
         
