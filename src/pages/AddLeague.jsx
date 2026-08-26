@@ -1,158 +1,264 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
+import { fetchAndNormalizeESPNLeague } from '../utils/espnService';
 import styles from './AddLeague.module.css';
 
 export default function AddLeague() {
     const navigate = useNavigate();
-    const { loadLeagueContext, isPremium, leagueCount, setShowPremiumModal } = useLeague();
+    const { loadLeagueContext } = useLeague();
     
-    const [userId, setUserId] = useState(null);
-    const [step, setStep] = useState(1);
+    // Platform Toggle: 'sleeper' or 'espn'
+    const [activeTab, setActiveTab] = useState('sleeper');
+    
+    // Sleeper State
+    const [sleeperUsername, setSleeperUsername] = useState('');
+    
+    // ESPN State
+    const [espnLeagueId, setEspnLeagueId] = useState('');
+    const [isPrivate, setIsPrivate] = useState(false);
+    const [espnS2, setEspnS2] = useState('');
+    const [swid, setSwid] = useState('');
+    
+    // UI States
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    
-    const [username, setUsername] = useState('');
-    const [sleeperUserId, setSleeperUserId] = useState('');
-    const [leagues, setLeagues] = useState([]);
-    const [selectedLeagueIds, setSelectedLeagueIds] = useState([]);
-    const [isCommissioner, setIsCommissioner] = useState(false);
+    const [errorMsg, setErrorMsg] = useState(null);
+    const [foundLeagues, setFoundLeagues] = useState([]);
 
-    useEffect(() => {
-        const fetchSession = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) setUserId(session.user.id);
-        };
-        fetchSession();
-    }, []);
+    const currentYear = new Date().getFullYear();
 
-    const handleSearchLeagues = async () => {
-        if (!username.trim()) return setError("Please enter your username.");
-        setLoading(true); setError('');
+    const searchSleeper = async (e) => {
+        e.preventDefault();
+        if (!sleeperUsername.trim()) return;
+        setLoading(true);
+        setErrorMsg(null);
+        setFoundLeagues([]);
+
         try {
-            const userRes = await fetch(`https://api.sleeper.app/v1/user/${username.trim()}`);
+            const userRes = await fetch(`https://api.sleeper.app/v1/user/${sleeperUsername.trim()}`);
+            if (!userRes.ok) throw new Error("Could not find Sleeper user.");
             const userData = await userRes.json();
-            if (!userRes.ok || !userData || !userData.user_id) throw new Error("User not found.");
-            
-            setSleeperUserId(userData.user_id);
-            const currentYear = new Date().getFullYear();
+            if (!userData || !userData.user_id) throw new Error("Invalid Sleeper username.");
+
             const leaguesRes = await fetch(`https://api.sleeper.app/v1/user/${userData.user_id}/leagues/nfl/${currentYear}`);
+            if (!leaguesRes.ok) throw new Error("Could not fetch Sleeper leagues.");
             const leaguesData = await leaguesRes.json();
-            
-            if (!leaguesRes.ok || !leaguesData || leaguesData.length === 0) throw new Error("No active leagues found.");
-            setLeagues(leaguesData);
-            setStep(2);
+
+            if (!leaguesData || leaguesData.length === 0) {
+                throw new Error(`No active leagues found for ${currentYear}.`);
+            }
+
+            const formattedLeagues = leaguesData.map(l => ({
+                id: String(l.league_id),
+                name: l.name,
+                avatar: l.avatar ? `https://sleepercdn.com/avatars/thumbs/${l.avatar}` : '/brand.png',
+                platform: 'sleeper'
+            }));
+
+            setFoundLeagues(formattedLeagues);
         } catch (err) {
-            setError(err.message || "An error occurred while contacting Sleeper.");
+            setErrorMsg(err.message);
         } finally {
             setLoading(false);
         }
     };
 
-    const toggleLeagueSelection = (id) => {
-        setSelectedLeagueIds(prev => prev.includes(id) ? prev.filter(lId => lId !== id) : [...prev, id]);
+    const searchESPN = async (e) => {
+        e.preventDefault();
+        if (!espnLeagueId.trim()) return;
+        setLoading(true);
+        setErrorMsg(null);
+        setFoundLeagues([]);
+
+        try {
+            const cookies = isPrivate ? { espn_s2: espnS2.trim(), swid: swid.trim() } : {};
+            const normalized = await fetchAndNormalizeESPNLeague(espnLeagueId, cookies);
+
+            if (!normalized) {
+                throw new Error("Could not locate ESPN league. Verify the ID and try again.");
+            }
+
+            setFoundLeagues([{
+                id: normalized.id,
+                name: normalized.name,
+                avatar: normalized.avatar,
+                platform: 'espn',
+                cookies: isPrivate ? cookies : null
+            }]);
+        } catch (err) {
+            setErrorMsg(err.message || "Failed to connect to ESPN league.");
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const handleConnectLeagues = async () => {
-        if (selectedLeagueIds.length === 0) return setError("Select a league.");
-        
-        // --- PAYWALL CHECK ---
-        if (!isPremium && (leagueCount + selectedLeagueIds.length > 2)) {
-            setShowPremiumModal(true);
-            return;
-        }
-
-        setLoading(true); setError('');
+    const connectLeague = async (league) => {
+        setLoading(true);
+        setErrorMsg(null);
         try {
-            let firstDbLeagueId = null;
-            for (const sleeperId of selectedLeagueIds) {
-                const leagueToConnect = leagues.find(l => l.league_id === sleeperId);
-                
-                let { data: existingLeague } = await supabase.from('leagues').select('id').eq('sleeper_league_id', leagueToConnect.league_id).maybeSingle();
-                let dbLeagueId = existingLeague?.id;
-                
-                if (!existingLeague) {
-                    const { data: newLeague, error: insertErr } = await supabase.from('leagues')
-                        .insert({ sleeper_league_id: leagueToConnect.league_id, league_name: leagueToConnect.name, platform: 'sleeper' })
-                        .select().single();
-                    if (insertErr) throw insertErr;
-                    dbLeagueId = newLeague.id;
-                }
-                
-                if (!firstDbLeagueId) firstDbLeagueId = dbLeagueId;
-                
-                let autoTeamName = 'Commissioner Team'; 
-                try {
-                    const uRes = await fetch(`https://api.sleeper.app/v1/league/${leagueToConnect.league_id}/users`);
-                    if (uRes.ok) {
-                        const uData = await uRes.json();
-                        const matchedUser = uData.find(u => u.user_id === sleeperUserId);
-                        if (matchedUser) autoTeamName = matchedUser.metadata?.team_name || matchedUser.display_name;
-                    }
-                } catch (autoErr) {}
-                
-                if (userId) {
-                    await supabase.from('user_leagues').upsert({
-                        user_id: userId, league_id: dbLeagueId, is_commissioner: isCommissioner, team_name: autoTeamName
-                    }, { onConflict: 'user_id, league_id' });
-                }
+            const { data: { session }, error: authErr } = await supabase.auth.getSession();
+            if (authErr || !session?.user) throw new Error("You must be logged in to connect a league.");
+
+            const userId = session.user.id;
+
+            const { data: existing } = await supabase
+                .from('user_leagues')
+                .select('*')
+                .eq('user_id', userId)
+                .eq('league_id', league.id)
+                .maybeSingle();
+
+            if (existing) {
+                throw new Error("You are already connected to this league.");
             }
-            await loadLeagueContext(userId, firstDbLeagueId);
+
+            const { error: insertErr } = await supabase.from('user_leagues').insert({
+                user_id: userId,
+                league_id: league.id,
+                platform: league.platform,
+                team_name: league.name
+            });
+
+            if (insertErr) throw insertErr;
+
+            await loadLeagueContext(userId, league.id);
             navigate('/');
         } catch (err) {
-            setError("An error occurred during sync.");
-        } finally {
+            setErrorMsg(err.message);
             setLoading(false);
         }
     };
 
     return (
-        <div className={styles.layout}>
-            <div className={styles.glassBox}>
+        <div className={styles.pageContainer}>
+            <div className={styles.card}>
                 <div className={styles.header}>
-                    <img src="/brand.png" alt="Huddle Logo" className={styles.logo} />
-                    <h1 className={styles.title}>Connect Your League</h1>
-                    <p className={styles.subtitle}>{step === 1 ? "Connect your external fantasy provider." : "Select leagues to sync."}</p>
+                    <i className="material-icons" style={{ fontSize: '40px', color: '#eebf1c' }}>link</i>
+                    <h1 className={styles.title}>Connect League</h1>
+                    <p className={styles.subtitle}>Select your fantasy platform to sync your rosters and data.</p>
                 </div>
-                {error && <div className={styles.error}>{error}</div>}
-                
-                {step === 1 && (
-                    <div className={styles.stepContainer}>
-                        <div className={styles.platformSection}>
-                            <label className={styles.platformLabel}>Sleeper Integration</label>
-                            <input type="text" className={styles.inputField} placeholder="Sleeper Username" value={username} onChange={(e) => setUsername(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearchLeagues()} />
-                            <button className={styles.sleeperBtn} onClick={handleSearchLeagues} disabled={loading}>{loading ? 'SEARCHING...' : 'SYNC SLEEPER'}</button>
+
+                <div className={styles.tabContainer}>
+                    <button 
+                        type="button"
+                        className={`${styles.tabBtn} ${activeTab === 'sleeper' ? styles.activeTab : ''}`}
+                        onClick={() => { setActiveTab('sleeper'); setFoundLeagues([]); setErrorMsg(null); }}
+                    >
+                        Sleeper
+                    </button>
+                    <button 
+                        type="button"
+                        className={`${styles.tabBtn} ${activeTab === 'espn' ? styles.activeTab : ''}`}
+                        onClick={() => { setActiveTab('espn'); setFoundLeagues([]); setErrorMsg(null); }}
+                    >
+                        ESPN
+                    </button>
+                </div>
+
+                {activeTab === 'sleeper' && (
+                    <form onSubmit={searchSleeper} className={styles.searchForm}>
+                        <label>Sleeper Username</label>
+                        <div className={styles.inputWrapper}>
+                            <input 
+                                type="text" 
+                                placeholder="e.g. FantasyChamp24" 
+                                value={sleeperUsername}
+                                onChange={(e) => setSleeperUsername(e.target.value)}
+                                className={styles.inputField}
+                            />
+                            <button type="submit" className={styles.searchBtn} disabled={loading || !sleeperUsername}>
+                                {loading ? 'Searching...' : 'Search'}
+                            </button>
                         </div>
+                    </form>
+                )}
+
+                {activeTab === 'espn' && (
+                    <form onSubmit={searchESPN} className={styles.searchForm}>
+                        <label>ESPN League ID</label>
+                        <div className={styles.inputWrapper}>
+                            <input 
+                                type="text" 
+                                placeholder="e.g. 123456789" 
+                                value={espnLeagueId}
+                                onChange={(e) => setEspnLeagueId(e.target.value.replace(/\D/g, ''))}
+                                className={styles.inputField}
+                            />
+                            <button type="submit" className={styles.searchBtn} disabled={loading || !espnLeagueId}>
+                                {loading ? 'Connecting...' : 'Connect'}
+                            </button>
+                        </div>
+                        <p className={styles.helperText}>Find your League ID in your ESPN URL: <i>leagueId=123456789</i></p>
+
+                        <div className={styles.accordionToggle} onClick={() => setIsPrivate(!isPrivate)}>
+                            <span>{isPrivate ? '▲ Hide Private League Settings' : '▼ Is this a Private League?'}</span>
+                        </div>
+
+                        {isPrivate && (
+                            <div className={styles.privateBox}>
+                                <div className={styles.cookieInputGroup}>
+                                    <label>espn_s2 Cookie</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="AEB... (long token)"
+                                        value={espnS2} 
+                                        onChange={(e) => setEspnS2(e.target.value)} 
+                                        className={styles.inputField} 
+                                    />
+                                </div>
+                                <div className={styles.cookieInputGroup}>
+                                    <label>SWID Cookie</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="{12345678-ABCD-...}" 
+                                        value={swid} 
+                                        onChange={(e) => setSwid(e.target.value)} 
+                                        className={styles.inputField} 
+                                    />
+                                </div>
+                                <p className={styles.helperText}>
+                                    Found in browser DevTools (F12) → Storage/Application → Cookies → espn.com
+                                </p>
+                            </div>
+                        )}
+                    </form>
+                )}
+
+                {errorMsg && (
+                    <div className={styles.errorBox}>
+                        <i className="material-icons">error_outline</i> {errorMsg}
                     </div>
                 )}
-                
-                {step === 2 && (
-                    <div className={styles.stepContainer}>
+
+                {foundLeagues.length > 0 && (
+                    <div className={styles.resultsContainer}>
+                        <h3 className={styles.resultsTitle}>Available Leagues</h3>
                         <div className={styles.leagueList}>
-                            {leagues.map(l => (
-                                <div key={l.league_id} className={`${styles.leagueCard} ${selectedLeagueIds.includes(l.league_id) ? styles.activeCard : ''}`} onClick={() => toggleLeagueSelection(l.league_id)}>
-                                    <div className={styles.checkboxWrapper}><div className={`${styles.checkCircle} ${selectedLeagueIds.includes(l.league_id) ? styles.checked : ''}`}></div></div>
-                                    <div className={styles.leagueAvatar} style={{ backgroundImage: `url(https://sleepercdn.com/avatars/thumbs/${l.avatar}), url(https://sleepercdn.com/images/v2/icons/league_default.webp)` }} />
-                                    <div className={styles.leagueNameWrapper}>
-                                        <div className={styles.leagueName}>{l.name}</div>
-                                        <div className={styles.leagueMeta}>{l.total_rosters} Teams</div>
+                            {foundLeagues.map(league => (
+                                <div key={league.id} className={styles.leagueItem}>
+                                    <div className={styles.leagueInfo}>
+                                        <img src={league.avatar} alt="Logo" className={styles.leagueAvatar} />
+                                        <div className={styles.leagueMeta}>
+                                            <span className={styles.leagueName}>{league.name}</span>
+                                            <span className={styles.leaguePlatform}>
+                                                {league.platform === 'sleeper' ? 'Sleeper API' : 'ESPN Fantasy'}
+                                            </span>
+                                        </div>
                                     </div>
+                                    <button 
+                                        type="button"
+                                        className={styles.connectBtn} 
+                                        onClick={() => connectLeague(league)}
+                                        disabled={loading}
+                                    >
+                                        Connect
+                                    </button>
                                 </div>
                             ))}
                         </div>
-                        <label className={styles.checkboxContainer}>
-                            <input type="checkbox" checked={isCommissioner} onChange={(e) => setIsCommissioner(e.target.checked)} />
-                            <span className={styles.checkmark}></span>
-                            I am the Commissioner
-                        </label>
-                        <div className={styles.buttonRow}>
-                            <button className={styles.backBtn} onClick={() => setStep(1)} disabled={loading}>BACK</button>
-                            <button className={styles.goldBtn} onClick={handleConnectLeagues} disabled={loading || selectedLeagueIds.length === 0}>{loading ? 'SYNCING...' : 'CONNECT LEAGUES'}</button>
-                        </div>
                     </div>
                 )}
-                <div className={styles.cancelLink} onClick={() => navigate(-1)}>Cancel and go back</div>
             </div>
         </div>
     );

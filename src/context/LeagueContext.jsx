@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
+import { fetchAndNormalizeESPNLeague } from '../utils/espnService';
 
 const LeagueContext = createContext();
 
@@ -7,18 +8,15 @@ export function useLeague() {
     return useContext(LeagueContext);
 }
 
-// Helper to securely format the Sleeper avatar without double-encoding it
 const formatAvatarUrl = (avatar) => {
     if (!avatar || typeof avatar !== 'string' || avatar.trim() === '' || avatar === 'null') {
         return '/brand.png';
     }
     
-    // If it's already a fully qualified URL, return it directly
     if (avatar.startsWith('http') || avatar.startsWith('/')) {
         return avatar;
     }
     
-    // Otherwise, append the Sleeper CDN
     return `https://sleepercdn.com/avatars/thumbs/${avatar}`;
 };
 
@@ -27,7 +25,6 @@ export function LeagueProvider({ children }) {
     const [userLeagues, setUserLeagues] = useState([]); 
     const [loading, setLoading] = useState(true);
     
-    // Premium & Limits State
     const [isPremium, setIsPremium] = useState(false);
     const [showPremiumModal, setShowPremiumModal] = useState(false);
     const [leagueCount, setLeagueCount] = useState(0);
@@ -57,7 +54,7 @@ export function LeagueProvider({ children }) {
             }
 
             // 2. Fetch User Leagues Mapping
-            const { data: userLeaguesData, error: ulError } = await supabase
+            const { data: userLeaguesData } = await supabase
                 .from('user_leagues')
                 .select('*')
                 .eq('user_id', userId);
@@ -73,49 +70,73 @@ export function LeagueProvider({ children }) {
                 // 3. Build the flattened league objects
                 const flattenedLeagues = await Promise.all(userLeaguesData.map(async (ul) => {
                     const matchedLeague = leaguesData?.find(l => l.id === ul.league_id || l.sleeper_league_id === ul.league_id) || {};
-                    const sleeperId = matchedLeague.sleeper_league_id || ul.league_id;
-                    
-                    let sleeperAvatar = null;
-                    let sleeperName = null;
+                    const targetId = ul.league_id || matchedLeague.id;
+                    const isESPN = ul.platform === 'espn' || matchedLeague.platform === 'espn';
 
-                    if (sleeperId) {
+                    let liveData = {};
+
+                    if (isESPN) {
                         try {
-                            const res = await fetch(`https://api.sleeper.app/v1/league/${sleeperId}`);
-                            if (res.ok) {
-                                const sData = await res.json();
-                                sleeperAvatar = sData.avatar;
-                                sleeperName = sData.name;
+                            const espnData = await fetchAndNormalizeESPNLeague(targetId);
+                            if (espnData) {
+                                liveData = {
+                                    sleeper_league_id: espnData.sleeper_league_id,
+                                    avatar: espnData.avatar,
+                                    name: espnData.name,
+                                    total_rosters: espnData.total_rosters,
+                                    settings: espnData.settings
+                                };
                             }
                         } catch (e) {
-                            console.warn("Failed to fetch live sleeper data for", sleeperId);
+                            console.warn("Failed to fetch live ESPN league data for", targetId);
+                        }
+                    } else {
+                        const sleeperId = matchedLeague.sleeper_league_id || targetId;
+                        if (sleeperId) {
+                            try {
+                                const res = await fetch(`https://api.sleeper.app/v1/league/${sleeperId}`);
+                                if (res.ok) {
+                                    const sData = await res.json();
+                                    liveData = {
+                                        sleeper_league_id: sleeperId,
+                                        avatar: sData.avatar,
+                                        name: sData.name,
+                                        total_rosters: sData.total_rosters,
+                                        settings: sData.settings
+                                    };
+                                }
+                            } catch (e) {
+                                console.warn("Failed to fetch live Sleeper data for", sleeperId);
+                            }
                         }
                     }
 
-                    const resolvedName = sleeperName || matchedLeague.league_name || matchedLeague.name || ul.team_name || "Unnamed League";
-                    const rawAvatar = sleeperAvatar || matchedLeague.avatar || matchedLeague.league_avatar || ul.avatar;
-                    const formattedAvatar = formatAvatarUrl(rawAvatar);
+                    const resolvedName = liveData.name || matchedLeague.league_name || matchedLeague.name || ul.team_name || "Unnamed League";
+                    const rawAvatar = liveData.avatar || matchedLeague.avatar || matchedLeague.league_avatar || ul.avatar;
+                    const finalAvatar = isESPN ? (rawAvatar || '/brand.png') : formatAvatarUrl(rawAvatar);
 
                     return {
                         ...matchedLeague, 
-                        ...ul,            
+                        ...ul,
+                        ...liveData,            
                         league_name: resolvedName,
                         name: resolvedName,
-                        avatar: formattedAvatar,
-                        league_avatar: formattedAvatar,
-                        league_id: ul.league_id || matchedLeague.id,
-                        sleeper_league_id: sleeperId
+                        avatar: finalAvatar,
+                        league_avatar: finalAvatar,
+                        league_id: targetId,
+                        platform: isESPN ? 'espn' : 'sleeper'
                     };
                 }));
 
                 setUserLeagues(flattenedLeagues); 
                 setLeagueCount(flattenedLeagues.length);
 
-                // 4. Determine Active League (Check parameter -> localStorage -> First League)
+                // 4. Determine Active League
                 const savedLeagueId = localStorage.getItem('huddle_active_league_id');
-                const targetId = preferredLeagueId || savedLeagueId || flattenedLeagues[0].league_id;
+                const targetIdToLoad = preferredLeagueId || savedLeagueId || flattenedLeagues[0].league_id;
 
                 const activeConnection = flattenedLeagues.find(
-                    ul => ul.league_id === targetId || ul.sleeper_league_id === targetId || ul.id === targetId
+                    ul => ul.league_id === targetIdToLoad || ul.sleeper_league_id === targetIdToLoad || ul.id === targetIdToLoad
                 ) || flattenedLeagues[0];
 
                 if (activeConnection) {
@@ -141,12 +162,10 @@ export function LeagueProvider({ children }) {
         }
     }, []);
 
-    // FAST IN-MEMORY SWITCH: Zero delay, no re-fetching all leagues from Sleeper
     const switchActiveLeague = async (leagueId) => {
         if (!leagueId) return;
 
         try {
-            // Find in current memory cache
             const target = userLeagues.find(
                 l => l.league_id === leagueId || l.sleeper_league_id === leagueId || l.id === leagueId
             );
@@ -163,7 +182,6 @@ export function LeagueProvider({ children }) {
                 return;
             }
 
-            // Fallback if userLeagues wasn't populated yet
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.user) {
                 await loadLeagueContext(session.user.id, leagueId);
@@ -209,7 +227,6 @@ export function LeagueProvider({ children }) {
                 const savedId = localStorage.getItem('huddle_active_league_id');
                 loadLeagueContext(session.user.id, savedId);
             }
-            // Background token refreshes ('TOKEN_REFRESHED') will no longer wipe your league state!
         });
 
         return () => {

@@ -1,23 +1,21 @@
-.layout {
+.pageContainer {
     display: flex;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
     padding: 20px;
-    font-family: 'Montserrat', sans-serif;
-    box-sizing: border-box;
+    background-color: #0b0e14;
+    color: #f8fafc;
 }
 
-.glassBox {
-    background: rgba(11, 14, 20, 0.8);
-    backdrop-filter: blur(15px);
-    border: 1px solid rgba(238, 191, 28, 0.3);
-    border-radius: 16px;
-    padding: 50px 40px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-    max-width: 550px;
+.card {
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    padding: 40px;
     width: 100%;
-    box-sizing: border-box;
+    max-width: 500px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 
 .header {
@@ -25,324 +23,227 @@
     margin-bottom: 30px;
 }
 
-.logo {
-    max-width: 100px;
-    margin-bottom: 20px;
-}
-
 .title {
-    color: #f8fafc;
+    margin: 10px 0 5px 0;
     font-size: 1.8em;
-    font-weight: 800;
+    font-weight: 900;
     text-transform: uppercase;
     letter-spacing: 1px;
-    margin: 0 0 10px 0;
 }
 
 .subtitle {
     color: #94a3b8;
-    font-size: 0.95em;
     margin: 0;
-    line-height: 1.5;
+    font-size: 0.9em;
 }
 
-.error {
-    background: rgba(239, 68, 68, 0.1);
-    color: #ef4444;
-    padding: 12px;
-    border: 1px solid rgba(239, 68, 68, 0.3);
+.tabContainer {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 25px;
+    background: #1e293b;
+    padding: 5px;
     border-radius: 8px;
-    font-size: 0.85em;
-    margin-bottom: 20px;
-    font-weight: bold;
-    text-align: center;
 }
 
-.stepContainer {
+.tabBtn {
+    flex: 1;
+    padding: 12px;
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-weight: 700;
+    font-size: 0.9em;
+    text-transform: uppercase;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.activeTab {
+    background: #0b0e14;
+    color: #eebf1c;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.searchForm {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 8px;
 }
 
-/* --- STEP 1: PLATFORM SECTION --- */
-.platformSection {
-    background: rgba(0, 0, 0, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 12px;
-    padding: 25px;
-}
-
-.platformLabel {
-    display: block;
-    color: #94a3b8;
-    font-size: 0.75em;
-    font-weight: 800;
+.searchForm label {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #cbd5e1;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 15px;
+    letter-spacing: 0.5px;
+}
+
+.inputWrapper {
+    display: flex;
+    gap: 10px;
 }
 
 .inputField {
-    width: 100%;
-    padding: 16px;
-    background: rgba(0, 0, 0, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    flex: 1;
+    background: #1e293b;
+    border: 1px solid #334155;
+    padding: 12px 15px;
     border-radius: 8px;
     color: #f8fafc;
-    font-family: inherit;
     font-size: 1em;
-    font-weight: 500;
     outline: none;
-    box-sizing: border-box;
-    transition: all 0.3s;
+    transition: border-color 0.2s ease;
 }
 
 .inputField:focus {
     border-color: #eebf1c;
-    box-shadow: 0 0 15px rgba(238, 191, 28, 0.15);
 }
 
-.sleeperBtn {
-    width: 100%;
-    padding: 16px;
-    background: #1e2530;
-    color: #cbd5e1;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    cursor: pointer;
-    transition: 0.2s;
-}
-
-.sleeperBtn:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.05);
+.searchBtn {
+    background: #334155;
     color: #f8fafc;
-    border-color: #eebf1c;
+    border: none;
+    padding: 0 20px;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s;
 }
 
-.sleeperBtn:disabled {
-    opacity: 0.6;
+.searchBtn:hover:not(:disabled) {
+    background: #475569;
+}
+
+.searchBtn:disabled {
+    opacity: 0.5;
     cursor: not-allowed;
 }
 
-/* --- STEP 2: LEAGUE SELECTION --- */
+.helperText {
+    margin: 5px 0 0 0;
+    font-size: 0.75em;
+    color: #64748b;
+}
+
+.accordionToggle {
+    margin-top: 15px;
+    font-size: 0.85em;
+    color: #eebf1c;
+    cursor: pointer;
+    font-weight: 600;
+    user-select: none;
+}
+
+.privateBox {
+    margin-top: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px dashed #334155;
+    padding: 15px;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.cookieInputGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.cookieInputGroup label {
+    font-size: 0.75em;
+    color: #94a3b8;
+}
+
+.errorBox {
+    margin-top: 20px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+    padding: 12px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.9em;
+    font-weight: 600;
+}
+
+.resultsContainer {
+    margin-top: 30px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding-top: 20px;
+}
+
+.resultsTitle {
+    font-size: 0.9em;
+    color: #94a3b8;
+    text-transform: uppercase;
+    margin: 0 0 15px 0;
+}
+
 .leagueList {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    max-height: 300px;
-    overflow-y: auto;
-    padding-right: 5px;
-    margin-bottom: 15px;
 }
 
-.leagueList::-webkit-scrollbar { width: 4px; }
-.leagueList::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
-
-.leagueCard {
+.leagueItem {
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    background: rgba(0, 0, 0, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #1e293b;
+    padding: 12px;
     border-radius: 8px;
-    padding: 12px 15px;
-    cursor: pointer;
-    transition: all 0.2s;
+    border: 1px solid #334155;
 }
 
-.leagueCard:hover {
-    background: rgba(255, 255, 255, 0.05);
-}
-
-.activeCard {
-    background: rgba(238, 191, 28, 0.05);
-    border-color: #eebf1c;
-}
-
-.checkboxWrapper {
+.leagueInfo {
     display: flex;
     align-items: center;
-    justify-content: center;
-    margin-right: 15px;
-}
-
-.checkCircle {
-    width: 20px;
-    height: 20px;
-    border-radius: 4px;
-    border: 2px solid #475569;
-    transition: 0.2s;
-    position: relative;
-}
-
-.checkCircle.checked {
-    background: #eebf1c;
-    border-color: #eebf1c;
-}
-
-.checkCircle.checked::after {
-    content: '';
-    position: absolute;
-    left: 6px;
-    top: 2px;
-    width: 4px;
-    height: 9px;
-    border: solid #0b0e14;
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
+    gap: 12px;
 }
 
 .leagueAvatar {
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    background-size: cover;
-    background-position: center;
-    margin-right: 15px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background-color: #111;
-    flex-shrink: 0;
-}
-
-.leagueNameWrapper {
-    display: flex;
-    flex-direction: column;
-    flex-grow: 1;
-    overflow: hidden;
-}
-
-.leagueName {
-    color: #f8fafc;
-    font-weight: 700;
-    font-size: 0.95em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    object-fit: cover;
+    border: 2px solid #475569;
 }
 
 .leagueMeta {
-    color: #64748b;
-    font-size: 0.8em;
-    margin-top: 2px;
-}
-
-.checkboxContainer {
     display: flex;
-    align-items: center;
-    color: #cbd5e1;
-    font-size: 0.9em;
-    font-weight: 500;
-    cursor: pointer;
-    margin-bottom: 20px;
+    flex-direction: column;
 }
 
-.checkboxContainer input {
-    display: none;
+.leagueName {
+    font-weight: 700;
+    font-size: 0.95em;
 }
 
-.checkmark {
-    width: 18px;
-    height: 18px;
-    border: 2px solid #475569;
-    border-radius: 4px;
-    margin-right: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
-}
-
-.checkboxContainer input:checked ~ .checkmark {
-    background: #eebf1c;
-    border-color: #eebf1c;
-}
-
-.checkboxContainer input:checked ~ .checkmark::after {
-    content: '';
-    width: 4px;
-    height: 8px;
-    border: solid #0b0e14;
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
-    margin-bottom: 2px;
-}
-
-/* --- BUTTONS --- */
-.buttonRow {
-    display: flex;
-    gap: 15px;
-}
-
-.backBtn {
-    flex: 1;
-    padding: 16px;
-    background: transparent;
+.leaguePlatform {
+    font-size: 0.75em;
     color: #94a3b8;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    cursor: pointer;
-    transition: 0.2s;
 }
 
-.backBtn:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.05);
-    color: #f8fafc;
-}
-
-.goldBtn {
-    flex: 2;
-    padding: 16px;
-    background: linear-gradient(90deg, #b8860b, #ffd700, #b8860b);
-    background-size: 200% auto;
-    color: #000;
+.connectBtn {
+    background: #eebf1c;
+    color: #0b0e14;
     border: none;
-    border-radius: 8px;
-    font-weight: 900;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 800;
+    cursor: pointer;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    cursor: pointer;
-    transition: 0.5s;
+    font-size: 0.8em;
+    transition: transform 0.1s;
 }
 
-.goldBtn:hover:not(:disabled) {
-    background-position: right center;
-    box-shadow: 0 0 20px rgba(238, 191, 28, 0.4);
-}
-
-.goldBtn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.cancelLink {
-    text-align: center;
-    color: #64748b;
-    font-size: 0.85em;
-    font-weight: 600;
-    margin-top: 25px;
-    cursor: pointer;
-    transition: color 0.2s;
-}
-
-.cancelLink:hover {
-    color: #cbd5e1;
-    text-decoration: underline;
-}
-
-/* --- RESPONSIVE OVERRIDES --- */
-@media (max-width: 600px) {
-    .glassBox {
-        padding: 30px 20px;
-    }
-    .title {
-        font-size: 1.5em;
-    }
-    .buttonRow {
-        flex-direction: column;
-    }
+.connectBtn:active {
+    transform: scale(0.95);
 }
