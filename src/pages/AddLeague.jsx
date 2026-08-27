@@ -149,10 +149,11 @@ export default function AddLeague() {
                     </button>
                     <button 
                         type="button"
-                        className={`${styles.tabBtn} ${activeTab === 'espn' ? styles.activeTab : ''}`}
-                        onClick={() => { setActiveTab('espn'); setFoundLeagues([]); setErrorMsg(null); }}
+                        className={styles.tabBtn}
+                        disabled
+                        title="ESPN Integration Coming Soon"
                     >
-                        ESPN
+                        ESPN (Soon)
                     </button>
                 </div>
 

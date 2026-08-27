@@ -60,6 +60,13 @@
     transition: all 0.2s ease;
 }
 
+.tabBtn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: transparent;
+    color: #64748b;
+}
+
 .activeTab {
     background: #0b0e14;
     color: #eebf1c;
