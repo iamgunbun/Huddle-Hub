@@ -32,7 +32,7 @@ export default function Managers() {
     
     // Engine State
     const [evaluations, setEvaluations] = useState({});
-    const [evalRecords, setEvalRecords] = useState({}); // Stores the raw DB row to track usage dynamically
+    const [evalRecords, setEvalRecords] = useState({}); 
     const [evalLoading, setEvalLoading] = useState(false);
     const [uiErrorMessage, setUiErrorMessage] = useState(null);
     
@@ -140,6 +140,15 @@ export default function Managers() {
         setUiErrorMessage(null);
         
         try {
+            // Strict Premium Paywall - Block non-premium users from executing or fetching
+            if (!isPremium) {
+                if (!autoCheckOnly) {
+                    setShowPremiumModal(true);
+                }
+                setEvalLoading(false);
+                return;
+            }
+
             const currentYear = new Date().getFullYear();
             
             const { data: existing } = await supabase
@@ -150,9 +159,8 @@ export default function Managers() {
                 .eq('year', currentYear)
                 .maybeSingle();
 
-            // Handle legacy rows where 'regenerated' was a boolean instead of a counter
             const currentRegens = existing?.regen_count ?? (existing?.regenerated ? 1 : 0);
-            const regenLimit = isPremium ? 5 : 1;
+            const regenLimit = 5;
 
             // 1. Initial Cache Load (Silent Auto-Check on page load)
             if (existing && !forceRegenerate) {
@@ -168,14 +176,10 @@ export default function Managers() {
                 return;
             }
 
-            // 2. Active Paywall & Limit Check for forced regeneration
+            // 2. Limit Check for forced regeneration
             if (existing && forceRegenerate) {
                 if (currentRegens >= regenLimit) {
-                    if (!isPremium) {
-                        setShowPremiumModal(true);
-                    } else {
-                        alert(`You have reached the absolute maximum of ${regenLimit} scouting reports for this manager this season.`);
-                    }
+                    alert(`You have reached the absolute maximum of ${regenLimit} scouting reports for this manager this season.`);
                     setEvalLoading(false);
                     return;
                 }
@@ -267,10 +271,9 @@ export default function Managers() {
         const evalData = evaluations[selectedManager.managerId];
         const canRegenerate = activeLeague?.is_commissioner || myManagerId === selectedManager.managerId;
         
-        // Dynamically calculate remaining limit for UI. If they upgrade to premium, maxRegens instantly becomes 5.
         const dbRecord = evalRecords[selectedManager.managerId];
         const usedRegens = dbRecord?.regen_count ?? (dbRecord?.regenerated ? 1 : 0);
-        const maxRegens = isPremium ? 5 : 1;
+        const maxRegens = 5;
         const remainingRegens = Math.max(0, maxRegens - usedRegens);
         const hasMaxedRegens = usedRegens >= maxRegens;
 
@@ -316,7 +319,21 @@ export default function Managers() {
                         <div className={styles.detailColumn}>
                             <h4 className={styles.sectionHeading}>Franchise Analytics</h4>
                             <div className={styles.aiBox}>
-                                {uiErrorMessage ? (
+                                {!isPremium ? (
+                                    <div style={{ textAlign: 'center', padding: '20px 10px' }}>
+                                        <i className="material-icons" style={{ fontSize: '40px', color: '#eebf1c', opacity: '0.9', marginBottom: '10px' }}>lock</i>
+                                        <h4 style={{ margin: '0 0 8px 0', color: '#f8fafc', fontSize: '1.1em' }}>Premium AI Scouting</h4>
+                                        <p style={{ fontSize: '0.85em', color: '#94a3b8', lineHeight: '1.5', marginBottom: '15px' }}>
+                                            Unlock deep insights into manager tendencies, trade philosophies, and roster strategies.
+                                        </p>
+                                        <button 
+                                            onClick={() => setShowPremiumModal(true)}
+                                            style={{ background: '#eebf1c', border: 'none', color: '#121212', padding: '10px 20px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.9em', fontWeight: 'bold' }}
+                                        >
+                                            Upgrade to Premium
+                                        </button>
+                                    </div>
+                                ) : uiErrorMessage ? (
                                     <p style={{ color: '#ef4444', fontSize: '0.9em' }}><strong>Pipeline Failure:</strong> {uiErrorMessage}</p>
                                 ) : !evalData && !evalLoading ? (
                                     <div style={{ textAlign: 'center', padding: '15px 0' }}>
@@ -327,7 +344,7 @@ export default function Managers() {
                                             Generate AI Scouting Report
                                         </button>
                                         <div style={{ fontSize: '0.75em', color: '#94a3b8', lineHeight: '1.5', padding: '0 10px' }}>
-                                            <p style={{ margin: '0 0 6px 0', fontWeight: '500' }}>You are allotted {isPremium ? '5 scouting reports' : '1 initial generation and 1 manual regeneration'} per season.</p>
+                                            <p style={{ margin: '0 0 6px 0', fontWeight: '500' }}>You are allotted 5 scouting reports per season.</p>
                                             <p style={{ margin: '0', fontStyle: 'italic', color: '#64748b' }}>*For Keeper & Redraft leagues, we highly recommend waiting until after your draft is complete to generate your evaluation for the most accurate results.</p>
                                         </div>
                                     </div>
@@ -339,9 +356,9 @@ export default function Managers() {
                                     </>
                                 )}
                                 
-                                {evalLoading && <span className={styles.aiSubtext}>Gemini Engine compiling records...</span>}
+                                {isPremium && evalLoading && <span className={styles.aiSubtext}>Gemini Engine compiling records...</span>}
                                 
-                                {evalData && !evalLoading && canRegenerate && !uiErrorMessage && (
+                                {isPremium && evalData && !evalLoading && canRegenerate && !uiErrorMessage && (
                                     <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                                         {hasMaxedRegens ? (
                                             <span className={styles.aiSubtext} style={{ color: '#ef4444' }}>
@@ -407,8 +424,17 @@ export default function Managers() {
                         </div>
 
                         <div className={styles.aiSnippet}>
-                            <i className="material-icons">auto_awesome</i> 
-                            <span>Scouting report ready</span>
+                            {isPremium ? (
+                                <>
+                                    <i className="material-icons">auto_awesome</i> 
+                                    <span>Scouting report ready</span>
+                                </>
+                            ) : (
+                                <>
+                                    <i className="material-icons" style={{ color: '#eebf1c', fontSize: '16px' }}>lock</i> 
+                                    <span style={{ color: '#eebf1c' }}>Pro Scouting Report</span>
+                                </>
+                            )}
                         </div>
                     </div>
                 ))}
