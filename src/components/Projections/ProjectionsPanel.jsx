@@ -47,9 +47,20 @@ export default function ProjectionsPanel() {
                     }
 
                     const weeksPlayed = teamStats.wins + teamStats.losses + teamStats.ties;
-                    const pointsPerWeek = weeksPlayed > 0 ? (teamStats.fpts / weeksPlayed) : rosterStrength;
                     
-                    const powerScore = (teamStats.wins * 25) + pointsPerWeek + (rosterStrength * 2);
+                    // Ratio to blend baseline projections vs actual season performance (maxes at 1 after 14 weeks)
+                    const progress = Math.min(weeksPlayed / 14, 1); 
+
+                    // Blend points per week
+                    const actualPPW = weeksPlayed > 0 ? (teamStats.fpts / weeksPlayed) : rosterStrength;
+                    const expectedPPW = (actualPPW * progress) + (rosterStrength * (1 - progress));
+
+                    // Blend win percentage (Assume 0.500 if no games played)
+                    const actualWinPct = weeksPlayed > 0 ? ((teamStats.wins + (teamStats.ties * 0.5)) / weeksPlayed) : 0.5;
+                    const expectedWinPct = (actualWinPct * progress) + (0.5 * (1 - progress));
+
+                    // Dynamic Power Score
+                    const powerScore = (expectedWinPct * 50) + expectedPPW;
 
                     ranks.push({
                         rosterID,
@@ -61,7 +72,6 @@ export default function ProjectionsPanel() {
                     });
                 }
 
-                // Hard Gatekeeper: If no rosters exist yet at all, exit out early to prevent NaN crash
                 if (ranks.length === 0) {
                     setPowerRankings([]);
                     setPreDraftMode(false);
@@ -69,38 +79,43 @@ export default function ProjectionsPanel() {
                     return;
                 }
 
-                // Check if this is a pre-draft league (all power scores are exactly 0)
                 const isPreDraft = ranks.every(t => t.powerScore === 0);
                 setPreDraftMode(isPreDraft);
 
                 let finalRankings = [];
 
                 if (isPreDraft) {
-                    // Distribute perfect, even baseline probability percentages across all slots
                     finalRankings = ranks.map((team) => {
                         const po = Math.round((playoffSpots / ranks.length) * 100);
                         const champ = Math.round((1 / ranks.length) * 100);
                         return { ...team, po, champ };
                     });
                 } else {
-                    // Standard Deviation Bell Curve Matrix for active leagues
                     ranks.sort((a, b) => b.powerScore - a.powerScore);
                     
-                    const avgPower = ranks.reduce((sum, r) => sum + r.powerScore, 0) / ranks.length;
-                    const variance = ranks.reduce((sum, r) => sum + Math.pow(r.powerScore - avgPower, 2), 0) / ranks.length;
-                    const stdDev = Math.sqrt(variance) || 1; 
+                    const maxPower = ranks[0].powerScore;
+                    
+                    // Softmax sensitivity tuning multipliers
+                    const kChamp = 0.08; 
+                    const kPo = 0.05;
 
-                    finalRankings = ranks.map((team) => {
-                        const zScore = (team.powerScore - avgPower) / stdDev;
-                        const playoffSpotShift = (playoffSpots - (ranks.length / 2)) * 0.4;
-                        
-                        const poOdds = Math.round(100 / (1 + Math.exp(-(zScore * 1.6 + playoffSpotShift))));
-                        const po = Math.max(1, Math.min(99, poOdds)); 
+                    // Calculate exponential weights for mathematical distribution
+                    const champWeights = ranks.map(r => Math.exp(kChamp * (r.powerScore - maxPower)));
+                    const poWeights = ranks.map(r => Math.exp(kPo * (r.powerScore - maxPower)));
 
-                        const champOdds = Math.round(100 / (1 + Math.exp(-(zScore * 2.2 - 1.8))));
-                        const champ = Math.max(0, Math.min(99, champOdds));
+                    const sumChampWeights = champWeights.reduce((a, b) => a + b, 0);
+                    const sumPoWeights = poWeights.reduce((a, b) => a + b, 0);
 
-                        return { ...team, po, champ };
+                    finalRankings = ranks.map((team, index) => {
+                        // Distribute exactly 100% for Champ, and exactly (playoffSpots * 100)% for Playoffs
+                        let champOdds = Math.round((champWeights[index] / sumChampWeights) * 100);
+                        let poOdds = Math.round((poWeights[index] / sumPoWeights) * playoffSpots * 100);
+
+                        // Bound the odds appropriately
+                        champOdds = Math.max(0, Math.min(99, champOdds));
+                        poOdds = Math.max(1, Math.min(99, poOdds)); 
+
+                        return { ...team, po: poOdds, champ: champOdds };
                     });
                 }
 
@@ -118,7 +133,6 @@ export default function ProjectionsPanel() {
         return <div className={styles.card}><p style={{ color: '#94a3b8', padding: '20px', textAlign: 'center', margin: 0, fontStyle: 'italic' }}>Simulating Matchups...</p></div>;
     }
 
-    // TRUE EMPTY STATE: If no teams or rosters are found in the system
     if (powerRankings.length === 0) {
         return (
             <div className={styles.card}>
@@ -148,13 +162,19 @@ export default function ProjectionsPanel() {
             {powerRankings.map((team, i) => (
                 <div key={team.rosterID} className={styles.teamRow}>
                     <div className={styles.rankBadge}>
-                        {preDraftMode ? '-' : (i === 0 ? '-' : i === powerRankings.length - 1 ? '-1' : '-')} 
+                        {preDraftMode ? '-' : (i + 1)} 
                     </div>
                     <img src={team.avatar} alt="Avatar" className={styles.avatar} onError={(e) => e.target.src = 'https://sleepercdn.com/images/v2/icons/league_default.webp'} />
-                    <div className={styles.teamInfo}>
-                        <span className={styles.teamName}>{team.name}</span>
+                    
+                    {/* Added minWidth: 0 to flex container to allow truncation child to work */}
+                    <div className={styles.teamInfo} style={{ flex: 1, minWidth: 0, paddingRight: '10px' }}>
+                        {/* Added block, nowrap, overflow, and ellipsis rules */}
+                        <span className={styles.teamName} style={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {team.name}
+                        </span>
                         <span className={styles.teamRecord}>{team.wins} - {team.losses}</span>
                     </div>
+                    
                     <div className={styles.oddsInfo}>
                         <div className={styles.oddsRow}>
                             <span className={styles.oddsLabel}>PO:</span> 
