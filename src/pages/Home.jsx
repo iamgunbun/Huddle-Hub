@@ -24,6 +24,7 @@ export default function Home() {
     const [leagueTenure, setLeagueTenure] = useState('Loading...');
 
     // Financial Tracking State for League Hub Card
+    const [duesConfigured, setDuesConfigured] = useState(false);
     const [myTxnCount, setMyTxnCount] = useState(0);
     const [myBalanceOwed, setMyBalanceOwed] = useState(0);
 
@@ -49,7 +50,7 @@ export default function Home() {
         const fetchNews = async () => {
             setLoadingNews(true);
             try {
-                const eRes = await fetch(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/news?limit=50`).catch(()=>null);
+                const eRes = await fetch(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/news?limit=50`).catch(() => null);
                 
                 if (eRes && eRes.ok) {
                     const eData = await eRes.json();
@@ -198,14 +199,22 @@ export default function Home() {
 
                         setMyTxnCount(calculatedAddsCount);
 
-                        const baseDues = dbLeagueMeta?.dues_amount ?? 100;
-                        const txnFeeCost = dbLeagueMeta?.enable_txn_fees ? (calculatedAddsCount * (dbLeagueMeta?.txn_fee_amount ?? 1)) : 0;
-                        const totalGrossOwed = baseDues + txnFeeCost;
-                        
-                        const ledger = dbLeagueMeta?.financial_ledger || {};
-                        const collectedAmount = ledger[activeRosterId] || 0;
-                        
-                        setMyBalanceOwed(totalGrossOwed - collectedAmount);
+                        // Check if dues have been set up by the commissioner
+                        const isDuesSetUp = dbLeagueMeta?.dues_amount !== null && dbLeagueMeta?.dues_amount !== undefined && dbLeagueMeta?.dues_amount !== '';
+                        setDuesConfigured(isDuesSetUp);
+
+                        if (isDuesSetUp) {
+                            const baseDues = Number(dbLeagueMeta.dues_amount) || 0;
+                            const txnFeeCost = dbLeagueMeta.enable_txn_fees ? (calculatedAddsCount * (dbLeagueMeta.txn_fee_amount ?? 1)) : 0;
+                            const totalGrossOwed = baseDues + txnFeeCost;
+                            
+                            const ledger = dbLeagueMeta.financial_ledger || {};
+                            const collectedAmount = ledger[activeRosterId] || 0;
+                            
+                            setMyBalanceOwed(totalGrossOwed - collectedAmount);
+                        } else {
+                            setMyBalanceOwed(0);
+                        }
                     }
                 }
                                  
@@ -384,14 +393,26 @@ export default function Home() {
                                 <span className={styles.infoValue}>{myTxnCount} moves</span>
                             </div>
 
-                            <div className={styles.infoRow} style={{ marginBottom: '20px' }}>
-                                <span className={styles.infoLabel}>
-                                    <i className="material-icons" style={{ fontSize: '1.1em', color: myBalanceOwed > 0 ? '#ff2a6d' : '#00ceb8', marginRight: '8px' }}>monetization_on</i> Balance Due
-                                </span>
-                                <span className={styles.infoValue} style={{ color: myBalanceOwed > 0 ? '#ff2a6d' : '#00ceb8', fontWeight: '800' }}>
-                                    ${myBalanceOwed.toFixed(2)}
-                                </span>
-                            </div>
+                            {duesConfigured ? (
+                                <div className={styles.infoRow} style={{ marginBottom: '20px' }}>
+                                    <span className={styles.infoLabel}>
+                                        <i className="material-icons" style={{ fontSize: '1.1em', color: myBalanceOwed > 0 ? '#ff2a6d' : '#00ceb8', marginRight: '8px' }}>monetization_on</i> Balance Due
+                                    </span>
+                                    <span className={styles.infoValue} style={{ color: myBalanceOwed > 0 ? '#ff2a6d' : '#00ceb8', fontWeight: '800' }}>
+                                        ${myBalanceOwed.toFixed(2)}
+                                    </span>
+                                </div>
+                            ) : (
+                                <div style={{ background: 'rgba(238, 191, 28, 0.05)', border: '1px solid rgba(238, 191, 28, 0.2)', borderRadius: '8px', padding: '12px', marginTop: '12px', marginBottom: '20px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#eebf1c', fontSize: '0.85em', fontWeight: '700', marginBottom: '4px' }}>
+                                        <i className="material-icons" style={{ fontSize: '16px' }}>account_balance_wallet</i>
+                                        <span>League Dues Not Set</span>
+                                    </div>
+                                    <p style={{ color: '#94a3b8', fontSize: '0.8em', margin: 0, lineHeight: '1.4' }}>
+                                        The commissioner has not set up league due tracking yet. If your commissioner is not in the league on Huddle, invite them below!
+                                    </p>
+                                </div>
+                            )}
                                                          
                             <button className={styles.fullWidthBtn} onClick={copyInviteLink}>{copyLinkText}</button>
                         </div>
@@ -487,12 +508,25 @@ export default function Home() {
                                         <span className={styles.infoLabel}>Add Transactions</span>
                                         <span className={styles.infoValue}>{myTxnCount} moves</span>
                                     </div>
-                                    <div className={styles.infoRow} style={{ marginBottom: '20px' }}>
-                                        <span className={styles.infoLabel}>Balance Due</span>
-                                        <span className={styles.infoValue} style={{ color: myBalanceOwed > 0 ? '#ff2a6d' : '#00ceb8', fontWeight: '800' }}>
-                                            ${myBalanceOwed.toFixed(2)}
-                                        </span>
-                                    </div>
+                                    
+                                    {duesConfigured ? (
+                                        <div className={styles.infoRow} style={{ marginBottom: '20px' }}>
+                                            <span className={styles.infoLabel}>Balance Due</span>
+                                            <span className={styles.infoValue} style={{ color: myBalanceOwed > 0 ? '#ff2a6d' : '#00ceb8', fontWeight: '800' }}>
+                                                ${myBalanceOwed.toFixed(2)}
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <div style={{ background: 'rgba(238, 191, 28, 0.05)', border: '1px solid rgba(238, 191, 28, 0.2)', borderRadius: '8px', padding: '12px', marginTop: '10px', marginBottom: '20px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#eebf1c', fontSize: '0.85em', fontWeight: '700', marginBottom: '4px' }}>
+                                                <i className="material-icons" style={{ fontSize: '16px' }}>account_balance_wallet</i>
+                                                <span>League Dues Not Set</span>
+                                            </div>
+                                            <p style={{ color: '#94a3b8', fontSize: '0.8em', margin: 0, lineHeight: '1.4' }}>
+                                                The commissioner has not set up league due tracking yet. If your commissioner is not in the league on Huddle, invite them below!
+                                            </p>
+                                        </div>
+                                    )}
 
                                     <button className={styles.fullWidthBtn} onClick={copyInviteLink}>{copyLinkText}</button>
                                 </div>

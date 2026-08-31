@@ -74,7 +74,7 @@ export default function PremiumModal({ onClose }) {
                     <li><i className="material-icons">check_circle</i> <span><strong>Unlimited Leagues:</strong> Connect as many leagues as you want (Free tier is limited to 2).</span></li>
                     <li><i className="material-icons">check_circle</i> <span><strong>Scouting Pipelines:</strong> Full access to the Trade and Draft Graders.</span></li>
                     <li><i className="material-icons">check_circle</i> <span><strong>Start/Sit Verdicts:</strong> Deep-dive tactical verdicts for your toughest lineup decisions.</span></li>
-                    <li><i className="material-icons">check_circle</i> <span><strong>AI Scouting Reports:</strong> Complete access to franchise evaluations, manager tendencies, and trade philosophies (up to 5 per manager per season).</span></li>
+                    <li><i className="material-icons">check_circle</i> <span><strong>Scouting Reports:</strong> Complete access to franchise evaluations, manager tendencies, and trade philosophies (up to 5 per manager per season).</span></li>
                 </ul>
 
                 <button className={styles.upgradeBtn} onClick={handleUpgrade} disabled={processing}>
