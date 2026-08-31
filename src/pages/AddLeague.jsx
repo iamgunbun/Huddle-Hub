@@ -9,19 +9,15 @@ export default function AddLeague() {
     const navigate = useNavigate();
     const { loadLeagueContext } = useLeague();
     
-    // Platform Toggle: 'sleeper' or 'espn'
     const [activeTab, setActiveTab] = useState('sleeper');
     
-    // Sleeper State
     const [sleeperUsername, setSleeperUsername] = useState('');
     
-    // ESPN State
     const [espnLeagueId, setEspnLeagueId] = useState('');
     const [isPrivate, setIsPrivate] = useState(false);
     const [espnS2, setEspnS2] = useState('');
     const [swid, setSwid] = useState('');
     
-    // UI States
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState(null);
     const [foundLeagues, setFoundLeagues] = useState([]);
@@ -102,27 +98,58 @@ export default function AddLeague() {
 
             const userId = session.user.id;
 
+            // 1. Resolve the Database UUID for the league
+            let dbLeagueId;
+            const queryColumn = league.platform === 'sleeper' ? 'sleeper_league_id' : 'id';
+            
+            const { data: existingLeague } = await supabase
+                .from('leagues')
+                .select('id')
+                .eq(queryColumn, league.id)
+                .maybeSingle();
+
+            if (existingLeague) {
+                dbLeagueId = existingLeague.id;
+            } else {
+                // Insert into leagues table to generate the UUID
+                const { data: newLeague, error: newLeagueErr } = await supabase
+                    .from('leagues')
+                    .insert({
+                        [queryColumn]: league.id,
+                        name: league.name,
+                        avatar: league.avatar,
+                        platform: league.platform
+                    })
+                    .select('id')
+                    .single();
+
+                if (newLeagueErr) throw new Error("Failed to register the new league in the database.");
+                dbLeagueId = newLeague.id;
+            }
+
+            // 2. Check for an existing connection using the UUID
             const { data: existing } = await supabase
                 .from('user_leagues')
                 .select('*')
                 .eq('user_id', userId)
-                .eq('league_id', league.id)
+                .eq('league_id', dbLeagueId)
                 .maybeSingle();
 
             if (existing) {
                 throw new Error("You are already connected to this league.");
             }
 
+            // 3. Insert the user connection using the UUID
             const { error: insertErr } = await supabase.from('user_leagues').insert({
                 user_id: userId,
-                league_id: league.id,
+                league_id: dbLeagueId,
                 platform: league.platform,
                 team_name: league.name
             });
 
             if (insertErr) throw insertErr;
 
-            await loadLeagueContext(userId, league.id);
+            await loadLeagueContext(userId, dbLeagueId);
             navigate('/');
         } catch (err) {
             setErrorMsg(err.message);
