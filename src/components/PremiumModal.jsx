@@ -33,7 +33,7 @@ export default function PremiumModal({ onClose }) {
                     
                     if (typeof customerInfo.entitlements.active['premium'] !== "undefined") {
                         await supabase.from('profiles').update({ is_premium: true }).eq('id', user.id);
-                        alert("Welcome to Huddle Premium!");
+                        alert("Welcome to Huddle Pro!");
                         window.location.reload(); 
                     }
                 } else {
@@ -67,14 +67,14 @@ export default function PremiumModal({ onClose }) {
                         alt="Huddle Pro" 
                         style={{ height: '70px', objectFit: 'contain', display: 'block', margin: '0 auto 15px auto' }} 
                     />
-                    <p className={styles.subtitle}>Unlock the ultimate dynasty experience.</p>
+                    <p className={styles.subtitle}>Unlock the ultimate fantasy experience.</p>
                 </div>
 
                 <ul className={styles.featureList}>
                     <li><i className="material-icons">check_circle</i> <span><strong>Unlimited Leagues:</strong> Connect as many leagues as you want (Free tier is limited to 2).</span></li>
                     <li><i className="material-icons">check_circle</i> <span><strong>Scouting Pipelines:</strong> Full access to the Trade and Draft Graders.</span></li>
                     <li><i className="material-icons">check_circle</i> <span><strong>Start/Sit Verdicts:</strong> Deep-dive tactical verdicts for your toughest lineup decisions.</span></li>
-                    <li><i className="material-icons">check_circle</i> <span><strong>Extended Manager Evals:</strong> Up to 5 manual franchise evaluations per manager per season.</span></li>
+                    <li><i className="material-icons">check_circle</i> <span><strong>AI Scouting Reports:</strong> Complete access to franchise evaluations, manager tendencies, and trade philosophies (up to 5 per manager per season).</span></li>
                 </ul>
 
                 <button className={styles.upgradeBtn} onClick={handleUpgrade} disabled={processing}>
