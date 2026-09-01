@@ -67,7 +67,12 @@ export default function PremiumModal({ onClose }) {
                         alt="Huddle Pro" 
                         style={{ height: '70px', objectFit: 'contain', display: 'block', margin: '0 auto 15px auto' }} 
                     />
-                    <p className={styles.subtitle}>Unlock the ultimate fantasy experience.</p>
+                    <p className={styles.subtitle}>
+                        Unlock the ultimate fantasy experience.<br/>
+                        <strong style={{ color: '#eebf1c', fontSize: '1.1em', display: 'inline-block', marginTop: '6px' }}>
+                            Try it completely free for 7 days.
+                        </strong>
+                    </p>
                 </div>
 
                 <ul className={styles.featureList}>
@@ -78,8 +83,11 @@ export default function PremiumModal({ onClose }) {
                 </ul>
 
                 <button className={styles.upgradeBtn} onClick={handleUpgrade} disabled={processing}>
-                    {processing ? 'Processing...' : 'Upgrade Now - $9.99 / Season'}
+                    {processing ? 'Processing...' : 'Start 7-Day Free Trial'}
                 </button>
+                <p style={{ textAlign: 'center', fontSize: '0.75em', color: '#94a3b8', margin: '12px 0 0 0', fontWeight: '500' }}>
+                    Then $9.99 / Season. Cancel anytime.
+                </p>
             </div>
         </div>
     );
