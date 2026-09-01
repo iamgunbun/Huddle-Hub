@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import { fetchAndNormalizeESPNLeague } from '../utils/espnService';
+import { fetchAndNormalizeYahooLeague } from '../utils/yahooService';
 
 const LeagueContext = createContext();
 
@@ -40,7 +41,6 @@ export function LeagueProvider({ children }) {
         }
 
         try {
-            // 1. Fetch Profile for Premium Status
             try {
                 const { data: profile } = await supabase
                     .from('profiles')
@@ -53,7 +53,6 @@ export function LeagueProvider({ children }) {
                 setIsPremium(false);
             }
 
-            // 2. Fetch User Leagues Mapping
             const { data: userLeaguesData } = await supabase
                 .from('user_leagues')
                 .select('*')
@@ -67,15 +66,30 @@ export function LeagueProvider({ children }) {
                     .select('*')
                     .in('id', leagueIds);
 
-                // 3. Build the flattened league objects
                 const flattenedLeagues = await Promise.all(userLeaguesData.map(async (ul) => {
                     const matchedLeague = leaguesData?.find(l => l.id === ul.league_id || l.sleeper_league_id === ul.league_id) || {};
                     const targetId = ul.league_id || matchedLeague.id;
                     const isESPN = ul.platform === 'espn' || matchedLeague.platform === 'espn';
+                    const isYahoo = ul.platform === 'yahoo' || matchedLeague.platform === 'yahoo';
 
                     let liveData = {};
 
-                    if (isESPN) {
+                    if (isYahoo) {
+                        try {
+                            const yahooData = await fetchAndNormalizeYahooLeague(targetId, userId);
+                            if (yahooData) {
+                                liveData = {
+                                    sleeper_league_id: yahooData.sleeper_league_id,
+                                    avatar: yahooData.avatar,
+                                    name: yahooData.name,
+                                    total_rosters: yahooData.total_rosters,
+                                    settings: yahooData.settings
+                                };
+                            }
+                        } catch (e) {
+                            console.warn("Failed to fetch live Yahoo league data for", targetId);
+                        }
+                    } else if (isESPN) {
                         try {
                             const espnData = await fetchAndNormalizeESPNLeague(targetId);
                             if (espnData) {
@@ -113,7 +127,7 @@ export function LeagueProvider({ children }) {
 
                     const resolvedName = liveData.name || matchedLeague.league_name || matchedLeague.name || ul.team_name || "Unnamed League";
                     const rawAvatar = liveData.avatar || matchedLeague.avatar || matchedLeague.league_avatar || ul.avatar;
-                    const finalAvatar = isESPN ? (rawAvatar || '/brand.png') : formatAvatarUrl(rawAvatar);
+                    const finalAvatar = (isESPN || isYahoo) ? (rawAvatar || '/brand.png') : formatAvatarUrl(rawAvatar);
 
                     return {
                         ...matchedLeague, 
@@ -124,14 +138,13 @@ export function LeagueProvider({ children }) {
                         avatar: finalAvatar,
                         league_avatar: finalAvatar,
                         league_id: targetId,
-                        platform: isESPN ? 'espn' : 'sleeper'
+                        platform: isYahoo ? 'yahoo' : (isESPN ? 'espn' : 'sleeper')
                     };
                 }));
 
                 setUserLeagues(flattenedLeagues); 
                 setLeagueCount(flattenedLeagues.length);
 
-                // 4. Determine Active League
                 const savedLeagueId = localStorage.getItem('huddle_active_league_id');
                 const targetIdToLoad = preferredLeagueId || savedLeagueId || flattenedLeagues[0].league_id;
 

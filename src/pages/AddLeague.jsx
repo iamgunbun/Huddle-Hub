@@ -98,7 +98,6 @@ export default function AddLeague() {
 
             const userId = session.user.id;
 
-            // 1. Resolve the Database UUID for the league
             let dbLeagueId;
             const queryColumn = league.platform === 'sleeper' ? 'sleeper_league_id' : 'id';
             
@@ -111,7 +110,6 @@ export default function AddLeague() {
             if (existingLeague) {
                 dbLeagueId = existingLeague.id;
             } else {
-                // Insert into leagues table to generate the UUID
                 const { data: newLeague, error: newLeagueErr } = await supabase
                     .from('leagues')
                     .insert({
@@ -127,7 +125,6 @@ export default function AddLeague() {
                 dbLeagueId = newLeague.id;
             }
 
-            // 2. Check for an existing connection using the UUID
             const { data: existing } = await supabase
                 .from('user_leagues')
                 .select('*')
@@ -139,7 +136,6 @@ export default function AddLeague() {
                 throw new Error("You are already connected to this league.");
             }
 
-            // 3. Insert the user connection using the UUID
             const { error: insertErr } = await supabase.from('user_leagues').insert({
                 user_id: userId,
                 league_id: dbLeagueId,
@@ -151,6 +147,20 @@ export default function AddLeague() {
 
             await loadLeagueContext(userId, dbLeagueId);
             navigate('/');
+        } catch (err) {
+            setErrorMsg(err.message);
+            setLoading(false);
+        }
+    };
+
+    const initiateYahooOAuth = async () => {
+        setLoading(true);
+        try {
+            const { data: { session }, error } = await supabase.auth.getSession();
+            if (error || !session?.user) throw new Error("You must be logged in to connect a Yahoo league.");
+            
+            // Redirects to your backend bridge to handle the secure OAuth 2.0 flow
+            window.location.href = `/api/yahoo-auth?userId=${session.user.id}`;
         } catch (err) {
             setErrorMsg(err.message);
             setLoading(false);
@@ -173,6 +183,13 @@ export default function AddLeague() {
                         onClick={() => { setActiveTab('sleeper'); setFoundLeagues([]); setErrorMsg(null); }}
                     >
                         Sleeper
+                    </button>
+                    <button 
+                        type="button"
+                        className={`${styles.tabBtn} ${activeTab === 'yahoo' ? styles.activeTab : ''}`}
+                        onClick={() => { setActiveTab('yahoo'); setFoundLeagues([]); setErrorMsg(null); }}
+                    >
+                        Yahoo
                     </button>
                     <button 
                         type="button"
@@ -202,6 +219,22 @@ export default function AddLeague() {
                     </form>
                 )}
 
+                {activeTab === 'yahoo' && (
+                    <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                        <i className="material-icons" style={{ fontSize: '48px', color: '#7b00ff', marginBottom: '15px' }}>sports_football</i>
+                        <p style={{ color: '#cbd5e1', fontSize: '0.9em', lineHeight: '1.5', marginBottom: '25px' }}>
+                            To connect your Yahoo Fantasy leagues, Huddle requires secure authorization to access your roster and matchup data.
+                        </p>
+                        <button 
+                            onClick={initiateYahooOAuth} 
+                            disabled={loading}
+                            style={{ background: '#7b00ff', color: '#fff', border: 'none', padding: '14px 24px', borderRadius: '8px', fontWeight: '800', fontSize: '0.95em', textTransform: 'uppercase', cursor: 'pointer', width: '100%', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}
+                        >
+                            {loading ? 'Redirecting...' : 'Link Yahoo Account'}
+                        </button>
+                    </div>
+                )}
+
                 {activeTab === 'espn' && (
                     <form onSubmit={searchESPN} className={styles.searchForm}>
                         <label>ESPN League ID</label>
@@ -217,39 +250,6 @@ export default function AddLeague() {
                                 {loading ? 'Connecting...' : 'Connect'}
                             </button>
                         </div>
-                        <p className={styles.helperText}>Find your League ID in your ESPN URL: <i>leagueId=123456789</i></p>
-
-                        <div className={styles.accordionToggle} onClick={() => setIsPrivate(!isPrivate)}>
-                            <span>{isPrivate ? '▲ Hide Private League Settings' : '▼ Is this a Private League?'}</span>
-                        </div>
-
-                        {isPrivate && (
-                            <div className={styles.privateBox}>
-                                <div className={styles.cookieInputGroup}>
-                                    <label>espn_s2 Cookie</label>
-                                    <input 
-                                        type="text" 
-                                        placeholder="AEB... (long token)"
-                                        value={espnS2} 
-                                        onChange={(e) => setEspnS2(e.target.value)} 
-                                        className={styles.inputField} 
-                                    />
-                                </div>
-                                <div className={styles.cookieInputGroup}>
-                                    <label>SWID Cookie</label>
-                                    <input 
-                                        type="text" 
-                                        placeholder="{12345678-ABCD-...}" 
-                                        value={swid} 
-                                        onChange={(e) => setSwid(e.target.value)} 
-                                        className={styles.inputField} 
-                                    />
-                                </div>
-                                <p className={styles.helperText}>
-                                    Found in browser DevTools (F12) → Storage/Application → Cookies → espn.com
-                                </p>
-                            </div>
-                        )}
                     </form>
                 )}
 
@@ -259,7 +259,7 @@ export default function AddLeague() {
                     </div>
                 )}
 
-                {foundLeagues.length > 0 && (
+                {foundLeagues.length > 0 && activeTab !== 'yahoo' && (
                     <div className={styles.resultsContainer}>
                         <h3 className={styles.resultsTitle}>Available Leagues</h3>
                         <div className={styles.leagueList}>

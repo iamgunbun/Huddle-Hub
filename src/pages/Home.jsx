@@ -14,7 +14,6 @@ export default function Home() {
     const [copyLinkText, setCopyLinkText] = useState('Copy Invite Link');
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 1100);
     
-    // Mobile Tab Navigation State
     const [activeMobileTab, setActiveMobileTab] = useState('feed');
          
     const [authChecking, setAuthChecking] = useState(true);
@@ -23,12 +22,10 @@ export default function Home() {
     const [leagueRole, setLeagueRole] = useState('Member');
     const [leagueTenure, setLeagueTenure] = useState('Loading...');
 
-    // Financial Tracking State for League Hub Card
     const [duesConfigured, setDuesConfigured] = useState(false);
     const [myTxnCount, setMyTxnCount] = useState(0);
     const [myBalanceOwed, setMyBalanceOwed] = useState(0);
 
-    // Live Fantasy News State
     const [fantasyNews, setFantasyNews] = useState([]);
     const [loadingNews, setLoadingNews] = useState(true);
 
@@ -44,7 +41,6 @@ export default function Home() {
         verifyAuth();
     }, [navigate]);
 
-    // Fetch Fantasy News Pipeline
     useEffect(() => {
         let isMounted = true;
         const fetchNews = async () => {
@@ -65,7 +61,6 @@ export default function Home() {
                             image: item.images && item.images.length > 0 ? item.images[0].url : ''
                         }));
 
-                        // Filter for fantasy-relevant terms
                         const fantasyFiltered = espnArticles.filter(a => {
                             const txt = `${a.title} ${a.description}`.toLowerCase();
                             return txt.includes('fantasy') || 
@@ -199,7 +194,6 @@ export default function Home() {
 
                         setMyTxnCount(calculatedAddsCount);
 
-                        // Check if dues have been set up by the commissioner
                         const isDuesSetUp = dbLeagueMeta?.dues_amount !== null && dbLeagueMeta?.dues_amount !== undefined && dbLeagueMeta?.dues_amount !== '';
                         setDuesConfigured(isDuesSetUp);
 
@@ -296,7 +290,6 @@ export default function Home() {
         return `https://sleepercdn.com/avatars/thumbs/${avatar}`;
     };
     
-    // Extracted News Feed Component Block
     const renderNewsFeed = () => (
         <div className={styles.hubCard}>
             <h3 className={styles.cardHeader}>
@@ -341,12 +334,10 @@ export default function Home() {
         <div className={styles.homeContainer}>
             {!isMobile ? (
                 <div className={styles.dashboardGrid}>
-                    {/* Column 1: Projections */}
                     <div className={styles.column}>
                         <ProjectionsPanel />
                     </div>
                                          
-                    {/* Column 2: Commish Note & News Feed */}
                     <div className={styles.column}>
                         <div className={styles.commishNote}>
                             <h3 className={styles.cardHeader}>Commissioner's Note</h3>
@@ -358,7 +349,6 @@ export default function Home() {
                         {renderNewsFeed()}
                     </div>
                                          
-                    {/* Column 3: League Hub Info & Champion */}
                     <div className={styles.column}>
                         <div className={styles.hubCard}>
                             <h3 className={styles.cardHeader}>League Hub Info</h3>
@@ -441,7 +431,6 @@ export default function Home() {
                 </div>
             ) : (
                 <div className={styles.mobileLayout}>
-                    {/* Top Navigation Bar for Mobile */}
                     <div className={styles.mobileTopNav}>
                         <button 
                             className={`${styles.navTab} ${activeMobileTab === 'feed' ? styles.activeTab : ''}`}
@@ -466,7 +455,6 @@ export default function Home() {
                         </button>
                     </div>
 
-                    {/* Tab-Driven Content Container */}
                     <div className={`${styles.mobileTabContent} ${styles.fadeEnter}`} key={activeMobileTab}>
                         
                         {activeMobileTab === 'feed' && (
@@ -554,6 +542,22 @@ export default function Home() {
                         )}
                         
                     </div>
+                </div>
+            )}
+
+            {/* MANDATORY YAHOO ATTRIBUTION FOOTER */}
+            {activeLeague?.platform === 'yahoo' && (
+                <div style={{ textAlign: 'center', padding: '30px 20px 10px 20px', marginTop: '30px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                    <a 
+                        href="https://sports.yahoo.com/fantasy/" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        style={{ color: '#94a3b8', fontSize: '0.85em', textDecoration: 'none', fontWeight: '600', transition: 'color 0.2s' }}
+                        onMouseOver={(e) => e.target.style.color = '#eebf1c'}
+                        onMouseOut={(e) => e.target.style.color = '#94a3b8'}
+                    >
+                        Fantasy data provided by Yahoo Fantasy
+                    </a>
                 </div>
             )}
         </div>
