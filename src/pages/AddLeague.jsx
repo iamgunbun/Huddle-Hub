@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
 import { fetchAndNormalizeESPNLeague } from '../utils/espnService';
@@ -7,22 +7,39 @@ import styles from './AddLeague.module.css';
 
 export default function AddLeague() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const { loadLeagueContext } = useLeague();
     
     const [activeTab, setActiveTab] = useState('sleeper');
     
+    // Sleeper State
     const [sleeperUsername, setSleeperUsername] = useState('');
     
+    // Yahoo State
+    const [isYahooLinked, setIsYahooLinked] = useState(false);
+    
+    // ESPN State
     const [espnLeagueId, setEspnLeagueId] = useState('');
     const [isPrivate, setIsPrivate] = useState(false);
     const [espnS2, setEspnS2] = useState('');
     const [swid, setSwid] = useState('');
     
+    // UI States
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState(null);
     const [foundLeagues, setFoundLeagues] = useState([]);
 
     const currentYear = new Date().getFullYear();
+
+    useEffect(() => {
+        if (searchParams.get('linked') === 'yahoo') {
+            setActiveTab('yahoo');
+            setIsYahooLinked(true);
+        } else if (searchParams.get('integration') === 'failed') {
+            setActiveTab('yahoo');
+            setErrorMsg(searchParams.get('reason') || 'Yahoo integration failed.');
+        }
+    }, [searchParams]);
 
     const searchSleeper = async (e) => {
         e.preventDefault();
@@ -89,6 +106,89 @@ export default function AddLeague() {
         }
     };
 
+    const fetchYahooLeagues = useCallback(async () => {
+        setLoading(true);
+        setErrorMsg(null);
+        setFoundLeagues([]);
+
+        try {
+            const { data: { session }, error: authErr } = await supabase.auth.getSession();
+            if (authErr || !session?.user) throw new Error("You must be logged in.");
+
+            const response = await fetch('/api/yahoo-proxy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    userId: session.user.id, 
+                    endpoint: 'users;use_login=1/games;game_keys=nfl/leagues' 
+                })
+            });
+
+            if (response.status === 401) {
+                setIsYahooLinked(false);
+                return;
+            }
+
+            if (!response.ok) throw new Error("Failed to fetch Yahoo leagues.");
+
+            const data = await response.json();
+            setIsYahooLinked(true);
+
+            const leaguesArray = [];
+            const games = data?.fantasy_content?.users?.[0]?.user?.[1]?.games;
+            
+            if (games) {
+                const gameCount = games.count || 0;
+                for (let i = 0; i < gameCount; i++) {
+                    const leaguesObj = games[i]?.game?.[1]?.leagues;
+                    if (leaguesObj) {
+                        const leagueCount = leaguesObj.count || 0;
+                        for (let j = 0; j < leagueCount; j++) {
+                            const leagueData = leaguesObj[j]?.league?.[0];
+                            if (leagueData) {
+                                leaguesArray.push({
+                                    id: String(leagueData.league_key),
+                                    name: leagueData.name,
+                                    avatar: leagueData.logo_url || '/brand.png',
+                                    platform: 'yahoo'
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (leaguesArray.length === 0) {
+                throw new Error("No active NFL leagues found on this Yahoo account.");
+            }
+
+            setFoundLeagues(leaguesArray);
+        } catch (err) {
+            setErrorMsg(err.message);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (activeTab === 'yahoo') {
+            fetchYahooLeagues();
+        }
+    }, [activeTab, fetchYahooLeagues]);
+
+    const initiateYahooOAuth = async () => {
+        setLoading(true);
+        try {
+            const { data: { session }, error } = await supabase.auth.getSession();
+            if (error || !session?.user) throw new Error("You must be logged in to connect a Yahoo league.");
+            
+            window.location.href = `/api/yahoo-auth?userId=${session.user.id}`;
+        } catch (err) {
+            setErrorMsg(err.message);
+            setLoading(false);
+        }
+    };
+
     const connectLeague = async (league) => {
         setLoading(true);
         setErrorMsg(null);
@@ -99,7 +199,7 @@ export default function AddLeague() {
             const userId = session.user.id;
 
             let dbLeagueId;
-            const queryColumn = league.platform === 'sleeper' ? 'sleeper_league_id' : 'id';
+            const queryColumn = (league.platform === 'sleeper' || league.platform === 'yahoo') ? 'sleeper_league_id' : 'id';
             
             const { data: existingLeague } = await supabase
                 .from('leagues')
@@ -153,20 +253,6 @@ export default function AddLeague() {
         }
     };
 
-    const initiateYahooOAuth = async () => {
-        setLoading(true);
-        try {
-            const { data: { session }, error } = await supabase.auth.getSession();
-            if (error || !session?.user) throw new Error("You must be logged in to connect a Yahoo league.");
-            
-            // Redirects to your backend bridge to handle the secure OAuth 2.0 flow
-            window.location.href = `/api/yahoo-auth?userId=${session.user.id}`;
-        } catch (err) {
-            setErrorMsg(err.message);
-            setLoading(false);
-        }
-    };
-
     return (
         <div className={styles.pageContainer}>
             <div className={styles.card}>
@@ -186,10 +272,11 @@ export default function AddLeague() {
                     </button>
                     <button 
                         type="button"
-                        className={`${styles.tabBtn} ${activeTab === 'yahoo' ? styles.activeTab : ''}`}
-                        onClick={() => { setActiveTab('yahoo'); setFoundLeagues([]); setErrorMsg(null); }}
+                        className={styles.tabBtn}
+                        disabled
+                        title="Pending Yahoo API Approval"
                     >
-                        Yahoo
+                        Yahoo (Soon)
                     </button>
                     <button 
                         type="button"
@@ -220,18 +307,37 @@ export default function AddLeague() {
                 )}
 
                 {activeTab === 'yahoo' && (
-                    <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                        <i className="material-icons" style={{ fontSize: '48px', color: '#7b00ff', marginBottom: '15px' }}>sports_football</i>
-                        <p style={{ color: '#cbd5e1', fontSize: '0.9em', lineHeight: '1.5', marginBottom: '25px' }}>
-                            To connect your Yahoo Fantasy leagues, Huddle requires secure authorization to access your roster and matchup data.
-                        </p>
-                        <button 
-                            onClick={initiateYahooOAuth} 
-                            disabled={loading}
-                            style={{ background: '#7b00ff', color: '#fff', border: 'none', padding: '14px 24px', borderRadius: '8px', fontWeight: '800', fontSize: '0.95em', textTransform: 'uppercase', cursor: 'pointer', width: '100%', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}
-                        >
-                            {loading ? 'Redirecting...' : 'Link Yahoo Account'}
-                        </button>
+                    <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                        <i className="material-icons" style={{ fontSize: '44px', color: '#7b00ff', marginBottom: '12px' }}>sports_football</i>
+                        
+                        {!isYahooLinked ? (
+                            <>
+                                <p style={{ color: '#cbd5e1', fontSize: '0.85em', lineHeight: '1.5', marginBottom: '20px' }}>
+                                    To connect your Yahoo Fantasy leagues, Huddle requires secure authorization to access your roster and matchup data.
+                                </p>
+                                <button 
+                                    onClick={initiateYahooOAuth} 
+                                    disabled={loading}
+                                    style={{ background: '#7b00ff', color: '#fff', border: 'none', padding: '12px 20px', borderRadius: '8px', fontWeight: '800', fontSize: '0.9em', textTransform: 'uppercase', cursor: 'pointer', width: '100%', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}
+                                >
+                                    {loading ? 'Redirecting...' : 'Link Yahoo Account'}
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <p style={{ color: '#00ceb8', fontSize: '0.9em', fontWeight: '700', marginBottom: '15px' }}>
+                                    Yahoo Account Linked
+                                </p>
+                                <button 
+                                    onClick={fetchYahooLeagues} 
+                                    disabled={loading}
+                                    className={styles.searchBtn}
+                                    style={{ width: '100%', padding: '12px 20px', fontSize: '0.9em' }}
+                                >
+                                    {loading ? 'Fetching Leagues...' : 'Refresh Yahoo Leagues'}
+                                </button>
+                            </>
+                        )}
                     </div>
                 )}
 
@@ -259,7 +365,7 @@ export default function AddLeague() {
                     </div>
                 )}
 
-                {foundLeagues.length > 0 && activeTab !== 'yahoo' && (
+                {foundLeagues.length > 0 && (
                     <div className={styles.resultsContainer}>
                         <h3 className={styles.resultsTitle}>Available Leagues</h3>
                         <div className={styles.leagueList}>
@@ -270,7 +376,7 @@ export default function AddLeague() {
                                         <div className={styles.leagueMeta}>
                                             <span className={styles.leagueName}>{league.name}</span>
                                             <span className={styles.leaguePlatform}>
-                                                {league.platform === 'sleeper' ? 'Sleeper API' : 'ESPN Fantasy'}
+                                                {league.platform === 'sleeper' ? 'Sleeper API' : league.platform === 'yahoo' ? 'Yahoo Fantasy' : 'ESPN Fantasy'}
                                             </span>
                                         </div>
                                     </div>
