@@ -4,7 +4,7 @@ import { getLeagueTransactions as _getLeagueTransactions } from './helperFunctio
 import { getNflState } from './helperFunctions/nflState';
 import { getLeagueRosters } from './helperFunctions/leagueRosters';
 import { getLeagueTeamManagers as _getLeagueTeamManagers } from './helperFunctions/leagueTeamManagers';
-import { getLeagueMatchups as _getLeagueMatchups } from './helperFunctions/leagueMatchups';
+import { getLeagueMatchups } from './helperFunctions/leagueMatchups';
 import { getRivalryMatchups as _getRivalryMatchups } from './helperFunctions/rivalryMatchups';
 import { getNews, stringDate } from './helperFunctions/news';
 import { loadPlayers } from './helperFunctions/players';
