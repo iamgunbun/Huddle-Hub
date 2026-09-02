@@ -21,8 +21,6 @@ export default function ProjectionsPanel() {
             try {
                 const id = activeLeague.sleeper_league_id;
                 
-                // Thanks to our helper.js shield, these calls will safely return empty objects for Yahoo leagues
-                // instead of crashing the Sleeper API with 404s.
                 const [standingsData, rostersData, managersData, currentLeagueData, pData, nflState] = await Promise.all([
                     getLeagueStandings(id),
                     getLeagueRosters(id),
@@ -36,44 +34,46 @@ export default function ProjectionsPanel() {
                 const rosters = rostersData?.rosters || {};
                 const playersInfo = pData?.players || {};
                 
-                const week = nflState?.display_week > 0 ? nflState.display_week : 1;
-                const playoffSpots = currentLeagueData?.settings?.playoff_teams || 6;
+                const week = (nflState?.display_week && nflState.display_week > 0) ? nflState.display_week : 1;
+                const playoffSpots = Number(currentLeagueData?.settings?.playoff_teams) || 6;
                 
                 let ranks = [];
                 
                 for (const rosterID in rosters) {
                     const teamStats = standings[rosterID] || { wins: 0, losses: 0, ties: 0, fpts: 0 };
-                    const teamMeta = getTeamFromTeamManagers(managersData, rosterID, currentLeagueData.season);
+                    const teamMeta = getTeamFromTeamManagers(managersData, rosterID, currentLeagueData?.season || new Date().getFullYear());
                     const roster = rosters[rosterID];
 
                     let rosterStrength = 0;
                     if (roster && roster.players && roster.players.length > 0) {
-                        const rosterPlayers = roster.players.map(pId => playersInfo[pId]).filter(p => p);
-                        rosterStrength = predictScores(rosterPlayers, week, currentLeagueData);
+                        const rosterPlayers = roster.players.map(pId => playersInfo[pId]).filter(Boolean);
+                        const rawStrength = predictScores(rosterPlayers, week, currentLeagueData);
+                        rosterStrength = Number.isFinite(rawStrength) ? rawStrength : 0;
                     }
 
-                    const weeksPlayed = teamStats.wins + teamStats.losses + teamStats.ties;
+                    const wins = Number(teamStats.wins) || 0;
+                    const losses = Number(teamStats.losses) || 0;
+                    const ties = Number(teamStats.ties) || 0;
+                    const fpts = Number(teamStats.fpts) || 0;
+                    const weeksPlayed = wins + losses + ties;
                     
-                    // Ratio to blend baseline projections vs actual season performance (maxes at 1 after 14 weeks)
                     const progress = Math.min(weeksPlayed / 14, 1); 
 
-                    // Blend points per week
-                    const actualPPW = weeksPlayed > 0 ? (teamStats.fpts / weeksPlayed) : rosterStrength;
+                    const actualPPW = weeksPlayed > 0 ? (fpts / weeksPlayed) : rosterStrength;
                     const expectedPPW = (actualPPW * progress) + (rosterStrength * (1 - progress));
 
-                    // Blend win percentage (Assume 0.500 if no games played)
-                    const actualWinPct = weeksPlayed > 0 ? ((teamStats.wins + (teamStats.ties * 0.5)) / weeksPlayed) : 0.5;
+                    const actualWinPct = weeksPlayed > 0 ? ((wins + (ties * 0.5)) / weeksPlayed) : 0.5;
                     const expectedWinPct = (actualWinPct * progress) + (0.5 * (1 - progress));
 
-                    // Dynamic Power Score
-                    const powerScore = (expectedWinPct * 50) + expectedPPW;
+                    const rawPowerScore = (expectedWinPct * 50) + expectedPPW;
+                    const powerScore = Number.isFinite(rawPowerScore) ? rawPowerScore : 0;
 
                     ranks.push({
                         rosterID,
-                        name: teamMeta.name || 'Unknown Team',
-                        avatar: teamMeta.avatar,
-                        wins: teamStats.wins,
-                        losses: teamStats.losses,
+                        name: teamMeta?.name || 'Unknown Team',
+                        avatar: teamMeta?.avatar,
+                        wins,
+                        losses,
                         powerScore
                     });
                 }
@@ -85,7 +85,8 @@ export default function ProjectionsPanel() {
                     return;
                 }
 
-                const isPreDraft = ranks.every(t => t.powerScore === 0);
+                // Check if teams have negligible power scores (pre-season)
+                const isPreDraft = ranks.every(t => !t.powerScore || t.powerScore <= 25);
                 setPreDraftMode(isPreDraft);
 
                 let finalRankings = [];
@@ -99,27 +100,22 @@ export default function ProjectionsPanel() {
                 } else {
                     ranks.sort((a, b) => b.powerScore - a.powerScore);
                     
-                    const maxPower = ranks[0].powerScore;
-                    
-                    // Softmax sensitivity tuning multipliers
+                    const maxPower = ranks[0].powerScore || 1;
                     const kChamp = 0.08; 
                     const kPo = 0.05;
 
-                    // Calculate exponential weights for mathematical distribution
                     const champWeights = ranks.map(r => Math.exp(kChamp * (r.powerScore - maxPower)));
                     const poWeights = ranks.map(r => Math.exp(kPo * (r.powerScore - maxPower)));
 
-                    const sumChampWeights = champWeights.reduce((a, b) => a + b, 0);
-                    const sumPoWeights = poWeights.reduce((a, b) => a + b, 0);
+                    const sumChampWeights = champWeights.reduce((a, b) => a + b, 0) || 1;
+                    const sumPoWeights = poWeights.reduce((a, b) => a + b, 0) || 1;
 
                     finalRankings = ranks.map((team, index) => {
-                        // Distribute exactly 100% for Champ, and exactly (playoffSpots * 100)% for Playoffs
                         let champOdds = Math.round((champWeights[index] / sumChampWeights) * 100);
                         let poOdds = Math.round((poWeights[index] / sumPoWeights) * playoffSpots * 100);
 
-                        // Bound the odds appropriately
-                        champOdds = Math.max(0, Math.min(99, champOdds));
-                        poOdds = Math.max(1, Math.min(99, poOdds)); 
+                        champOdds = Math.max(0, Math.min(99, Number.isFinite(champOdds) ? champOdds : 0));
+                        poOdds = Math.max(1, Math.min(99, Number.isFinite(poOdds) ? poOdds : 1)); 
 
                         return { ...team, po: poOdds, champ: champOdds };
                     });
@@ -146,7 +142,6 @@ export default function ProjectionsPanel() {
                     Live Projections
                 </h3>
                 
-                {/* Dynamically adjust the empty state graphic based on the platform */}
                 {activeLeague?.platform === 'yahoo' ? (
                     <div style={{ padding: '30px 20px', textAlign: 'center', margin: 0 }}>
                         <div style={{ 
