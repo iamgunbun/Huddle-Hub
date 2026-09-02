@@ -4,7 +4,7 @@ import { activeLeague } from '$lib/stores/leagueContext.js';
 import { leagueID as defaultLeagueID } from '$lib/utils/leagueInfo.js';
 import { fetchAndNormalizeYahooLeague } from '../yahooService';
 
-const isYahooLeague = (id) => typeof id === 'string' && (id.includes('.l.') || id.startsWith('yahoo_'));
+const isYahooLeague = (id) => id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
 
 export const getLeagueData = async (queryLeagueID) => {
     let id = queryLeagueID;

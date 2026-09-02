@@ -3,7 +3,7 @@ import { get } from 'svelte/store';
 import { rostersStore } from '$lib/stores';
 import { fetchAndNormalizeYahooRosters } from '../yahooService';
 
-const isYahooLeague = (id) => typeof id === 'string' && (id.includes('.l.') || id.startsWith('yahoo_'));
+const isYahooLeague = (id) => id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
 
 export const getLeagueRosters = async (queryLeagueID = defaultLeagueID) => {
     if (!queryLeagueID) return { rosters: {}, startersAndReserve: [] };

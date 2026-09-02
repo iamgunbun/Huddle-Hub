@@ -6,7 +6,6 @@ import { activeLeague } from '$lib/stores/leagueContext.js';
 import { leagueID as defaultLeagueID } from '$lib/utils/leagueInfo.js';
 import { fetchAndNormalizeYahooMatchups } from '../yahooService';
 
-// GUARANTEED YAHOO DETECTOR: Any ID with a period or non-numeric char is Yahoo
 const isYahooLeague = (id) => id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
 
 export const getLeagueMatchups = async (queryLeagueID) => {
@@ -41,7 +40,7 @@ export const getLeagueMatchups = async (queryLeagueID) => {
         const year = leagueData.season;
         const regularSeasonLength = leagueData.settings?.playoff_week_start ? leagueData.settings.playoff_week_start - 1 : 14;
 
-        // --- YAHOO PLATFORM ROUTING (FETCH ALL PAST WEEKS) ---
+        // --- YAHOO PLATFORM ROUTING ---
         if (isYahooLeague(id)) {
             const yPromises = [];
             for (let i = 1; i <= week; i++) {

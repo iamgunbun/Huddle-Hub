@@ -1,12 +1,12 @@
 import { supabase } from '../supabaseClient';
 
-const getCleanYahooLeagueKey = (rawId) => {
+export const cleanYahooKey = (rawId) => {
     if (!rawId) return null;
     let str = String(rawId).trim();
     if (/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(str)) return null;
     
-    // Auto-correct common typo where the letter 'l' is stored as the number '1'
-    str = str.replace('.1.', '.l.');
+    // Automatically correct the number '1' to lowercase 'l'
+    str = str.replace(/\.1\./g, '.l.');
     
     if (str.includes('.l.')) return str;
     return `nfl.l.${str}`;
@@ -18,9 +18,11 @@ const getUserId = async (explicitUserId) => {
     return session?.user?.id || null;
 };
 
+const DEFAULT_POSITIONS = ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF', 'BN', 'BN', 'BN', 'BN', 'BN', 'BN'];
+
 // 1. LEAGUE INFO & SETTINGS
 export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null) => {
-    const cleanKey = getCleanYahooLeagueKey(leagueId);
+    const cleanKey = cleanYahooKey(leagueId);
     const userId = await getUserId(passedUserId);
     if (!cleanKey || !userId) return null;
 
@@ -53,12 +55,13 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
             total_rosters: totalRosters,
             avatar: leagueData.logo_url || '/brand.png',
             platform: 'yahoo',
+            roster_positions: DEFAULT_POSITIONS, // Prevents predictScores indexOf crash
             settings: {
                 playoff_week_start: playoffWeekStart,
                 divisions: 0,
                 playoff_teams: 6,
                 type: 0,
-                roster_positions: ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF', 'BN', 'BN', 'BN', 'BN', 'BN', 'BN']
+                roster_positions: DEFAULT_POSITIONS
             },
             metadata: {},
             raw_yahoo: data
@@ -69,30 +72,29 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
     }
 };
 
-// 2. ROSTERS, PLAYERS, & STANDINGS (Dual-Fetch Merge)
+// 2. ROSTERS & STANDINGS (Dual-Fetch Merge)
 export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = null) => {
-    const cleanKey = getCleanYahooLeagueKey(leagueId);
+    const cleanKey = cleanYahooKey(leagueId);
     const userId = await getUserId(passedUserId);
     if (!cleanKey || !userId) return { rosters: {}, startersAndReserve: [] };
 
     try {
-        const [rosterRes, standingsRes] = await Promise.all([
-            fetch('/api/yahoo-proxy', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId, endpoint: `league/${cleanKey}/teams/roster` })
-            }).catch(() => null),
+        const [standingsRes, teamsRes] = await Promise.all([
             fetch('/api/yahoo-proxy', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId, endpoint: `league/${cleanKey}/standings` })
+            }).catch(() => null),
+            fetch('/api/yahoo-proxy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, endpoint: `league/${cleanKey}/teams/roster` })
             }).catch(() => null)
         ]);
 
-        const rData = rosterRes?.ok ? await rosterRes.json() : {};
         const sData = standingsRes?.ok ? await standingsRes.json() : {};
+        const rData = teamsRes?.ok ? await teamsRes.json() : {};
 
-        // 1. Map Standings (Wins, Losses, Points)
         const standingsMap = {};
         const stLeagueObj = sData?.fantasy_content?.league;
         if (Array.isArray(stLeagueObj)) {
@@ -123,13 +125,11 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
             }
         }
 
-        // 2. Map Rosters & Merge with Standings
         const rosterMap = {};
         const startersAndReserve = [];
         
-        const rLeagueObj = rData?.fantasy_content?.league;
         let teamsData = null;
-        
+        const rLeagueObj = rData?.fantasy_content?.league;
         if (Array.isArray(rLeagueObj)) {
             const teamsWrapper = rLeagueObj.find(x => x && x.teams);
             teamsData = teamsWrapper?.teams;
@@ -233,7 +233,7 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
 
 // 3. MATCHUPS & SCOREBOARD
 export const fetchAndNormalizeYahooMatchups = async (leagueId, week = 1, passedUserId = null) => {
-    const cleanKey = getCleanYahooLeagueKey(leagueId);
+    const cleanKey = cleanYahooKey(leagueId);
     const userId = await getUserId(passedUserId);
     if (!cleanKey || !userId) return { matchups: {}, week };
 
