@@ -66,7 +66,8 @@ export default function AddLeague() {
                 id: String(l.league_id),
                 name: l.name,
                 avatar: l.avatar ? `https://sleepercdn.com/avatars/thumbs/${l.avatar}` : '/brand.png',
-                platform: 'sleeper'
+                platform: 'sleeper',
+                managerName: userData.display_name // Captures precise username for user_leagues insert
             }));
 
             setFoundLeagues(formattedLeagues);
@@ -204,7 +205,7 @@ export default function AddLeague() {
             const { data: existingLeague, error: selectErr } = await supabase
                 .from('leagues')
                 .select('id')
-                .eq(queryColumn, String(league.id))
+                .eq(queryColumn, String(league.id)) // Forces string mapping to prevent malformed syntax errors
                 .maybeSingle();
 
             if (selectErr) {
@@ -219,8 +220,8 @@ export default function AddLeague() {
                     .from('leagues')
                     .insert({
                         [queryColumn]: String(league.id),
-                        league_name: league.name,
-                        avatar: league.avatar,
+                        league_name: league.name, // Fixed column names 
+                        league_avatar: league.avatar, // Fixed column names
                         platform: league.platform
                     })
                     .select('id')
@@ -248,7 +249,7 @@ export default function AddLeague() {
                 user_id: userId,
                 league_id: dbLeagueId,
                 platform: league.platform,
-                team_name: league.name
+                team_name: league.managerName || sleeperUsername.trim() || league.name // Safely inputs actual username
             });
 
             if (insertErr) throw insertErr;
