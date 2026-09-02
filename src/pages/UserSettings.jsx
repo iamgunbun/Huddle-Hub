@@ -8,6 +8,7 @@ import styles from './Settings.module.css';
 export default function UserSettings() {
     const navigate = useNavigate();
     const { activeLeague } = useLeague();
+    const [userId, setUserId] = useState(null);
     const [userEmail, setUserEmail] = useState('Loading...');
     
     const [newPassword, setNewPassword] = useState('');
@@ -16,10 +17,27 @@ export default function UserSettings() {
     const [passwordMessage, setPasswordMessage] = useState('');
     const [passwordError, setPasswordError] = useState('');
 
+    const [newsletterOptIn, setNewsletterOptIn] = useState(true);
+    const [updatingNewsletter, setUpdatingNewsletter] = useState(false);
+    const [newsletterMessage, setNewsletterMessage] = useState('');
+
     useEffect(() => {
         const fetchUser = async () => {
             const { data: { user } } = await supabase.auth.getUser();
-            if (user) setUserEmail(user.email);
+            if (user) {
+                setUserEmail(user.email);
+                setUserId(user.id);
+
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('newsletter_opt_in')
+                    .eq('id', user.id)
+                    .maybeSingle();
+
+                if (profile && profile.newsletter_opt_in !== null) {
+                    setNewsletterOptIn(profile.newsletter_opt_in);
+                }
+            }
         };
         fetchUser();
     }, []);
@@ -50,6 +68,31 @@ export default function UserSettings() {
         }
     };
 
+    const handleToggleNewsletter = async () => {
+        if (!userId || updatingNewsletter) return;
+        const nextState = !newsletterOptIn;
+        setUpdatingNewsletter(true);
+        setNewsletterMessage('');
+
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .update({ newsletter_opt_in: nextState })
+                .eq('id', userId);
+
+            if (error) throw error;
+
+            setNewsletterOptIn(nextState);
+            setNewsletterMessage(nextState ? "Subscribed to newsletter." : "Unsubscribed from newsletter.");
+            setTimeout(() => setNewsletterMessage(''), 3500);
+        } catch (err) {
+            console.error("Error updating preferences:", err);
+            alert("Failed to update notification preference.");
+        } finally {
+            setUpdatingNewsletter(false);
+        }
+    };
+
     const handleLogout = async () => {
         await supabase.auth.signOut();
         navigate('/login');
@@ -76,6 +119,56 @@ export default function UserSettings() {
 
                 <div className={styles.divider}></div>
                 
+                <h2 className={styles.subHeading}>Notification Preferences</h2>
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '14px 16px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                    borderRadius: '8px',
+                    marginTop: '12px',
+                    border: '1px solid rgba(255, 255, 255, 0.08)'
+                }}>
+                    <div>
+                        <div style={{ fontWeight: '600', color: '#f8fafc', fontSize: '0.95em' }}>Email Newsletter & Updates</div>
+                        <div style={{ fontSize: '0.8em', color: '#94a3b8', marginTop: '3px' }}>
+                            Weekly fantasy alerts, pro trial updates, and news.
+                        </div>
+                    </div>
+                    <label style={{ position: 'relative', display: 'inline-block', width: '46px', height: '24px', margin: 0 }}>
+                        <input 
+                            type="checkbox" 
+                            checked={newsletterOptIn} 
+                            onChange={handleToggleNewsletter}
+                            disabled={updatingNewsletter}
+                            style={{ opacity: 0, width: 0, height: 0 }}
+                        />
+                        <span style={{
+                            position: 'absolute',
+                            cursor: 'pointer',
+                            top: 0, left: 0, right: 0, bottom: 0,
+                            backgroundColor: newsletterOptIn ? '#eebf1c' : '#475569',
+                            borderRadius: '24px',
+                            transition: '0.2s ease'
+                        }}>
+                            <span style={{
+                                position: 'absolute',
+                                height: '18px',
+                                width: '18px',
+                                left: newsletterOptIn ? '24px' : '3px',
+                                bottom: '3px',
+                                backgroundColor: '#0f172a',
+                                borderRadius: '50%',
+                                transition: '0.2s ease'
+                            }} />
+                        </span>
+                    </label>
+                </div>
+                {newsletterMessage && <div className={styles.message} style={{ marginTop: '10px' }}>{newsletterMessage}</div>}
+
+                <div className={styles.divider}></div>
+
                 <h2 className={styles.subHeading}>Change Password</h2>
                 <div className={styles.infoGroup} style={{ marginTop: '15px' }}>
                     <label>New Password</label>

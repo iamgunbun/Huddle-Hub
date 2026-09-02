@@ -23,8 +23,8 @@ export default function Onboarding() {
         },
         {
             icon: "workspace_premium",
-            title: "Go Premium",
-            desc: "Unlock an ad-free experience, unlimited league connections, and full access to all advanced scouting tools for just $10/season."
+            title: "Try Huddle Pro Free",
+            desc: "Start your 7-day free trial to unlock an ad-free experience, unlimited league connections, and full access to advanced scouting tools."
         }
     ];
 

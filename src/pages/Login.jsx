@@ -12,6 +12,7 @@ export default function Login() {
     const [authError, setAuthError] = useState('');
     const [loading, setLoading] = useState(false);
     const [favoriteTeam, setFavoriteTeam] = useState('');
+    const [newsletterOptIn, setNewsletterOptIn] = useState(true);
     
     const nflTeams = [
         { id: 'ari', name: 'Arizona Cardinals' }, { id: 'atl', name: 'Atlanta Falcons' },
@@ -54,10 +55,33 @@ export default function Login() {
                 const { error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;
             } else {
-                const { data, error } = await supabase.auth.signUp({ email, password });
+                const { data, error } = await supabase.auth.signUp({
+                    email,
+                    password,
+                    options: {
+                        data: {
+                            favorite_team: favoriteTeam,
+                            newsletter_opt_in: newsletterOptIn
+                        }
+                    }
+                });
                 if (error) throw error;
+
                 if (data?.user) {
-                    await supabase.from('profiles').upsert({ id: data.user.id, favorite_team: favoriteTeam });
+                    await supabase.from('profiles').upsert({ 
+                        id: data.user.id, 
+                        favorite_team: favoriteTeam,
+                        newsletter_opt_in: newsletterOptIn 
+                    });
+
+                    // Optional call to trigger automated subscription in Resend
+                    if (newsletterOptIn) {
+                        fetch('/api/enroll-subscriber', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email: data.user.email })
+                        }).catch((err) => console.error("Newsletter enrollment error:", err));
+                    }
                 }
             }
             
@@ -135,6 +159,26 @@ export default function Login() {
                                     <option key={team.id} value={team.id}>{team.name}</option>
                                 ))}
                             </select>
+
+                            <label style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                                fontSize: '0.85em',
+                                color: '#cbd5e1',
+                                cursor: 'pointer',
+                                margin: '14px 0 6px 0',
+                                textAlign: 'left',
+                                userSelect: 'none'
+                            }}>
+                                <input 
+                                    type="checkbox" 
+                                    checked={newsletterOptIn} 
+                                    onChange={(e) => setNewsletterOptIn(e.target.checked)}
+                                    style={{ accentColor: '#eebf1c', width: '16px', height: '16px', cursor: 'pointer' }}
+                                />
+                                <span>Send me fantasy updates, trial alerts, and newsletters</span>
+                            </label>
                         </>
                     )}
                     
