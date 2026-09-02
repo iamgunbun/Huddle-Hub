@@ -12,11 +12,17 @@ export default function ProjectionsPanel() {
 
     useEffect(() => {
         const load = async () => {
-            if (!activeLeague?.sleeper_league_id) return;
+            if (!activeLeague?.sleeper_league_id) {
+                setLoading(false);
+                return;
+            }
             setLoading(true);
             
             try {
                 const id = activeLeague.sleeper_league_id;
+                
+                // Thanks to our helper.js shield, these calls will safely return empty objects for Yahoo leagues
+                // instead of crashing the Sleeper API with 404s.
                 const [standingsData, rostersData, managersData, currentLeagueData, pData, nflState] = await Promise.all([
                     getLeagueStandings(id),
                     getLeagueRosters(id),
@@ -139,10 +145,31 @@ export default function ProjectionsPanel() {
                 <h3 style={{ textAlign: 'center', fontSize: '1.3em', fontWeight: '500', color: '#f8fafc', padding: '15px 0', margin: 0, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                     Live Projections
                 </h3>
-                <p style={{ color: '#94a3b8', padding: '30px 20px', textAlign: 'center', margin: 0, fontStyle: 'italic', fontSize: '0.9em', lineHeight: '1.6' }}>
-                    <i className="material-icons" style={{ display: 'block', fontSize: '32px', color: '#64748b', marginBottom: '10px' }}>layers_clear</i>
-                    No roster configurations found.<br />Ensure franchise slots are created on Sleeper to launch projections.
-                </p>
+                
+                {/* Dynamically adjust the empty state graphic based on the platform */}
+                {activeLeague?.platform === 'yahoo' ? (
+                    <div style={{ padding: '30px 20px', textAlign: 'center', margin: 0 }}>
+                        <div style={{ 
+                            background: 'rgba(238, 191, 28, 0.1)', 
+                            border: '1px dashed rgba(238, 191, 28, 0.4)', 
+                            borderRadius: '8px', 
+                            padding: '16px',
+                            display: 'inline-block',
+                            marginBottom: '15px'
+                        }}>
+                            <i className="material-icons" style={{ fontSize: '32px', color: '#eebf1c' }}>science</i>
+                        </div>
+                        <h4 style={{ color: '#eebf1c', margin: '0 0 8px 0', fontSize: '1.1em' }}>Yahoo Projections Under Construction</h4>
+                        <p style={{ color: '#94a3b8', fontSize: '0.9em', lineHeight: '1.6', margin: 0 }}>
+                            We are actively mapping Yahoo's roster structures. Advanced playoff odds for Yahoo leagues will be available soon!
+                        </p>
+                    </div>
+                ) : (
+                    <p style={{ color: '#94a3b8', padding: '30px 20px', textAlign: 'center', margin: 0, fontStyle: 'italic', fontSize: '0.9em', lineHeight: '1.6' }}>
+                        <i className="material-icons" style={{ display: 'block', fontSize: '32px', color: '#64748b', marginBottom: '10px' }}>layers_clear</i>
+                        No roster configurations found.<br />Ensure franchise slots are created on Sleeper to launch projections.
+                    </p>
+                )}
             </div>
         );
     }
@@ -166,9 +193,7 @@ export default function ProjectionsPanel() {
                     </div>
                     <img src={team.avatar} alt="Avatar" className={styles.avatar} onError={(e) => e.target.src = 'https://sleepercdn.com/images/v2/icons/league_default.webp'} />
                     
-                    {/* Added minWidth: 0 to flex container to allow truncation child to work */}
                     <div className={styles.teamInfo} style={{ flex: 1, minWidth: 0, paddingRight: '10px' }}>
-                        {/* Added block, nowrap, overflow, and ellipsis rules */}
                         <span className={styles.teamName} style={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {team.name}
                         </span>
