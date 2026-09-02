@@ -219,8 +219,8 @@ export default function AddLeague() {
                     .from('leagues')
                     .insert({
                         [queryColumn]: String(league.id),
-                        league_name: league.name,
-                        league_avatar: league.avatar,
+                        name: league.name,
+                        avatar: league.avatar,
                         platform: league.platform
                     })
                     .select('id')
