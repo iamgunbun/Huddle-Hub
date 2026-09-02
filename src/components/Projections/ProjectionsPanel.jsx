@@ -38,6 +38,7 @@ export default function ProjectionsPanel() {
                 const playoffSpots = Number(currentLeagueData?.settings?.playoff_teams) || 6;
                 
                 let ranks = [];
+                let totalPlayersFound = 0;
                 
                 for (const rosterID in rosters) {
                     const teamStats = standings[rosterID] || { wins: 0, losses: 0, ties: 0, fpts: 0 };
@@ -46,6 +47,7 @@ export default function ProjectionsPanel() {
 
                     let rosterStrength = 0;
                     if (roster && roster.players && roster.players.length > 0) {
+                        totalPlayersFound += roster.players.length;
                         const rosterPlayers = roster.players.map(pId => playersInfo[pId]).filter(Boolean);
                         const rawStrength = predictScores(rosterPlayers, week, currentLeagueData);
                         rosterStrength = Number.isFinite(rawStrength) ? rawStrength : 0;
@@ -85,8 +87,8 @@ export default function ProjectionsPanel() {
                     return;
                 }
 
-                // Check if teams have negligible power scores (pre-season)
-                const isPreDraft = ranks.every(t => !t.powerScore || t.powerScore <= 25);
+                // Only trigger pre-draft mode if no players exist on any roster at all
+                const isPreDraft = totalPlayersFound === 0;
                 setPreDraftMode(isPreDraft);
 
                 let finalRankings = [];
