@@ -109,7 +109,9 @@ const processRegularSeason = async ({rosters, leagueData, curSeason, week, regul
     }
 
     let startWeek = parseInt(week);
-    const isYahoo = String(curSeason).includes('.l.') || !/^\d+$/.test(String(curSeason));
+    
+    // GUARANTEED YAHOO DETECTOR
+    const isYahoo = String(curSeason).includes('.') || !/^\d+$/.test(String(curSeason));
     let matchupsData = [];
 
     if (isYahoo) {

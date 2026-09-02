@@ -6,7 +6,8 @@ import { activeLeague } from '$lib/stores/leagueContext.js';
 import { leagueID as defaultLeagueID } from '$lib/utils/leagueInfo.js';
 import { fetchAndNormalizeYahooMatchups } from '../yahooService';
 
-const isYahooLeague = (id) => id && (String(id).includes('.l.') || !/^\d+$/.test(String(id)));
+// GUARANTEED YAHOO DETECTOR: Any ID with a period or non-numeric char is Yahoo
+const isYahooLeague = (id) => id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
 
 export const getLeagueMatchups = async (queryLeagueID) => {
     let id = queryLeagueID;
@@ -43,7 +44,6 @@ export const getLeagueMatchups = async (queryLeagueID) => {
         // --- YAHOO PLATFORM ROUTING (FETCH ALL PAST WEEKS) ---
         if (isYahooLeague(id)) {
             const yPromises = [];
-            // Fire API requests for every week up to the current week to build History
             for (let i = 1; i <= week; i++) {
                 yPromises.push(fetchAndNormalizeYahooMatchups(id, i));
             }
