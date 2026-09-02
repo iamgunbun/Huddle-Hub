@@ -69,8 +69,11 @@ export function LeagueProvider({ children }) {
                 const flattenedLeagues = await Promise.all(userLeaguesData.map(async (ul) => {
                     const matchedLeague = leaguesData?.find(l => l.id === ul.league_id || l.sleeper_league_id === ul.league_id) || {};
                     
-                    // FIX: Prioritize the external API key (sleeper_league_id) over the Supabase UUID
-                    const targetId = matchedLeague.sleeper_league_id || ul.league_id || matchedLeague.id;
+                    // Database Primary Key UUID (e.g. c632e497-...)
+                    const dbRecordId = matchedLeague.id || ul.league_id;
+                    
+                    // External Provider ID (e.g. "470.l.604026" or Sleeper numeric ID)
+                    const externalPlatformId = matchedLeague.sleeper_league_id || (ul.league_id !== dbRecordId ? ul.league_id : null);
                     
                     const isESPN = ul.platform === 'espn' || matchedLeague.platform === 'espn';
                     const isYahoo = ul.platform === 'yahoo' || matchedLeague.platform === 'yahoo';
@@ -79,25 +82,24 @@ export function LeagueProvider({ children }) {
 
                     if (isYahoo) {
                         try {
-                            const yahooData = await fetchAndNormalizeYahooLeague(targetId, userId);
+                            const yahooData = await fetchAndNormalizeYahooLeague(externalPlatformId || dbRecordId, userId);
                             if (yahooData) {
                                 liveData = {
-                                    sleeper_league_id: yahooData.sleeper_league_id || targetId,
                                     avatar: yahooData.avatar,
                                     name: yahooData.name,
                                     total_rosters: yahooData.total_rosters,
-                                    settings: yahooData.settings
+                                    settings: yahooData.settings,
+                                    season: yahooData.season
                                 };
                             }
                         } catch (e) {
-                            console.warn("Failed to fetch live Yahoo league data for", targetId);
+                            console.warn("Failed to fetch live Yahoo league data for", externalPlatformId);
                         }
                     } else if (isESPN) {
                         try {
-                            const espnData = await fetchAndNormalizeESPNLeague(targetId);
+                            const espnData = await fetchAndNormalizeESPNLeague(externalPlatformId || dbRecordId);
                             if (espnData) {
                                 liveData = {
-                                    sleeper_league_id: espnData.sleeper_league_id || targetId,
                                     avatar: espnData.avatar,
                                     name: espnData.name,
                                     total_rosters: espnData.total_rosters,
@@ -105,21 +107,21 @@ export function LeagueProvider({ children }) {
                                 };
                             }
                         } catch (e) {
-                            console.warn("Failed to fetch live ESPN league data for", targetId);
+                            console.warn("Failed to fetch live ESPN league data for", externalPlatformId);
                         }
                     } else {
-                        const sleeperId = matchedLeague.sleeper_league_id || targetId;
-                        if (sleeperId) {
+                        const sleeperId = externalPlatformId || dbRecordId;
+                        if (sleeperId && /^\d+$/.test(String(sleeperId))) {
                             try {
                                 const res = await fetch(`https://api.sleeper.app/v1/league/${sleeperId}`);
                                 if (res.ok) {
                                     const sData = await res.json();
                                     liveData = {
-                                        sleeper_league_id: sleeperId,
                                         avatar: sData.avatar,
                                         name: sData.name,
                                         total_rosters: sData.total_rosters,
-                                        settings: sData.settings
+                                        settings: sData.settings,
+                                        season: sData.season
                                     };
                                 }
                             } catch (e) {
@@ -136,11 +138,13 @@ export function LeagueProvider({ children }) {
                         ...matchedLeague, 
                         ...ul,
                         ...liveData,            
+                        id: dbRecordId,                        // Preserves database UUID for Supabase queries
+                        league_id: dbRecordId,                 // Preserves database foreign key
+                        sleeper_league_id: externalPlatformId, // Preserves external API key (e.g. 470.l.604026)
                         league_name: resolvedName,
                         name: resolvedName,
                         avatar: finalAvatar,
                         league_avatar: finalAvatar,
-                        league_id: targetId,
                         platform: isYahoo ? 'yahoo' : (isESPN ? 'espn' : 'sleeper')
                     };
                 }));
@@ -149,10 +153,10 @@ export function LeagueProvider({ children }) {
                 setLeagueCount(flattenedLeagues.length);
 
                 const savedLeagueId = localStorage.getItem('huddle_active_league_id');
-                const targetIdToLoad = preferredLeagueId || savedLeagueId || flattenedLeagues[0].league_id;
+                const targetIdToLoad = preferredLeagueId || savedLeagueId || flattenedLeagues[0].id;
 
                 const activeConnection = flattenedLeagues.find(
-                    ul => ul.league_id === targetIdToLoad || ul.sleeper_league_id === targetIdToLoad || ul.id === targetIdToLoad
+                    ul => ul.id === targetIdToLoad || ul.league_id === targetIdToLoad || ul.sleeper_league_id === targetIdToLoad
                 ) || flattenedLeagues[0];
 
                 if (activeConnection) {
@@ -163,7 +167,7 @@ export function LeagueProvider({ children }) {
                         avatar: activeConnection.avatar || '/brand.png'
                     };
                     setActiveLeague(selected);
-                    localStorage.setItem('huddle_active_league_id', selected.league_id || selected.id);
+                    localStorage.setItem('huddle_active_league_id', selected.id);
                 }
             } else {
                 setUserLeagues([]);
@@ -183,7 +187,7 @@ export function LeagueProvider({ children }) {
 
         try {
             const target = userLeagues.find(
-                l => l.league_id === leagueId || l.sleeper_league_id === leagueId || l.id === leagueId
+                l => l.id === leagueId || l.league_id === leagueId || l.sleeper_league_id === leagueId
             );
 
             if (target) {
@@ -194,7 +198,7 @@ export function LeagueProvider({ children }) {
                     avatar: target.avatar || '/brand.png'
                 };
                 setActiveLeague(updated);
-                localStorage.setItem('huddle_active_league_id', target.league_id || target.id);
+                localStorage.setItem('huddle_active_league_id', target.id);
                 return;
             }
 
