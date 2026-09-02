@@ -94,35 +94,51 @@ export default function Home() {
         window.addEventListener('resize', handleResize);
                  
         const fetchHubData = async () => {
-            if (!activeLeague?.sleeper_league_id) return;
-            const sleeperId = activeLeague.sleeper_league_id;
-            try {
-                const [managersData, pData, currentLeagueData] = await Promise.all([
-                    getLeagueTeamManagers(sleeperId),
-                    loadPlayers(),
-                    getLeagueData(sleeperId)
-                ]);
-                
-                setTeamManagers(managersData);
-                const playersMap = pData?.players || {};
-                const { data: { session } } = await supabase.auth.getSession();
-                                 
-                if (session?.user) {
-                    const { data: ulData } = await supabase.from('user_leagues')
-                        .select('team_name')
-                        .eq('user_id', session.user.id)
-                        .eq('league_id', activeLeague.id)
-                        .single();
+            if (!activeLeague) return;
+            const targetId = activeLeague.sleeper_league_id || activeLeague.id || activeLeague.league_id;
+            if (!targetId) return;
 
-                    const { data: dbLeagueMeta } = await supabase.from('leagues')
+            const platform = activeLeague.platform || 'sleeper';
+            const isYahoo = platform === 'yahoo';
+            const isSleeper = platform === 'sleeper';
+
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                const userId = session?.user?.id;
+                
+                let ulData = null;
+                let dbLeagueMeta = null;
+
+                if (userId) {
+                    const { data: ulRes } = await supabase.from('user_leagues')
+                        .select('team_name, is_commissioner')
+                        .eq('user_id', userId)
+                        .eq('league_id', activeLeague.id)
+                        .maybeSingle();
+                    ulData = ulRes;
+
+                    const { data: dbMeta } = await supabase.from('leagues')
                         .select('dues_amount, enable_txn_fees, txn_fee_amount, exclude_defenses_from_fees, financial_ledger')
                         .eq('id', activeLeague.id)
                         .maybeSingle();
-                                         
-                    let currentRole = activeLeague.is_commissioner ? 'Commissioner' : 'Member';
+                    dbLeagueMeta = dbMeta;
+                }
+
+                if (isSleeper) {
+                    // --- SLEEPER PLATFORM ROUTING ---
+                    const [managersData, pData, currentLeagueData] = await Promise.all([
+                        getLeagueTeamManagers(targetId),
+                        loadPlayers(),
+                        getLeagueData(targetId)
+                    ]);
+                    
+                    setTeamManagers(managersData);
+                    const playersMap = pData?.players || {};
+                    
+                    let currentRole = activeLeague.is_commissioner || ulData?.is_commissioner ? 'Commissioner' : 'Member';
                     let tenureText = '1st Year';
-                    const leagueYears = Object.keys(managersData.teamManagersMap).map(Number);
-                    const currentYear = managersData.currentSeason;
+                    const leagueYears = Object.keys(managersData?.teamManagersMap || {}).map(Number);
+                    const currentYear = managersData?.currentSeason;
                                          
                     if (leagueYears.length > 0) {
                         const leagueStartYear = Math.min(...leagueYears);
@@ -136,10 +152,22 @@ export default function Home() {
                         const searchName = ulData.team_name.toLowerCase().trim();
                                                  
                         if (searchName !== 'commissioner team') {
-                            const rostersMap = managersData.teamManagersMap[currentYear] || {};
+                            const rostersMap = managersData?.teamManagersMap?.[currentYear] || {};
                             for (const [rId, rData] of Object.entries(rostersMap)) {
                                 const apiTeamName = rData.team?.name?.toLowerCase().trim();
-                                if (apiTeamName === searchName) {
+                                
+                                let matchesUsername = false;
+                                if (rData.managers && managersData.users) {
+                                    for (const mId of rData.managers) {
+                                        const sUser = managersData.users[mId];
+                                        if (sUser?.display_name?.toLowerCase().trim() === searchName) {
+                                            matchesUsername = true;
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                if (apiTeamName === searchName || matchesUsername) {
                                     activeRosterId = rId;
                                     const isCoOwner = rData.managers?.length > 1;
                                                                          
@@ -160,7 +188,7 @@ export default function Home() {
                     if (activeRosterId) {
                         let allTxns = [];
                         for (let i = 0; i <= 18; i++) {
-                            const res = await fetch(`https://api.sleeper.app/v1/league/${activeLeague.sleeper_league_id}/transactions/${i}`);
+                            const res = await fetch(`https://api.sleeper.app/v1/league/${targetId}/transactions/${i}`);
                             if (res.ok) {
                                 const data = await res.json();
                                 allTxns = [...allTxns, ...data];
@@ -210,27 +238,67 @@ export default function Home() {
                             setMyBalanceOwed(0);
                         }
                     }
-                }
-                                 
-                const leagueData = await getLeagueData(sleeperId);
-                const prevLeagueId = leagueData?.status === "complete" ? leagueData.league_id : leagueData?.previous_league_id;
-                                 
-                if (prevLeagueId && prevLeagueId !== "0") {
-                    const [prevLeagueRes, winnersRes] = await Promise.all([
-                        fetch(`https://api.sleeper.app/v1/league/${prevLeagueId}`),
-                        fetch(`https://api.sleeper.app/v1/league/${prevLeagueId}/winners_bracket`)
-                    ]);
-                                         
-                    const prevLeagueData = await prevLeagueRes.json();
-                    const winnersBracket = await winnersRes.json();
-                                         
-                    if (winnersBracket && winnersBracket.length > 0) {
-                        const playoffRounds = winnersBracket[winnersBracket.length - 1].r;
-                        const finalsMatch = winnersBracket.find(m => m.r === playoffRounds && m.t1_from?.w);
-                        if (finalsMatch) {
-                            setRecentChamp({ year: prevLeagueData.season, champion: finalsMatch.w });
+                                     
+                    const prevLeagueId = currentLeagueData?.status === "complete" ? currentLeagueData.league_id : currentLeagueData?.previous_league_id;
+                                     
+                    if (prevLeagueId && prevLeagueId !== "0") {
+                        const [prevLeagueRes, winnersRes] = await Promise.all([
+                            fetch(`https://api.sleeper.app/v1/league/${prevLeagueId}`),
+                            fetch(`https://api.sleeper.app/v1/league/${prevLeagueId}/winners_bracket`)
+                        ]);
+                                             
+                        const prevLeagueData = await prevLeagueRes.json();
+                        const winnersBracket = await winnersRes.json();
+                                             
+                        if (winnersBracket && winnersBracket.length > 0) {
+                            const playoffRounds = winnersBracket[winnersBracket.length - 1].r;
+                            const finalsMatch = winnersBracket.find(m => m.r === playoffRounds && m.t1_from?.w);
+                            if (finalsMatch) {
+                                setRecentChamp({ year: prevLeagueData.season, champion: finalsMatch.w });
+                            }
                         }
                     }
+                } 
+                else if (isYahoo) {
+                    // --- YAHOO PLATFORM ROUTING ---
+                    let currentRole = activeLeague.is_commissioner || ulData?.is_commissioner ? 'Commissioner' : 'Member';
+                    setLeagueRole(currentRole);
+                    setLeagueTenure("Yahoo League");
+                    setMyTxnCount(0); 
+
+                    // Fetch Yahoo rosters via proxy to avoid CORS/404 crashes
+                    try {
+                        const proxyRes = await fetch('/api/yahoo-proxy', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                userId: userId,
+                                endpoint: `league/${targetId}/teams`
+                            })
+                        });
+
+                        if (proxyRes.ok) {
+                            const data = await proxyRes.json();
+                            // Future: Map Yahoo team configurations to setTeamManagers state here
+                        }
+                    } catch (err) {
+                        console.warn("Yahoo proxy fetch failed:", err);
+                    }
+
+                    // Handle generic dues fallback for Yahoo
+                    const isDuesSetUp = dbLeagueMeta?.dues_amount !== null && dbLeagueMeta?.dues_amount !== undefined && dbLeagueMeta?.dues_amount !== '';
+                    setDuesConfigured(isDuesSetUp);
+
+                    if (isDuesSetUp) {
+                        const baseDues = Number(dbLeagueMeta.dues_amount) || 0;
+                        const ledger = dbLeagueMeta.financial_ledger || {};
+                        const collectedAmount = ulData?.team_name ? (ledger[ulData.team_name] || 0) : 0;
+                        setMyBalanceOwed(baseDues - collectedAmount);
+                    } else {
+                        setMyBalanceOwed(0);
+                    }
+                    
+                    setRecentChamp(null);
                 }
             } catch (e) {
                 console.error("Dashboard data load failed:", e);
