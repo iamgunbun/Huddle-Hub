@@ -28,10 +28,7 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
         const response = await fetch('/api/yahoo-proxy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                userId, 
-                endpoint: `league/${cleanKey}/settings` 
-            })
+            body: JSON.stringify({ userId, endpoint: `league/${cleanKey}/settings` })
         });
 
         if (!response.ok) return null;
@@ -61,7 +58,6 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
                 divisions: 0,
                 playoff_teams: 6,
                 type: 0,
-                // INJECT FALLBACK ARRAY TO PREVENT `indexOf` CRASH IN PROJECTIONS
                 roster_positions: ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF', 'BN', 'BN', 'BN', 'BN', 'BN', 'BN']
             },
             metadata: {},
@@ -73,51 +69,140 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
     }
 };
 
-// 2. ROSTERS & TEAMS
+// 2. ROSTERS, PLAYERS, & STANDINGS (Dual-Fetch Merge)
 export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = null) => {
     const cleanKey = getCleanYahooLeagueKey(leagueId);
     const userId = await getUserId(passedUserId);
     if (!cleanKey || !userId) return { rosters: {}, startersAndReserve: [] };
 
     try {
-        const response = await fetch('/api/yahoo-proxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                userId, 
-                endpoint: `league/${cleanKey}/teams` 
-            })
-        });
+        // Fetch BOTH endpoints simultaneously to guarantee we get W/L Records AND Roster Players
+        const [rosterRes, standingsRes] = await Promise.all([
+            fetch('/api/yahoo-proxy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, endpoint: `league/${cleanKey}/teams/roster` })
+            }).catch(() => null),
+            fetch('/api/yahoo-proxy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, endpoint: `league/${cleanKey}/standings` })
+            }).catch(() => null)
+        ]);
 
-        if (!response.ok) return { rosters: {}, startersAndReserve: [] };
+        const rData = rosterRes?.ok ? await rosterRes.json() : {};
+        const sData = standingsRes?.ok ? await standingsRes.json() : {};
 
-        const data = await response.json();
-        const teamsData = data?.fantasy_content?.league?.[1]?.teams;
-        if (!teamsData) return { rosters: {}, startersAndReserve: [] };
+        // 1. Map Standings (Wins, Losses, Points)
+        const standingsMap = {};
+        const stLeagueObj = sData?.fantasy_content?.league;
+        if (Array.isArray(stLeagueObj)) {
+            const stWrapper = stLeagueObj.find(x => x && x.standings);
+            const stTeams = stWrapper?.standings?.[0]?.teams;
+            if (stTeams) {
+                Object.keys(stTeams).forEach(k => {
+                    if (k === 'count') return;
+                    const tm = stTeams[k]?.team;
+                    if (!Array.isArray(tm)) return;
+                    
+                    const tmInfo = tm[0];
+                    const tmStats = tm[1]?.team_standings;
+                    const tId = parseInt(tmInfo?.find(x => x.team_id)?.team_id);
+                    
+                    if (tId && tmStats) {
+                        const totals = tmStats.outcome_totals || {};
+                        standingsMap[tId] = {
+                            wins: parseInt(totals.wins) || 0,
+                            losses: parseInt(totals.losses) || 0,
+                            ties: parseInt(totals.ties) || 0,
+                            fpts: parseFloat(tmStats.points_for) || 0,
+                            fpts_against: parseFloat(tmStats.points_against) || 0,
+                            streak: tmStats.streak?.value || 0
+                        };
+                    }
+                });
+            }
+        }
 
+        // 2. Map Rosters & Merge with Standings
         const rosterMap = {};
         const startersAndReserve = [];
+        
+        const rLeagueObj = rData?.fantasy_content?.league;
+        let teamsData = null;
+        
+        if (Array.isArray(rLeagueObj)) {
+            const teamsWrapper = rLeagueObj.find(x => x && x.teams);
+            teamsData = teamsWrapper?.teams;
+        }
 
-        Object.keys(teamsData).forEach((k) => {
+        // Fallback if rosters fail: Use standings teams just to populate names
+        if (!teamsData && Array.isArray(stLeagueObj)) {
+            const stWrapper = stLeagueObj.find(x => x && x.standings);
+            teamsData = stWrapper?.standings?.[0]?.teams;
+        }
+
+        if (!teamsData) return { rosters: {}, startersAndReserve: [] };
+
+        Object.keys(teamsData).forEach(k => {
             if (k === 'count') return;
             const teamWrapper = teamsData[k]?.team;
-            if (!teamWrapper) return;
+            if (!Array.isArray(teamWrapper)) return;
 
-            const teamInfo = teamWrapper[0];
-            const teamStandings = teamWrapper[2]?.team_standings; 
+            const teamInfoArray = teamWrapper[0];
+            if (!Array.isArray(teamInfoArray)) return;
 
-            const teamKey = teamInfo?.find(x => x.team_key)?.team_key || `team_${k}`;
-            const teamId = parseInt(teamInfo?.find(x => x.team_id)?.team_id) || (parseInt(k) + 1);
-            const teamName = teamInfo?.find(x => x.name)?.name || `Team ${teamId}`;
-            const teamLogo = teamInfo?.find(x => x.team_logos)?.team_logos?.[0]?.team_logo?.url || '/brand.png';
-            const managers = teamInfo?.find(x => x.managers)?.managers || [];
-            const primaryManager = managers[0]?.manager?.nickname || teamName;
+            const teamKey = teamInfoArray.find(x => x.team_key)?.team_key || `team_${k}`;
+            const teamId = parseInt(teamInfoArray.find(x => x.team_id)?.team_id) || (parseInt(k) + 1);
+            const teamName = teamInfoArray.find(x => x.name)?.name || `Team ${teamId}`;
+            
+            let teamLogo = '/brand.png';
+            const logosArr = teamInfoArray.find(x => x.team_logos)?.team_logos;
+            if (Array.isArray(logosArr) && logosArr[0]?.team_logo?.url) {
+                teamLogo = logosArr[0].team_logo.url;
+            }
 
-            const totals = teamStandings?.outcome_totals || {};
-            const wins = parseInt(totals.wins) || 0;
-            const losses = parseInt(totals.losses) || 0;
-            const ties = parseInt(totals.ties) || 0;
-            const fpts = parseFloat(teamStandings?.points_for) || 0;
+            let primaryManager = teamName;
+            const managersArr = teamInfoArray.find(x => x.managers)?.managers;
+            if (Array.isArray(managersArr) && managersArr[0]?.manager?.nickname) {
+                primaryManager = managersArr[0].manager.nickname;
+            }
+
+            // Extract Players safely
+            const playersArr = [];
+            const startersArr = [];
+            const rosterObjWrapper = teamWrapper.find(x => x && x.roster);
+            
+            if (rosterObjWrapper && rosterObjWrapper.roster) {
+                const rObj = rosterObjWrapper.roster;
+                const playersNode = Object.values(rObj).find(val => val && val.players)?.players;
+                
+                if (playersNode) {
+                    Object.keys(playersNode).forEach(pK => {
+                        if (pK === 'count') return;
+                        const pItemWrapper = playersNode[pK]?.player;
+                        if (!Array.isArray(pItemWrapper)) return;
+                        
+                        const pInfo = pItemWrapper[0];
+                        if (!Array.isArray(pInfo)) return;
+                        
+                        const pId = pInfo.find(x => x.player_id)?.player_id;
+                        const pSelectedPosition = pItemWrapper[1]?.selected_position?.[1]?.position;
+                        
+                        if (pId) {
+                            playersArr.push(pId);
+                            if (pSelectedPosition && pSelectedPosition !== 'BN' && pSelectedPosition !== 'IR') {
+                                startersArr.push(pId);
+                                startersAndReserve.push(pId);
+                            }
+                        }
+                    });
+                }
+            }
+
+            const sMap = standingsMap[teamId] || {};
+            const fpts = sMap.fpts || 0;
+            const fptsAgainst = sMap.fpts_against || 0;
 
             rosterMap[teamId] = {
                 roster_id: teamId,
@@ -125,20 +210,20 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
                 team_name: teamName,
                 avatar: teamLogo,
                 manager_name: primaryManager,
-                players: [],
-                starters: [],
+                players: playersArr,
+                starters: startersArr,
                 reserve: [],
                 settings: {
-                    wins,
-                    losses,
-                    ties,
+                    wins: sMap.wins || 0,
+                    losses: sMap.losses || 0,
+                    ties: sMap.ties || 0,
                     fpts: Math.floor(fpts),
                     fpts_decimal: Math.round((fpts % 1) * 100),
-                    fpts_against: 0,
-                    fpts_against_decimal: 0,
+                    fpts_against: Math.floor(fptsAgainst),
+                    fpts_against_decimal: Math.round((fptsAgainst % 1) * 100),
                     division: 1
                 },
-                metadata: { streak: teamStandings?.streak?.value || 0 }
+                metadata: { streak: sMap.streak || 0 }
             };
         });
 
@@ -159,10 +244,7 @@ export const fetchAndNormalizeYahooMatchups = async (leagueId, week = 1, passedU
         const response = await fetch('/api/yahoo-proxy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                userId, 
-                endpoint: `league/${cleanKey}/scoreboard;week=${week}` 
-            })
+            body: JSON.stringify({ userId, endpoint: `league/${cleanKey}/scoreboard;week=${week}` })
         });
 
         if (!response.ok) return { matchups: {}, week };
