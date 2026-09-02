@@ -201,11 +201,16 @@ export default function AddLeague() {
             let dbLeagueId;
             const queryColumn = (league.platform === 'sleeper' || league.platform === 'yahoo') ? 'sleeper_league_id' : 'id';
             
-            const { data: existingLeague } = await supabase
+            const { data: existingLeague, error: selectErr } = await supabase
                 .from('leagues')
                 .select('id')
-                .eq(queryColumn, league.id)
+                .eq(queryColumn, String(league.id))
                 .maybeSingle();
+
+            if (selectErr) {
+                console.error("Lookup error:", selectErr);
+                throw new Error("Database query failed while checking league existence.");
+            }
 
             if (existingLeague) {
                 dbLeagueId = existingLeague.id;
@@ -213,7 +218,7 @@ export default function AddLeague() {
                 const { data: newLeague, error: newLeagueErr } = await supabase
                     .from('leagues')
                     .insert({
-                        [queryColumn]: league.id,
+                        [queryColumn]: String(league.id),
                         name: league.name,
                         avatar: league.avatar,
                         platform: league.platform
@@ -221,7 +226,10 @@ export default function AddLeague() {
                     .select('id')
                     .single();
 
-                if (newLeagueErr) throw new Error("Failed to register the new league in the database.");
+                if (newLeagueErr) {
+                    console.error("Insert error:", newLeagueErr);
+                    throw new Error("Failed to register the new league in the database.");
+                }
                 dbLeagueId = newLeague.id;
             }
 
