@@ -6,6 +6,7 @@ import { waitForAll } from './multiPromise';
 import { getManagers, round, sortHighAndLow } from './universalFunctions';
 import { Records } from '../dataClasses';
 import { getBrackets } from './leagueBrackets';
+import { fetchAndNormalizeYahooMatchups } from '../yahooService';
 
 let recordsCache = {}; 
 
@@ -42,7 +43,6 @@ export const getLeagueRecords = async (refresh = false, queryLeagueID = null) =>
     let allRegDiffs = [];
     let allPlayoffDiffs = [];
 
-    // CRITICAL FIX: Catch both Number 0 and String "0" to prevent 404 API crashing
     while (curSeason && curSeason !== 0 && curSeason !== "0") {
         const res = await waitForAll(
             getLeagueRosters(curSeason),
@@ -51,7 +51,6 @@ export const getLeagueRecords = async (refresh = false, queryLeagueID = null) =>
 
         const [rosterRes, leagueData] = res || [null, null];
 
-        // Safe Abort if the API failed to fetch the previous year
         if (!leagueData || !rosterRes) break;
 
         const rosters = rosterRes?.rosters || {};
@@ -75,7 +74,7 @@ export const getLeagueRecords = async (refresh = false, queryLeagueID = null) =>
         if (!currentYear && regData.year) {
             currentYear = regData.year;
         }
-        curSeason = regData.season;
+        curSeason = leagueData.previous_league_id || 0;
     }
 
     playoffRecords.currentYear = regularSeason.currentYear;
@@ -109,25 +108,47 @@ const processRegularSeason = async ({rosters, leagueData, curSeason, week, regul
         analyzeRosters({year, roster: rosters[rosterID], regularSeason});
     }
 
-    const matchupsPromises = [];
     let startWeek = parseInt(week);
-    while(week > 0) {
-        matchupsPromises.push(fetch(`https://api.sleeper.app/v1/league/${curSeason}/matchups/${week}`, {compress: true}))
-        week--;
-    }
+    const isYahoo = String(curSeason).includes('.l.') || !/^\d+$/.test(String(curSeason));
+    let matchupsData = [];
 
-    // Safely execute matchups arrays to prevent 'iterable' destructuring crashes
-    const matchupsRes = await waitForAll(...matchupsPromises).catch((err) => { console.error(err); return []; });
-    const matchupsJsonPromises = [];
-    
-    for(const matchupRes of (matchupsRes || [])) {
-        if (matchupRes && matchupRes.ok) {
-            matchupsJsonPromises.push(matchupRes.json());
+    if (isYahoo) {
+        const yPromises = [];
+        let w = startWeek;
+        while (w > 0) {
+            yPromises.push(fetchAndNormalizeYahooMatchups(curSeason, w));
+            w--;
         }
-    }
-    const matchupsData = await waitForAll(...matchupsJsonPromises).catch((err) => { console.error(err); return []; });
+        const yWeeks = await Promise.all(yPromises);
+        
+        matchupsData = yWeeks.map(yw => {
+            const arr = [];
+            Object.entries(yw.matchups || {}).forEach(([mId, matchupPair]) => {
+                matchupPair.forEach(team => {
+                    arr.push({ ...team, matchup_id: mId });
+                });
+            });
+            return arr;
+        });
+    } else {
+        const matchupsPromises = [];
+        let w = startWeek;
+        while(w > 0) {
+            matchupsPromises.push(fetch(`https://api.sleeper.app/v1/league/${curSeason}/matchups/${w}`, {compress: true}))
+            w--;
+        }
 
-    curSeason = leagueData.previous_league_id;
+        const matchupsRes = await waitForAll(...matchupsPromises).catch((err) => { console.error(err); return []; });
+        const matchupsJsonPromises = [];
+        
+        for(const matchupRes of (matchupsRes || [])) {
+            if (matchupRes && matchupRes.ok) {
+                matchupsJsonPromises.push(matchupRes.json());
+            }
+        }
+        matchupsData = await waitForAll(...matchupsJsonPromises).catch((err) => { console.error(err); return []; });
+    }
+
     let seasonPointsRecord = [];
     let matchupDifferentials = [];
 
@@ -154,7 +175,7 @@ const analyzeRosters = ({year, roster, regularSeason}) => {
     const rosterID = roster.roster_id;
     const managers = getManagers(roster);
 
-    if(roster.settings.wins === 0 && roster.settings.ties === 0 && roster.settings.losses === 0) return;
+    if(!roster.settings || (roster.settings.wins === 0 && roster.settings.ties === 0 && roster.settings.losses === 0)) return;
 
     const fptsFor = roster.settings.fpts + (roster.settings.fpts_decimal / 100);
     const fptsPerGame = round(fptsFor / (roster.settings.wins + roster.settings.losses + roster.settings.ties));
@@ -166,7 +187,7 @@ const analyzeRosters = ({year, roster, regularSeason}) => {
         fptsFor,
         fptsAgainst:  roster.settings.fpts_against + (roster.settings.fpts_against_decimal / 100),
         fptsPerGame,
-        potentialPoints:  roster.settings.ppts + (roster.settings.ppts_decimal / 100),
+        potentialPoints:  roster.settings.ppts ? (roster.settings.ppts + (roster.settings.ppts_decimal / 100)) : fptsFor,
         rosterID,
         year,
     }

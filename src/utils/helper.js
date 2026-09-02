@@ -4,13 +4,13 @@ import { getLeagueTransactions as _getLeagueTransactions } from './helperFunctio
 import { getNflState } from './helperFunctions/nflState';
 import { getLeagueRosters } from './helperFunctions/leagueRosters';
 import { getLeagueTeamManagers as _getLeagueTeamManagers } from './helperFunctions/leagueTeamManagers';
-import { getLeagueMatchups } from './helperFunctions/leagueMatchups'; // FIX: Removed the _ alias!
+import { getLeagueMatchups } from './helperFunctions/leagueMatchups';
 import { getRivalryMatchups as _getRivalryMatchups } from './helperFunctions/rivalryMatchups';
 import { getNews, stringDate } from './helperFunctions/news';
 import { loadPlayers } from './helperFunctions/players';
 import { waitForAll } from './helperFunctions/multiPromise';
 import { getUpcomingDraft as _getUpcomingDraft, getPreviousDrafts as _getPreviousDrafts } from './helperFunctions/leagueDrafts';
-import { getLeagueRecords as _getLeagueRecords } from './helperFunctions/leagueRecords';
+import { getLeagueRecords } from './helperFunctions/leagueRecords'; // Natively Supports Yahoo Now!
 import { cleanName, round, generateGraph, getTeamFromTeamManagers, gotoManager, getAuthor, parseDate, getAvatar } from './helperFunctions/universalFunctions';
 import { predictScores } from './helperFunctions/predictOptimalScore';
 import { getBrackets as _getBrackets } from './helperFunctions/leagueBrackets';
@@ -29,21 +29,7 @@ const getUpcomingDraft = async (id, ...args) => isYahooId(id) ? null : _getUpcom
 const getPreviousDrafts = async (id, ...args) => isYahooId(id) ? [] : _getPreviousDrafts(id, ...args);
 const getBrackets = async (id, ...args) => isYahooId(id) ? null : _getBrackets(id, ...args);
 
-// Safely format empty state for League Records to prevent UI crashes
-const getLeagueRecords = async (arg1 = false, arg2 = null, ...args) => {
-    const refresh = typeof arg1 === 'boolean' ? arg1 : false;
-    const queryLeagueID = typeof arg1 === 'string' ? arg1 : arg2;
-    
-    if (isYahooId(queryLeagueID)) {
-        return { 
-            regularSeasonData: { allTimeMatchupDifferentials: [], currentYear: null, lastYear: null }, 
-            playoffData: { allTimeMatchupDifferentials: [], currentYear: null, lastYear: null } 
-        };
-    }
-    return _getLeagueRecords(refresh, queryLeagueID, ...args);
-};
-
-// Safely format empty state for Trophy Room to prevent UI crashes
+// Keep shield for Trophy Room until Yahoo previous-season mapping is built
 const getAwards = async (arg1 = false, arg2 = null, ...args) => {
     const refresh = typeof arg1 === 'boolean' ? arg1 : false;
     const queryLeagueID = typeof arg1 === 'string' ? arg1 : arg2;
@@ -52,7 +38,6 @@ const getAwards = async (arg1 = false, arg2 = null, ...args) => {
     return _getAwards(refresh, queryLeagueID, ...args);
 };
 
-// Custom interceptor for Team Managers to support Yahoo team names/avatars AND User Profiles
 const getLeagueTeamManagers = async (id, ...args) => {
     if (isYahooId(id)) {
         const rostersData = await getLeagueRosters(id);

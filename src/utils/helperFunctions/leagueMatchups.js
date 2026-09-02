@@ -6,8 +6,7 @@ import { activeLeague } from '$lib/stores/leagueContext.js';
 import { leagueID as defaultLeagueID } from '$lib/utils/leagueInfo.js';
 import { fetchAndNormalizeYahooMatchups } from '../yahooService';
 
-// MORE ROBUST SHIELD: Any ID with non-numeric characters (like periods) is flagged as Yahoo
-const isYahooLeague = (id) => id && !/^\d+$/.test(String(id));
+const isYahooLeague = (id) => id && (String(id).includes('.l.') || !/^\d+$/.test(String(id)));
 
 export const getLeagueMatchups = async (queryLeagueID) => {
     let id = queryLeagueID;
@@ -41,11 +40,24 @@ export const getLeagueMatchups = async (queryLeagueID) => {
         const year = leagueData.season;
         const regularSeasonLength = leagueData.settings?.playoff_week_start ? leagueData.settings.playoff_week_start - 1 : 14;
 
-        // --- YAHOO PLATFORM ROUTING ---
+        // --- YAHOO PLATFORM ROUTING (FETCH ALL PAST WEEKS) ---
         if (isYahooLeague(id)) {
-            const yWeekMatchup = await fetchAndNormalizeYahooMatchups(id, week);
+            const yPromises = [];
+            // Fire API requests for every week up to the current week to build History
+            for (let i = 1; i <= week; i++) {
+                yPromises.push(fetchAndNormalizeYahooMatchups(id, i));
+            }
+            const yWeeks = await Promise.all(yPromises);
+            
+            const matchupWeeks = yWeeks
+                .filter(w => w && Object.keys(w.matchups || {}).length > 0)
+                .map(w => ({
+                    matchups: w.matchups, 
+                    week: w.week 
+                }));
+
             const matchupsResponse = {
-                matchupWeeks: [yWeekMatchup],
+                matchupWeeks,
                 year,
                 week,
                 regularSeasonLength,
