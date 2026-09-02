@@ -6,7 +6,8 @@ import { activeLeague } from '$lib/stores/leagueContext.js';
 import { leagueID as defaultLeagueID } from '$lib/utils/leagueInfo.js';
 import { fetchAndNormalizeYahooMatchups } from '../yahooService';
 
-const isYahooLeague = (id) => typeof id === 'string' && (id.includes('.l.') || id.startsWith('yahoo_'));
+// MORE ROBUST SHIELD: Any ID with non-numeric characters (like periods) is flagged as Yahoo
+const isYahooLeague = (id) => id && !/^\d+$/.test(String(id));
 
 export const getLeagueMatchups = async (queryLeagueID) => {
     let id = queryLeagueID;

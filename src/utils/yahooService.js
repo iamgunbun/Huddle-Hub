@@ -2,8 +2,12 @@ import { supabase } from '../supabaseClient';
 
 const getCleanYahooLeagueKey = (rawId) => {
     if (!rawId) return null;
-    const str = String(rawId).trim();
+    let str = String(rawId).trim();
     if (/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(str)) return null;
+    
+    // Auto-correct common typo where the letter 'l' is stored as the number '1'
+    str = str.replace('.1.', '.l.');
+    
     if (str.includes('.l.')) return str;
     return `nfl.l.${str}`;
 };
@@ -56,7 +60,9 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
                 playoff_week_start: playoffWeekStart,
                 divisions: 0,
                 playoff_teams: 6,
-                type: 0
+                type: 0,
+                // INJECT FALLBACK ARRAY TO PREVENT `indexOf` CRASH IN PROJECTIONS
+                roster_positions: ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF', 'BN', 'BN', 'BN', 'BN', 'BN', 'BN']
             },
             metadata: {},
             raw_yahoo: data
@@ -67,7 +73,7 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
     }
 };
 
-// 2. ROSTERS & PLAYERS (Updated to fetch full team rosters)
+// 2. ROSTERS & TEAMS
 export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = null) => {
     const cleanKey = getCleanYahooLeagueKey(leagueId);
     const userId = await getUserId(passedUserId);
@@ -79,7 +85,7 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 userId, 
-                endpoint: `league/${cleanKey}/teams/roster` 
+                endpoint: `league/${cleanKey}/teams` 
             })
         });
 
@@ -98,7 +104,7 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
             if (!teamWrapper) return;
 
             const teamInfo = teamWrapper[0];
-            const rosterData = teamWrapper[1]?.roster?.[0];
+            const teamStandings = teamWrapper[2]?.team_standings; 
 
             const teamKey = teamInfo?.find(x => x.team_key)?.team_key || `team_${k}`;
             const teamId = parseInt(teamInfo?.find(x => x.team_id)?.team_id) || (parseInt(k) + 1);
@@ -107,28 +113,11 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
             const managers = teamInfo?.find(x => x.managers)?.managers || [];
             const primaryManager = managers[0]?.manager?.nickname || teamName;
 
-            const playersArr = [];
-            const startersArr = [];
-
-            if (rosterData?.players) {
-                const pObj = rosterData.players;
-                Object.keys(pObj).forEach((pK) => {
-                    if (pK === 'count') return;
-                    const pItem = pObj[pK]?.player?.[0];
-                    if (!pItem) return;
-
-                    const pId = pItem.find(x => x.player_id)?.player_id;
-                    const pSelectedPosition = pObj[pK]?.player?.[1]?.selected_position?.[1]?.position;
-
-                    if (pId) {
-                        playersArr.push(pId);
-                        if (pSelectedPosition && pSelectedPosition !== 'BN' && pSelectedPosition !== 'IR') {
-                            startersArr.push(pId);
-                            startersAndReserve.push(pId);
-                        }
-                    }
-                });
-            }
+            const totals = teamStandings?.outcome_totals || {};
+            const wins = parseInt(totals.wins) || 0;
+            const losses = parseInt(totals.losses) || 0;
+            const ties = parseInt(totals.ties) || 0;
+            const fpts = parseFloat(teamStandings?.points_for) || 0;
 
             rosterMap[teamId] = {
                 roster_id: teamId,
@@ -136,20 +125,20 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
                 team_name: teamName,
                 avatar: teamLogo,
                 manager_name: primaryManager,
-                players: playersArr,
-                starters: startersArr,
+                players: [],
+                starters: [],
                 reserve: [],
                 settings: {
-                    wins: 0,
-                    losses: 0,
-                    ties: 0,
-                    fpts: 0,
-                    fpts_decimal: 0,
+                    wins,
+                    losses,
+                    ties,
+                    fpts: Math.floor(fpts),
+                    fpts_decimal: Math.round((fpts % 1) * 100),
                     fpts_against: 0,
                     fpts_against_decimal: 0,
                     division: 1
                 },
-                metadata: { streak: 0 }
+                metadata: { streak: teamStandings?.streak?.value || 0 }
             };
         });
 
@@ -218,6 +207,6 @@ export const fetchAndNormalizeYahooMatchups = async (leagueId, week = 1, passedU
         return { matchups, week };
     } catch (err) {
         console.error("Yahoo Matchups Adapter Error:", err);
-        return { matchups, week };
+        return { matchups: {}, week };
     }
 };
