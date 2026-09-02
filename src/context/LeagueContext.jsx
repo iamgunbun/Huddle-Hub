@@ -68,7 +68,10 @@ export function LeagueProvider({ children }) {
 
                 const flattenedLeagues = await Promise.all(userLeaguesData.map(async (ul) => {
                     const matchedLeague = leaguesData?.find(l => l.id === ul.league_id || l.sleeper_league_id === ul.league_id) || {};
-                    const targetId = ul.league_id || matchedLeague.id;
+                    
+                    // FIX: Prioritize the external API key (sleeper_league_id) over the Supabase UUID
+                    const targetId = matchedLeague.sleeper_league_id || ul.league_id || matchedLeague.id;
+                    
                     const isESPN = ul.platform === 'espn' || matchedLeague.platform === 'espn';
                     const isYahoo = ul.platform === 'yahoo' || matchedLeague.platform === 'yahoo';
 
@@ -79,7 +82,7 @@ export function LeagueProvider({ children }) {
                             const yahooData = await fetchAndNormalizeYahooLeague(targetId, userId);
                             if (yahooData) {
                                 liveData = {
-                                    sleeper_league_id: yahooData.sleeper_league_id,
+                                    sleeper_league_id: yahooData.sleeper_league_id || targetId,
                                     avatar: yahooData.avatar,
                                     name: yahooData.name,
                                     total_rosters: yahooData.total_rosters,
@@ -94,7 +97,7 @@ export function LeagueProvider({ children }) {
                             const espnData = await fetchAndNormalizeESPNLeague(targetId);
                             if (espnData) {
                                 liveData = {
-                                    sleeper_league_id: espnData.sleeper_league_id,
+                                    sleeper_league_id: espnData.sleeper_league_id || targetId,
                                     avatar: espnData.avatar,
                                     name: espnData.name,
                                     total_rosters: espnData.total_rosters,
