@@ -4,7 +4,7 @@ import { getLeagueTransactions as _getLeagueTransactions } from './helperFunctio
 import { getNflState } from './helperFunctions/nflState';
 import { getLeagueRosters } from './helperFunctions/leagueRosters';
 import { getLeagueTeamManagers as _getLeagueTeamManagers } from './helperFunctions/leagueTeamManagers';
-import { getLeagueMatchups as _getLeagueMatchups } from './helperFunctions/leagueMatchups';
+import { getLeagueMatchups } from './helperFunctions/leagueMatchups'; // FIX: Removed the _ alias!
 import { getRivalryMatchups as _getRivalryMatchups } from './helperFunctions/rivalryMatchups';
 import { getNews, stringDate } from './helperFunctions/news';
 import { loadPlayers } from './helperFunctions/players';
@@ -63,7 +63,6 @@ const getLeagueTeamManagers = async (id, ...args) => {
         
         if (rostersData && rostersData.rosters) {
             Object.values(rostersData.rosters).forEach(roster => {
-                // Map the team assignments
                 teamManagersMap[year][roster.roster_id] = {
                     team: {
                         name: roster.team_name || `Team ${roster.roster_id}`,
@@ -72,7 +71,6 @@ const getLeagueTeamManagers = async (id, ...args) => {
                     managers: [roster.owner_id]
                 };
                 
-                // POPULATE USERS DICTIONARY SO MANAGER DATA RENDERS
                 users[roster.owner_id] = {
                     display_name: roster.manager_name || roster.team_name,
                     avatar: roster.avatar || '/brand.png',
