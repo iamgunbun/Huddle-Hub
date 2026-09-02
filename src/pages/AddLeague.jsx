@@ -281,11 +281,10 @@ export default function AddLeague() {
                     </button>
                     <button 
                         type="button"
-                        className={styles.tabBtn}
-                        disabled
-                        title="Pending Yahoo API Approval"
+                        className={`${styles.tabBtn} ${activeTab === 'yahoo' ? styles.activeTab : ''}`}
+                        onClick={() => { setActiveTab('yahoo'); setFoundLeagues([]); setErrorMsg(null); }}
                     >
-                        Yahoo (Soon)
+                        Yahoo
                     </button>
                     <button 
                         type="button"
