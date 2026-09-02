@@ -4,7 +4,7 @@ import { getLeagueTransactions as _getLeagueTransactions } from './helperFunctio
 import { getNflState } from './helperFunctions/nflState';
 import { getLeagueRosters } from './helperFunctions/leagueRosters';
 import { getLeagueTeamManagers as _getLeagueTeamManagers } from './helperFunctions/leagueTeamManagers';
-import { getLeagueMatchups } from './helperFunctions/leagueMatchups';
+import { getLeagueMatchups as _getLeagueMatchups } from './helperFunctions/leagueMatchups';
 import { getRivalryMatchups as _getRivalryMatchups } from './helperFunctions/rivalryMatchups';
 import { getNews, stringDate } from './helperFunctions/news';
 import { loadPlayers } from './helperFunctions/players';
@@ -19,42 +19,55 @@ import { getLeagueStandings } from './helperFunctions/leagueStandings';
 import { getAwards as _getAwards } from './helperFunctions/leagueAwards';
 
 // ==========================================
-// UNIVERSAL PLATFORM SHIELD
+// PLATFORM SHIELD (Yahoo Block)
 // ==========================================
-// Sleeper IDs are strictly numeric (e.g., "977259463943729152")
-const isSleeperId = (id) => id && /^\d+$/.test(String(id));
+const isYahooId = (id) => id && (String(id).includes('.l.') || !/^\d+$/.test(String(id)));
 
-// Shield functions that strictly require Sleeper IDs and don't have Yahoo routing yet
-const getLeagueTransactions = async (id, ...args) => isSleeperId(id) ? _getLeagueTransactions(id, ...args) : [];
-const getRivalryMatchups = async (id, ...args) => isSleeperId(id) ? _getRivalryMatchups(id, ...args) : {};
-const getUpcomingDraft = async (id, ...args) => isSleeperId(id) ? _getUpcomingDraft(id, ...args) : null;
-const getPreviousDrafts = async (id, ...args) => isSleeperId(id) ? _getPreviousDrafts(id, ...args) : [];
-const getLeagueRecords = async (id, ...args) => isSleeperId(id) ? _getLeagueRecords(id, ...args) : {};
-const getBrackets = async (id, ...args) => isSleeperId(id) ? _getBrackets(id, ...args) : [];
-const getAwards = async (id, ...args) => isSleeperId(id) ? _getAwards(id, ...args) : [];
+const getLeagueTransactions = async (id, ...args) => isYahooId(id) ? [] : _getLeagueTransactions(id, ...args);
+const getRivalryMatchups = async (id, ...args) => isYahooId(id) ? {} : _getRivalryMatchups(id, ...args);
+const getUpcomingDraft = async (id, ...args) => isYahooId(id) ? null : _getUpcomingDraft(id, ...args);
+const getPreviousDrafts = async (id, ...args) => isYahooId(id) ? [] : _getPreviousDrafts(id, ...args);
+
+const getLeagueRecords = async (arg1 = false, arg2 = null, ...args) => {
+    const refresh = typeof arg1 === 'boolean' ? arg1 : false;
+    const queryLeagueID = typeof arg1 === 'string' ? arg1 : arg2;
+    
+    if (isYahooId(queryLeagueID)) return { regularSeasonData: {}, playoffData: {} };
+    return _getLeagueRecords(refresh, queryLeagueID, ...args);
+};
+
+const getBrackets = async (id, ...args) => isYahooId(id) ? null : _getBrackets(id, ...args);
+
+const getAwards = async (arg1 = false, arg2 = null, ...args) => {
+    const refresh = typeof arg1 === 'boolean' ? arg1 : false;
+    const queryLeagueID = typeof arg1 === 'string' ? arg1 : arg2;
+
+    if (isYahooId(queryLeagueID)) return [];
+    return _getAwards(refresh, queryLeagueID, ...args);
+};
 
 // Custom interceptor for Team Managers to support Yahoo team names/avatars
 const getLeagueTeamManagers = async (id, ...args) => {
-    if (isSleeperId(id)) return _getLeagueTeamManagers(id, ...args);
-    
-    // YAHOO MOCK: Map Yahoo Rosters to the Sleeper TeamManagers structure
-    const rostersData = await getLeagueRosters(id);
-    const teamManagersMap = {};
-    const year = new Date().getFullYear();
-    teamManagersMap[year] = {};
-    
-    if (rostersData && rostersData.rosters) {
-        Object.values(rostersData.rosters).forEach(roster => {
-            teamManagersMap[year][roster.roster_id] = {
-                team: {
-                    name: roster.team_name || `Team ${roster.roster_id}`,
-                    avatar: roster.avatar || '/brand.png'
-                },
-                managers: [roster.owner_id]
-            };
-        });
+    if (isYahooId(id)) {
+        const rostersData = await getLeagueRosters(id);
+        const teamManagersMap = {};
+        const year = new Date().getFullYear();
+        teamManagersMap[year] = {};
+        
+        if (rostersData && rostersData.rosters) {
+            Object.values(rostersData.rosters).forEach(roster => {
+                teamManagersMap[year][roster.roster_id] = {
+                    team: {
+                        name: roster.team_name || `Team ${roster.roster_id}`,
+                        avatar: roster.avatar || '/brand.png'
+                    },
+                    managers: [roster.owner_id]
+                };
+            });
+        }
+        return { teamManagersMap, users: {}, currentSeason: year };
     }
-    return { teamManagersMap, users: {}, currentSeason: year };
+    return _getLeagueTeamManagers(id, ...args);
 };
 
 export {
@@ -62,33 +75,33 @@ export {
     homepageText,
     gotoManager,
     managers,
-    getLeagueData,          // Unshielded (Has native Yahoo routing)
-    getLeagueTransactions,  // Shielded
+    getLeagueData,
+    getLeagueTransactions,
     getNflState,
-    getLeagueRosters,       // Unshielded (Has native Yahoo routing)
-    getLeagueTeamManagers,  // Custom Mocked
-    getLeagueMatchups,      // Unshielded (Has native Yahoo routing)
-    getRivalryMatchups,     // Shielded
+    getLeagueRosters,
+    getLeagueTeamManagers,
+    getLeagueMatchups,
+    getRivalryMatchups,
     getNews,
     loadPlayers,
     waitForAll,
-    getUpcomingDraft,       // Shielded
-    getPreviousDrafts,      // Shielded
-    getLeagueRecords,       // Shielded
+    getUpcomingDraft,
+    getPreviousDrafts,
+    getLeagueRecords,
     cleanName,
     round,
     dues,
     leagueID,
     leagueName,
     dynasty,
-    getAwards,              // Shielded
+    getAwards,
     stringDate,
-    getBrackets,            // Shielded
+    getBrackets,
     generateGraph,
     getBlogPosts,
     generateParagraph,
-    predictScores,          // Unshielded (Takes player array, not ID)
-    getLeagueStandings,     // Unshielded (Uses mapped base data)
+    predictScores,
+    getLeagueStandings,
     getAuthor,
     parseDate,
     getAvatar,
