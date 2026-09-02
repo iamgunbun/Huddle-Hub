@@ -4,7 +4,7 @@ import { getLeagueTransactions as _getLeagueTransactions } from './helperFunctio
 import { getNflState } from './helperFunctions/nflState';
 import { getLeagueRosters } from './helperFunctions/leagueRosters';
 import { getLeagueTeamManagers as _getLeagueTeamManagers } from './helperFunctions/leagueTeamManagers';
-import { getLeagueMatchups } from './helperFunctions/leagueMatchups';
+import { getLeagueMatchups as _getLeagueMatchups } from './helperFunctions/leagueMatchups';
 import { getRivalryMatchups as _getRivalryMatchups } from './helperFunctions/rivalryMatchups';
 import { getNews, stringDate } from './helperFunctions/news';
 import { loadPlayers } from './helperFunctions/players';
@@ -27,17 +27,23 @@ const getLeagueTransactions = async (id, ...args) => isYahooId(id) ? [] : _getLe
 const getRivalryMatchups = async (id, ...args) => isYahooId(id) ? {} : _getRivalryMatchups(id, ...args);
 const getUpcomingDraft = async (id, ...args) => isYahooId(id) ? null : _getUpcomingDraft(id, ...args);
 const getPreviousDrafts = async (id, ...args) => isYahooId(id) ? [] : _getPreviousDrafts(id, ...args);
+const getBrackets = async (id, ...args) => isYahooId(id) ? null : _getBrackets(id, ...args);
 
+// Safely format empty state for League Records to prevent UI crashes
 const getLeagueRecords = async (arg1 = false, arg2 = null, ...args) => {
     const refresh = typeof arg1 === 'boolean' ? arg1 : false;
     const queryLeagueID = typeof arg1 === 'string' ? arg1 : arg2;
     
-    if (isYahooId(queryLeagueID)) return { regularSeasonData: {}, playoffData: {} };
+    if (isYahooId(queryLeagueID)) {
+        return { 
+            regularSeasonData: { allTimeMatchupDifferentials: [], currentYear: null, lastYear: null }, 
+            playoffData: { allTimeMatchupDifferentials: [], currentYear: null, lastYear: null } 
+        };
+    }
     return _getLeagueRecords(refresh, queryLeagueID, ...args);
 };
 
-const getBrackets = async (id, ...args) => isYahooId(id) ? null : _getBrackets(id, ...args);
-
+// Safely format empty state for Trophy Room to prevent UI crashes
 const getAwards = async (arg1 = false, arg2 = null, ...args) => {
     const refresh = typeof arg1 === 'boolean' ? arg1 : false;
     const queryLeagueID = typeof arg1 === 'string' ? arg1 : arg2;
@@ -46,16 +52,18 @@ const getAwards = async (arg1 = false, arg2 = null, ...args) => {
     return _getAwards(refresh, queryLeagueID, ...args);
 };
 
-// Custom interceptor for Team Managers to support Yahoo team names/avatars
+// Custom interceptor for Team Managers to support Yahoo team names/avatars AND User Profiles
 const getLeagueTeamManagers = async (id, ...args) => {
     if (isYahooId(id)) {
         const rostersData = await getLeagueRosters(id);
         const teamManagersMap = {};
+        const users = {}; 
         const year = new Date().getFullYear();
         teamManagersMap[year] = {};
         
         if (rostersData && rostersData.rosters) {
             Object.values(rostersData.rosters).forEach(roster => {
+                // Map the team assignments
                 teamManagersMap[year][roster.roster_id] = {
                     team: {
                         name: roster.team_name || `Team ${roster.roster_id}`,
@@ -63,9 +71,16 @@ const getLeagueTeamManagers = async (id, ...args) => {
                     },
                     managers: [roster.owner_id]
                 };
+                
+                // POPULATE USERS DICTIONARY SO MANAGER DATA RENDERS
+                users[roster.owner_id] = {
+                    display_name: roster.manager_name || roster.team_name,
+                    avatar: roster.avatar || '/brand.png',
+                    user_id: roster.owner_id
+                };
             });
         }
-        return { teamManagersMap, users: {}, currentSeason: year };
+        return { teamManagersMap, users, currentSeason: year };
     }
     return _getLeagueTeamManagers(id, ...args);
 };
