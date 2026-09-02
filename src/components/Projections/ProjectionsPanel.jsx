@@ -12,19 +12,20 @@ export default function ProjectionsPanel() {
 
     useEffect(() => {
         const load = async () => {
-            const targetId = activeLeague?.sleeper_league_id || activeLeague?.league_id || activeLeague?.id;
-            if (!targetId) {
+            if (!activeLeague?.sleeper_league_id) {
                 setLoading(false);
                 return;
             }
             setLoading(true);
             
             try {
+                const id = activeLeague.sleeper_league_id;
+                
                 const [standingsData, rostersData, managersData, currentLeagueData, pData, nflState] = await Promise.all([
-                    getLeagueStandings(targetId),
-                    getLeagueRosters(targetId),
-                    getLeagueTeamManagers(targetId),
-                    getLeagueData(targetId),
+                    getLeagueStandings(id),
+                    getLeagueRosters(id),
+                    getLeagueTeamManagers(id),
+                    getLeagueData(id),
                     loadPlayers(),
                     getNflState()
                 ]);
@@ -71,8 +72,8 @@ export default function ProjectionsPanel() {
 
                     ranks.push({
                         rosterID,
-                        name: teamMeta?.name || roster?.team_name || `Team ${rosterID}`,
-                        avatar: teamMeta?.avatar || roster?.avatar || '/brand.png',
+                        name: teamMeta?.name || 'Unknown Team',
+                        avatar: teamMeta?.avatar,
                         wins,
                         losses,
                         powerScore
@@ -86,6 +87,7 @@ export default function ProjectionsPanel() {
                     return;
                 }
 
+                // Only trigger pre-draft mode if no players exist on any roster at all
                 const isPreDraft = totalPlayersFound === 0;
                 setPreDraftMode(isPreDraft);
 
@@ -141,10 +143,30 @@ export default function ProjectionsPanel() {
                 <h3 style={{ textAlign: 'center', fontSize: '1.3em', fontWeight: '500', color: '#f8fafc', padding: '15px 0', margin: 0, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                     Live Projections
                 </h3>
-                <p style={{ color: '#94a3b8', padding: '30px 20px', textAlign: 'center', margin: 0, fontStyle: 'italic', fontSize: '0.9em', lineHeight: '1.6' }}>
-                    <i className="material-icons" style={{ display: 'block', fontSize: '32px', color: '#64748b', marginBottom: '10px' }}>layers_clear</i>
-                    No roster configurations found for this league.
-                </p>
+                
+                {activeLeague?.platform === 'yahoo' ? (
+                    <div style={{ padding: '30px 20px', textAlign: 'center', margin: 0 }}>
+                        <div style={{ 
+                            background: 'rgba(238, 191, 28, 0.1)', 
+                            border: '1px dashed rgba(238, 191, 28, 0.4)', 
+                            borderRadius: '8px', 
+                            padding: '16px',
+                            display: 'inline-block',
+                            marginBottom: '15px'
+                        }}>
+                            <i className="material-icons" style={{ fontSize: '32px', color: '#eebf1c' }}>science</i>
+                        </div>
+                        <h4 style={{ color: '#eebf1c', margin: '0 0 8px 0', fontSize: '1.1em' }}>Yahoo Projections Under Construction</h4>
+                        <p style={{ color: '#94a3b8', fontSize: '0.9em', lineHeight: '1.6', margin: 0 }}>
+                            We are actively mapping Yahoo's roster structures. Advanced playoff odds for Yahoo leagues will be available soon!
+                        </p>
+                    </div>
+                ) : (
+                    <p style={{ color: '#94a3b8', padding: '30px 20px', textAlign: 'center', margin: 0, fontStyle: 'italic', fontSize: '0.9em', lineHeight: '1.6' }}>
+                        <i className="material-icons" style={{ display: 'block', fontSize: '32px', color: '#64748b', marginBottom: '10px' }}>layers_clear</i>
+                        No roster configurations found.<br />Ensure franchise slots are created on Sleeper to launch projections.
+                    </p>
+                )}
             </div>
         );
     }
