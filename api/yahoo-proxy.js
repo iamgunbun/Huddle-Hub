@@ -1,16 +1,26 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
     try {
-        const { userId, endpoint } = req.body;
+        // Guarantee the body is parsed regardless of the server framework
+        let body = req.body;
+        if (typeof body === 'string') {
+            try { body = JSON.parse(body); } catch (e) {}
+        } else if (body instanceof Buffer) {
+            try { body = JSON.parse(body.toString()); } catch (e) {}
+        }
+
+        const userId = body?.userId;
+        const endpoint = body?.endpoint;
 
         if (!userId || !endpoint) {
-            return res.status(400).json({ error: 'Missing userId or endpoint.' });
+            return res.status(400).json({ error: 'Missing userId or endpoint.', bodyReceived: req.body });
         }
 
         const { data: authData, error: authError } = await supabase
@@ -26,6 +36,7 @@ export default async function handler(req, res) {
 
         let accessToken = authData.access_token;
 
+        // Auto-refresh token if expired
         if (new Date() >= new Date(authData.expires_at)) {
             const credentials = Buffer.from(`${process.env.YAHOO_CLIENT_ID}:${process.env.YAHOO_CLIENT_SECRET}`).toString('base64');
             
@@ -57,6 +68,7 @@ export default async function handler(req, res) {
             }).eq('user_id', userId).eq('provider', 'yahoo');
         }
 
+        // Fetch securely from Yahoo
         const yahooResponse = await fetch(`https://fantasysports.yahooapis.com/fantasy/v2/${endpoint}?format=json`, {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });

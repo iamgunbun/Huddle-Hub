@@ -15,9 +15,9 @@ export const loadPlayers = async (activeLeagueId) => {
     let expiration = null;
     
     try {
-        // v8 cache key forces the browser to discard the Sleeper cache and map the new Yahoo IDs
-        playersInfo = JSON.parse(localStorage.getItem(`playersInfo_v8_${currentId}`));
-        expiration = parseInt(localStorage.getItem(`expiration_v8_${currentId}`));
+        // v9 cache key forces the browser to discard the Sleeper cache and map the new Yahoo IDs
+        playersInfo = JSON.parse(localStorage.getItem(`playersInfo_v9_${currentId}`));
+        expiration = parseInt(localStorage.getItem(`expiration_v9_${currentId}`));
     } catch (e) {
         console.warn("Failed to read local player cache safely:", e);
     }
@@ -144,12 +144,12 @@ export const loadPlayers = async (activeLeagueId) => {
         });
         
         try {
-            localStorage.setItem(`playersInfo_v8_${currentId}`, JSON.stringify(data));
-            localStorage.setItem(`expiration_v8_${currentId}`, (now + (24 * 3600)).toString());
+            localStorage.setItem(`playersInfo_v9_${currentId}`, JSON.stringify(data));
+            localStorage.setItem(`expiration_v9_${currentId}`, (now + (24 * 3600)).toString());
         } catch (storageError) {
             localStorage.clear();
-            localStorage.setItem(`playersInfo_v8_${currentId}`, JSON.stringify(data));
-            localStorage.setItem(`expiration_v8_${currentId}`, (now + (24 * 3600)).toString());
+            localStorage.setItem(`playersInfo_v9_${currentId}`, JSON.stringify(data));
+            localStorage.setItem(`expiration_v9_${currentId}`, (now + (24 * 3600)).toString());
         }
 
         return { players: data, stale: false };

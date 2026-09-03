@@ -5,10 +5,15 @@ export const cleanYahooKey = (rawId) => {
     let str = String(rawId).trim();
     if (/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(str)) return null;
     
-    str = str.replace(/\.1\./g, '.l.');
-    
-    if (str.includes('.l.')) return str;
-    return `nfl.l.${str}`;
+    // UNIVERSAL YAHOO KEY ROUTER:
+    // Extract strictly the final numeric ID and prepend 'nfl.l.'
+    // This forces Yahoo to automatically route to the current active season
+    // and ignores invalid game keys (like 470 or .1.) that trigger 400 errors.
+    const match = str.match(/(\d+)$/);
+    if (match) {
+        return `nfl.l.${match[1]}`;
+    }
+    return null;
 };
 
 const getUserId = async (explicitUserId) => {
@@ -78,7 +83,7 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
     if (!cleanKey || !userId) return { rosters: {}, startersAndReserve: [] };
 
     try {
-        // Step 1: Fetch Standings to map records and get team keys
+        // Step 1: Fetch Standings to map records and obtain correct Team Keys
         const standingsRes = await fetch('/api/yahoo-proxy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -114,7 +119,7 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
                     
                     if (tId && tmStats) {
                         const totals = tmStats.outcome_totals || {};
-                        standingsMap[tKey] = {
+                        standingsMap[tId] = {
                             roster_id: tId,
                             wins: parseInt(totals.wins) || 0,
                             losses: parseInt(totals.losses) || 0,
@@ -128,7 +133,7 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
             }
         }
 
-        // Step 2: Fetch every team's roster explicitly in parallel to avoid 400 Bad Request
+        // Step 2: Fetch every team's roster explicitly in parallel 
         const teamPromises = teamKeys.map(tKey => 
             fetch('/api/yahoo-proxy', {
                 method: 'POST',
@@ -197,7 +202,7 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
                 }
             }
 
-            const sMap = standingsMap[teamKey] || {};
+            const sMap = standingsMap[teamId] || {};
             const fpts = sMap.fpts || 0;
             const fptsAgainst = sMap.fpts_against || 0;
 
