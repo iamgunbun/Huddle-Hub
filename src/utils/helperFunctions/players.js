@@ -1,5 +1,26 @@
 import { leagueID as defaultLeagueID } from '../leagueInfo';
 
+// Normalized "first last" key, used to reconcile a player across platforms when
+// an ID crosswalk isn't available -- Yahoo rosters routinely include players
+// Sleeper's yahoo_id mapping doesn't cover, and those still need projections.
+export const playerNameKey = (fn, ln) =>
+    `${fn || ''} ${ln || ''}`.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+
+const buildNameIndex = (data) => {
+    const byName = {};
+    Object.values(data || {}).forEach(p => {
+        if (!p) return;
+        const key = playerNameKey(p.fn, p.ln);
+        if (!key) return;
+        const existing = byName[key];
+        // On a name collision, keep the more prominent player (lower searchRank).
+        if (!existing || (p.searchRank || 999999) < (existing.searchRank || 999999)) {
+            byName[key] = p;
+        }
+    });
+    return byName;
+};
+
 export const loadPlayers = async (activeLeagueId) => {
     const currentId = activeLeagueId || defaultLeagueID;
     const now = Math.round(new Date().getTime() / 1000);
@@ -8,7 +29,7 @@ export const loadPlayers = async (activeLeagueId) => {
     const isYahoo = currentId && (String(currentId).includes('.') || !/^\d+$/.test(String(currentId)));
     
     if (!currentId || currentId === 'default_id' || currentId === 'undefined') {
-        return { players: {}, stale: true };
+        return { players: {}, playersByName: {}, stale: true };
     }
     
     // The player database is identical for every league -- only the ID scheme it
@@ -40,7 +61,7 @@ export const loadPlayers = async (activeLeagueId) => {
     }
 
     if (playersInfo && expiration && now < expiration) {
-        return { players: playersInfo, stale: false };
+        return { players: playersInfo, playersByName: buildNameIndex(playersInfo), stale: false };
     }
 
     try {
@@ -61,7 +82,7 @@ export const loadPlayers = async (activeLeagueId) => {
         const leagueRes = !isYahoo ? responses[2] : null;
         
         if (!isYahoo && (!leagueRes || !leagueRes.ok)) {
-            return { players: playersInfo || {}, stale: true };
+            return { players: playersInfo || {}, playersByName: buildNameIndex(playersInfo), stale: true };
         }
         
         const rawPlayers = await sleeperRes.json();
@@ -184,9 +205,9 @@ export const loadPlayers = async (activeLeagueId) => {
             }
         }
 
-        return { players: data, stale: false };
+        return { players: data, playersByName: buildNameIndex(data), stale: false };
     } catch (e) {
         console.error("Player fetch failed:", e);
-        return { players: playersInfo || {}, stale: true };
+        return { players: playersInfo || {}, playersByName: buildNameIndex(playersInfo), stale: true };
     }
 };
