@@ -3,8 +3,11 @@ import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
 import { getLeagueRosters, getLeagueTeamManagers, loadPlayers, getLeagueData } from '../utils/helper';
 import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
+import { fetchAndNormalizeYahooMatchups } from '../utils/yahooService';
 import PlayerModal from '../components/PlayerModal';
 import styles from './Matchups.module.css';
+
+const isYahooLeagueId = (id) => id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
 
 export default function Matchups() {
     const { activeLeague } = useLeague();
@@ -97,21 +100,34 @@ export default function Matchups() {
         if (!activeLeague?.sleeper_league_id) return;
         let isMounted = true;
         
-        fetch(`https://api.sleeper.app/v1/league/${activeLeague.sleeper_league_id}/matchups/${activeWeek}`)
-            .then(res => res.json())
-            .then(mData => {
-                if (isMounted) {
-                    setWeeklyMatchups(mData || []);
-                    if (myRosterId && Array.isArray(mData)) {
-                        const userM = mData.find(m => m.roster_id === parseInt(myRosterId));
-                        if (userM) setSelectedMatchupId(userM.matchup_id);
-                        else if (mData.length > 0) setSelectedMatchupId(mData[0].matchup_id);
-                    } else if (mData && mData.length > 0) {
-                        setSelectedMatchupId(mData[0].matchup_id);
-                    }
-                }
-            })
-            .catch(err => console.error("Matchups fetch err:", err));
+        const applyMatchupData = (mData) => {
+            if (!isMounted) return;
+            setWeeklyMatchups(mData || []);
+            if (myRosterId && Array.isArray(mData)) {
+                const userM = mData.find(m => m.roster_id === parseInt(myRosterId));
+                if (userM) setSelectedMatchupId(userM.matchup_id);
+                else if (mData.length > 0) setSelectedMatchupId(mData[0].matchup_id);
+            } else if (mData && mData.length > 0) {
+                setSelectedMatchupId(mData[0].matchup_id);
+            }
+        };
+
+        if (isYahooLeagueId(activeLeague.sleeper_league_id)) {
+            fetchAndNormalizeYahooMatchups(activeLeague.sleeper_league_id, activeWeek)
+                .then(({ matchups }) => {
+                    const flat = [];
+                    Object.entries(matchups || {}).forEach(([mId, pair]) => {
+                        pair.forEach(team => flat.push({ ...team, matchup_id: mId }));
+                    });
+                    applyMatchupData(flat);
+                })
+                .catch(err => console.error("Yahoo matchups fetch err:", err));
+        } else {
+            fetch(`https://api.sleeper.app/v1/league/${activeLeague.sleeper_league_id}/matchups/${activeWeek}`)
+                .then(res => res.json())
+                .then(applyMatchupData)
+                .catch(err => console.error("Matchups fetch err:", err));
+        }
 
         fetch(`https://api.sleeper.com/projections/nfl/${season}/${activeWeek}?season_type=regular`)
             .then(res => res.json())
