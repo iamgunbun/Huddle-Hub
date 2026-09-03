@@ -33,7 +33,10 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
             body: JSON.stringify({ userId, endpoint: `league/${cleanKey}/settings` })
         });
 
-        if (!response.ok) return null;
+        if (!response.ok) {
+            console.warn(`Yahoo Settings 400 Error: ${response.status}`);
+            return null;
+        }
 
         const data = await response.json();
         const leagueData = data?.fantasy_content?.league?.[0];
@@ -72,14 +75,14 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
     }
 };
 
-// 2. ROSTERS & STANDINGS (Dual-Fetch Merge)
+// 2. ROSTERS & STANDINGS (Dual-Fetch Merge Matrix)
 export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = null) => {
     const cleanKey = cleanYahooKey(leagueId);
     const userId = await getUserId(passedUserId);
     if (!cleanKey || !userId) return { rosters: {}, startersAndReserve: [] };
 
     try {
-        // Step 1: Fetch Team Standings & Team Keys
+        // Step 1: Fetch Standings to get Team Keys and Records
         const standingsRes = await fetch('/api/yahoo-proxy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -129,7 +132,7 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
             }
         }
 
-        // Step 2: Feed the Array of Team Keys into the Roster Matrix Endpoint
+        // Step 2: Build Matrix URI safely and fetch Rosters
         let teamsData = null;
         if (teamKeys.length > 0) {
             const rosterRes = await fetch('/api/yahoo-proxy', {
@@ -141,6 +144,8 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
             if (rosterRes && rosterRes.ok) {
                 const rData = await rosterRes.json();
                 teamsData = rData?.fantasy_content?.teams;
+            } else {
+                console.warn("Yahoo Rosters Matrix 400 Error: Failed to fetch players array.");
             }
         }
 
@@ -234,20 +239,24 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
 export const fetchAndNormalizeYahooMatchups = async (leagueId, week = 1, passedUserId = null) => {
     const cleanKey = cleanYahooKey(leagueId);
     const userId = await getUserId(passedUserId);
-    if (!cleanKey || !userId) return { matchups: {}, week };
+    const safeWeek = parseInt(week) || 1;
+    if (!cleanKey || !userId) return { matchups: {}, week: safeWeek };
 
     try {
         const response = await fetch('/api/yahoo-proxy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId, endpoint: `league/${cleanKey}/scoreboard;week=${week}` })
+            body: JSON.stringify({ userId, endpoint: `league/${cleanKey}/scoreboard;type=week;week=${safeWeek}` })
         });
 
-        if (!response.ok) return { matchups: {}, week };
+        if (!response.ok) {
+            console.warn(`Yahoo Matchups 400 Error on Week ${safeWeek}`);
+            return { matchups: {}, week: safeWeek };
+        }
 
         const data = await response.json();
         const matchupsData = data?.fantasy_content?.league?.[1]?.scoreboard?.[0]?.matchups;
-        if (!matchupsData) return { matchups: {}, week };
+        if (!matchupsData) return { matchups: {}, week: safeWeek };
 
         const matchups = {};
 
@@ -282,9 +291,9 @@ export const fetchAndNormalizeYahooMatchups = async (leagueId, week = 1, passedU
             }
         });
 
-        return { matchups, week };
+        return { matchups, week: safeWeek };
     } catch (err) {
         console.error("Yahoo Matchups Adapter Error:", err);
-        return { matchups: {}, week };
+        return { matchups: {}, week: safeWeek };
     }
 };
