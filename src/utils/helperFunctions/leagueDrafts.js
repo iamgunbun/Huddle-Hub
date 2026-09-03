@@ -14,6 +14,7 @@ export const getUpcomingDraft = async () => {
         getLeagueData()
     ).catch((err) => { console.error(err); });
 
+    // YAHOO SHIELD
     if (!leagueData || leagueData.platform === 'yahoo' || (leagueData.id && String(leagueData.id).includes('.'))) {
         return null;
     }
@@ -63,7 +64,6 @@ export const getUpcomingDraft = async () => {
     return draftData;
 };
 
-// Predict draft board
 const buildFromScratch = (rosters, previousOrder, rounds, picks, regularSeasonLength) => {
     const draftOrder = [];
     const rosterKeys = Object.keys(rosters);
@@ -109,7 +109,6 @@ const buildFromScratch = (rosters, previousOrder, rounds, picks, regularSeasonLe
     return {draft, draftOrder, accuracy };
 };
 
-// Build pre-determined draft board
 const buildConfirmed = (draftOrderObj, rounds, picks, players = null, type = null) => {
     const draftOrder = [];
     let leagueSize = 0;
@@ -185,7 +184,7 @@ export const getPreviousDrafts = async () => {
     }
     let curSeason = leagueID;
 
-    // Return empty drafts list for Yahoo leagues
+    // YAHOO SHIELD
     if (curSeason && (String(curSeason).includes('.') || !/^\d+$/.test(String(curSeason)))) {
         return [];
     }

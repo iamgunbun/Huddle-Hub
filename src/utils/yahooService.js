@@ -55,7 +55,7 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
             total_rosters: totalRosters,
             avatar: leagueData.logo_url || '/brand.png',
             platform: 'yahoo',
-            roster_positions: DEFAULT_POSITIONS, // Prevents predictScores indexOf crash
+            roster_positions: DEFAULT_POSITIONS, 
             settings: {
                 playoff_week_start: playoffWeekStart,
                 divisions: 0,
@@ -79,23 +79,17 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
     if (!cleanKey || !userId) return { rosters: {}, startersAndReserve: [] };
 
     try {
-        const [standingsRes, teamsRes] = await Promise.all([
-            fetch('/api/yahoo-proxy', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId, endpoint: `league/${cleanKey}/standings` })
-            }).catch(() => null),
-            fetch('/api/yahoo-proxy', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId, endpoint: `league/${cleanKey}/teams/roster` })
-            }).catch(() => null)
-        ]);
+        // Step 1: Fetch Team Standings & Team Keys
+        const standingsRes = await fetch('/api/yahoo-proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, endpoint: `league/${cleanKey}/standings` })
+        }).catch(() => null);
 
         const sData = standingsRes?.ok ? await standingsRes.json() : {};
-        const rData = teamsRes?.ok ? await teamsRes.json() : {};
-
         const standingsMap = {};
+        const teamKeys = [];
+        
         const stLeagueObj = sData?.fantasy_content?.league;
         if (Array.isArray(stLeagueObj)) {
             const stWrapper = stLeagueObj.find(x => x && x.standings);
@@ -108,11 +102,21 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
                     
                     const tmInfo = tm[0];
                     const tmStats = tm[1]?.team_standings;
-                    const tId = parseInt(tmInfo?.find(x => x.team_id)?.team_id);
+                    
+                    let tKey = '';
+                    let tId = null;
+
+                    if (Array.isArray(tmInfo)) {
+                        tKey = tmInfo.find(x => x.team_key)?.team_key;
+                        tId = parseInt(tmInfo.find(x => x.team_id)?.team_id);
+                    }
+
+                    if (tKey) teamKeys.push(tKey);
                     
                     if (tId && tmStats) {
                         const totals = tmStats.outcome_totals || {};
-                        standingsMap[tId] = {
+                        standingsMap[tKey] = {
+                            roster_id: tId,
                             wins: parseInt(totals.wins) || 0,
                             losses: parseInt(totals.losses) || 0,
                             ties: parseInt(totals.ties) || 0,
@@ -125,104 +129,99 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
             }
         }
 
+        // Step 2: Feed the Array of Team Keys into the Roster Matrix Endpoint
+        let teamsData = null;
+        if (teamKeys.length > 0) {
+            const rosterRes = await fetch('/api/yahoo-proxy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, endpoint: `teams;team_keys=${teamKeys.join(',')}/roster` })
+            }).catch(() => null);
+            
+            if (rosterRes && rosterRes.ok) {
+                const rData = await rosterRes.json();
+                teamsData = rData?.fantasy_content?.teams;
+            }
+        }
+
         const rosterMap = {};
         const startersAndReserve = [];
-        
-        let teamsData = null;
-        const rLeagueObj = rData?.fantasy_content?.league;
-        if (Array.isArray(rLeagueObj)) {
-            const teamsWrapper = rLeagueObj.find(x => x && x.teams);
-            teamsData = teamsWrapper?.teams;
-        }
 
-        if (!teamsData && Array.isArray(stLeagueObj)) {
-            const stWrapper = stLeagueObj.find(x => x && x.standings);
-            teamsData = stWrapper?.standings?.[0]?.teams;
-        }
+        if (teamsData) {
+            Object.keys(teamsData).forEach(k => {
+                if (k === 'count') return;
+                const teamWrapper = teamsData[k]?.team;
+                if (!Array.isArray(teamWrapper)) return;
 
-        if (!teamsData) return { rosters: {}, startersAndReserve: [] };
+                const teamInfoArray = teamWrapper[0];
+                if (!Array.isArray(teamInfoArray)) return;
 
-        Object.keys(teamsData).forEach(k => {
-            if (k === 'count') return;
-            const teamWrapper = teamsData[k]?.team;
-            if (!Array.isArray(teamWrapper)) return;
-
-            const teamInfoArray = teamWrapper[0];
-            if (!Array.isArray(teamInfoArray)) return;
-
-            const teamKey = teamInfoArray.find(x => x.team_key)?.team_key || `team_${k}`;
-            const teamId = parseInt(teamInfoArray.find(x => x.team_id)?.team_id) || (parseInt(k) + 1);
-            const teamName = teamInfoArray.find(x => x.name)?.name || `Team ${teamId}`;
-            
-            let teamLogo = '/brand.png';
-            const logosArr = teamInfoArray.find(x => x.team_logos)?.team_logos;
-            if (Array.isArray(logosArr) && logosArr[0]?.team_logo?.url) {
-                teamLogo = logosArr[0].team_logo.url;
-            }
-
-            let primaryManager = teamName;
-            const managersArr = teamInfoArray.find(x => x.managers)?.managers;
-            if (Array.isArray(managersArr) && managersArr[0]?.manager?.nickname) {
-                primaryManager = managersArr[0].manager.nickname;
-            }
-
-            const playersArr = [];
-            const startersArr = [];
-            const rosterObjWrapper = teamWrapper.find(x => x && x.roster);
-            
-            if (rosterObjWrapper && rosterObjWrapper.roster) {
-                const rObj = rosterObjWrapper.roster;
-                const playersNode = Object.values(rObj).find(val => val && val.players)?.players;
+                const teamKey = teamInfoArray.find(x => x.team_key)?.team_key;
+                const teamId = parseInt(teamInfoArray.find(x => x.team_id)?.team_id);
+                const teamName = teamInfoArray.find(x => x.name)?.name || `Team ${teamId}`;
                 
-                if (playersNode) {
-                    Object.keys(playersNode).forEach(pK => {
-                        if (pK === 'count') return;
-                        const pItemWrapper = playersNode[pK]?.player;
-                        if (!Array.isArray(pItemWrapper)) return;
-                        
-                        const pInfo = pItemWrapper[0];
-                        if (!Array.isArray(pInfo)) return;
-                        
-                        const pId = pInfo.find(x => x.player_id)?.player_id;
-                        const pSelectedPosition = pItemWrapper[1]?.selected_position?.[1]?.position;
-                        
-                        if (pId) {
-                            playersArr.push(pId);
-                            if (pSelectedPosition && pSelectedPosition !== 'BN' && pSelectedPosition !== 'IR') {
-                                startersArr.push(pId);
-                                startersAndReserve.push(pId);
+                let teamLogo = '/brand.png';
+                const logosArr = teamInfoArray.find(x => x.team_logos)?.team_logos;
+                if (Array.isArray(logosArr) && logosArr[0]?.team_logo?.url) teamLogo = logosArr[0].team_logo.url;
+
+                let primaryManager = teamName;
+                const managersArr = teamInfoArray.find(x => x.managers)?.managers;
+                if (Array.isArray(managersArr) && managersArr[0]?.manager?.nickname) primaryManager = managersArr[0].manager.nickname;
+
+                const playersArr = [];
+                const startersArr = [];
+                const rosterObjWrapper = teamWrapper.find(x => x && x.roster);
+                
+                if (rosterObjWrapper && rosterObjWrapper.roster) {
+                    const playersNode = Object.values(rosterObjWrapper.roster).find(val => val && val.players)?.players;
+                    if (playersNode) {
+                        Object.keys(playersNode).forEach(pK => {
+                            if (pK === 'count') return;
+                            const pItemWrapper = playersNode[pK]?.player;
+                            if (!Array.isArray(pItemWrapper)) return;
+                            
+                            const pInfo = pItemWrapper[0];
+                            const pId = pInfo.find(x => x.player_id)?.player_id;
+                            const pSelectedPosition = pItemWrapper[1]?.selected_position?.[1]?.position;
+                            
+                            if (pId) {
+                                playersArr.push(pId);
+                                if (pSelectedPosition && pSelectedPosition !== 'BN' && pSelectedPosition !== 'IR') {
+                                    startersArr.push(pId);
+                                    startersAndReserve.push(pId);
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
                 }
-            }
 
-            const sMap = standingsMap[teamId] || {};
-            const fpts = sMap.fpts || 0;
-            const fptsAgainst = sMap.fpts_against || 0;
+                const sMap = standingsMap[teamKey] || {};
+                const fpts = sMap.fpts || 0;
+                const fptsAgainst = sMap.fpts_against || 0;
 
-            rosterMap[teamId] = {
-                roster_id: teamId,
-                owner_id: teamKey,
-                team_name: teamName,
-                avatar: teamLogo,
-                manager_name: primaryManager,
-                players: playersArr,
-                starters: startersArr,
-                reserve: [],
-                settings: {
-                    wins: sMap.wins || 0,
-                    losses: sMap.losses || 0,
-                    ties: sMap.ties || 0,
-                    fpts: Math.floor(fpts),
-                    fpts_decimal: Math.round((fpts % 1) * 100),
-                    fpts_against: Math.floor(fptsAgainst),
-                    fpts_against_decimal: Math.round((fptsAgainst % 1) * 100),
-                    division: 1
-                },
-                metadata: { streak: sMap.streak || 0 }
-            };
-        });
+                rosterMap[teamId] = {
+                    roster_id: teamId,
+                    owner_id: teamKey,
+                    team_name: teamName,
+                    avatar: teamLogo,
+                    manager_name: primaryManager,
+                    players: playersArr,
+                    starters: startersArr,
+                    reserve: [],
+                    settings: {
+                        wins: sMap.wins || 0,
+                        losses: sMap.losses || 0,
+                        ties: sMap.ties || 0,
+                        fpts: Math.floor(fpts),
+                        fpts_decimal: Math.round((fpts % 1) * 100),
+                        fpts_against: Math.floor(fptsAgainst),
+                        fpts_against_decimal: Math.round((fptsAgainst % 1) * 100),
+                        division: 1
+                    },
+                    metadata: { streak: sMap.streak || 0 }
+                };
+            });
+        }
 
         return { rosters: rosterMap, startersAndReserve };
     } catch (err) {

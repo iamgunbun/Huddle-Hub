@@ -13,7 +13,7 @@ export const getBrackets = async (queryLeagueID) => {
         id = activeStore?.sleeper_league_id || defaultLeagueID;
     }
 
-    // Return null immediately for Yahoo to prevent hitting Sleeper brackets endpoint
+    // YAHOO SHIELD: Block Yahoo IDs from hitting the Sleeper Bracket API
     if (id && (String(id).includes('.') || !/^\d+$/.test(String(id)))) {
         return null;
     }

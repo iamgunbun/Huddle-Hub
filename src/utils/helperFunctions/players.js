@@ -4,6 +4,9 @@ export const loadPlayers = async (activeLeagueId) => {
     const currentId = activeLeagueId || defaultLeagueID;
     const now = Math.round(new Date().getTime() / 1000);
     
+    // YAHOO SHIELD: Stops Yahoo ID from requesting Sleeper league configuration
+    const isYahoo = currentId && (String(currentId).includes('.') || !/^\d+$/.test(String(currentId)));
+    
     if (!currentId || currentId === 'default_id' || currentId === 'undefined') {
         return { players: {}, stale: true };
     }
@@ -12,7 +15,6 @@ export const loadPlayers = async (activeLeagueId) => {
     let expiration = null;
     
     try {
-        // BUMPED TO v5: Forces browser to delete the old cache and map the new rankings & status fields
         playersInfo = JSON.parse(localStorage.getItem(`playersInfo_v5_${currentId}`));
         expiration = parseInt(localStorage.getItem(`expiration_v5_${currentId}`));
     } catch (e) {
@@ -24,28 +26,43 @@ export const loadPlayers = async (activeLeagueId) => {
     }
 
     try {
-        const [sleeperRes, leagueRes, stateRes] = await Promise.all([
+        const promises = [
             fetch("https://api.sleeper.app/v1/players/nfl"),
-            fetch(`https://api.sleeper.app/v1/league/${currentId}`),
             fetch("https://api.sleeper.app/v1/state/nfl")
-        ]);
+        ];
+
+        // ONLY fetch league data from Sleeper if it is NOT a Yahoo ID
+        if (!isYahoo) {
+            promises.push(fetch(`https://api.sleeper.app/v1/league/${currentId}`));
+        }
+
+        const responses = await Promise.all(promises);
         
-        if (!leagueRes.ok) {
+        const sleeperRes = responses[0];
+        const stateRes = responses[1];
+        const leagueRes = !isYahoo ? responses[2] : null;
+        
+        if (!isYahoo && (!leagueRes || !leagueRes.ok)) {
             return { players: playersInfo || {}, stale: true };
         }
         
         const rawPlayers = await sleeperRes.json();
-        const leagueData = await leagueRes.json();
         const nflState = await stateRes.json();
+        const leagueData = leagueRes ? await leagueRes.json() : null;
         
-        const scoringSettings = leagueData?.scoring_settings || {};
+        // Use default half-PPR scoring for Yahoo leagues so Projections mathematically populate
+        const scoringSettings = leagueData?.scoring_settings || {
+            pass_yd: 0.04, pass_td: 4, pass_int: -1,
+            rush_yd: 0.1, rush_td: 6, rec_yd: 0.1, rec_td: 6, rec: 0.5,
+            fum_lost: -2, fum: -1
+        };
+        
         const week = nflState.display_week > 0 ? nflState.display_week : 1;
         const year = nflState.season || new Date().getFullYear();
-
         const projRes = await fetch(`https://api.sleeper.com/projections/nfl/${year}/${week}?season_type=regular`);
         const projections = await projRes.json();
-        const projMap = {};
 
+        const projMap = {};
         if (projections && projections.length) {
             for (const proj of projections) {
                 let customPoints = 0;
@@ -85,7 +102,6 @@ export const loadPlayers = async (activeLeagueId) => {
                 exp: p.years_exp || 0,
                 college: p.college || '-',
                 wi: {},
-                // Capture Native Sleeper Status & Rankings
                 status: p.status || 'Active',
                 injStatus: p.injury_status || null,
                 injNotes: p.injury_notes || null,
@@ -109,7 +125,6 @@ export const loadPlayers = async (activeLeagueId) => {
             }
         }
 
-        // Calculate Positional Rankings based on Sleeper's Overall Search Rank
         Object.values(posGroups).forEach(group => {
             group.sort((a, b) => a.searchRank - b.searchRank);
             group.forEach((p, idx) => {

@@ -1,31 +1,20 @@
 export const predictScores = (players, week, leagueData) => {
     const starterPositions = getStarterPositions(leagueData);
 
-    // sort roster by highest projected points for that week
     const projectedPlayers = [...players].sort((a, b) => (b.wi && b.wi[week] ? b.wi[week].p : 0) - (a.wi && a.wi[week] ? a.wi[week].p : 0));
 
-    // now that the players are sorted, grab the QBs
     const qbs = projectedPlayers.filter(p => p.pos == 'QB');
-    // and the WRs
     const wrs = projectedPlayers.filter(p => p.pos == 'WR');
-    // and the RBs
     const rbs = projectedPlayers.filter(p => p.pos == 'RB');
-    // and the TEs
     const tes = projectedPlayers.filter(p => p.pos == 'TE');
-    // and the DEFs
     const defs = projectedPlayers.filter(p => p.pos == 'DEF');
-    // and the Ks
     const ks = projectedPlayers.filter(p => p.pos == 'K');
-    // and the DLs
     const dls = projectedPlayers.filter(p => p.pos == 'DL');
-    // and the LBs
     const lbs = projectedPlayers.filter(p => p.pos == 'LB');
-    // and the DBs
     const dbs = projectedPlayers.filter(p => p.pos == 'DB');
 
     let powerScore = 0;
 
-    // next, use the roster configuration to grab the highest scorer at each position
     for(const starterPosition of starterPositions) {
         const qb = parseFloat(qbs[0]?.wi && qbs[0]?.wi[week] ? qbs[0].wi[week].p : 0);
         const rb = parseFloat(rbs[0]?.wi && rbs[0]?.wi[week] ? rbs[0].wi[week].p : 0);
@@ -74,7 +63,6 @@ export const predictScores = (players, week, leagueData) => {
                 dbs.shift();
                 powerScore += db;
                 break;
-            // Start of flex players
             case 'FLEX':
                 if(rb >= wr && rb >= te) {
                     rbs.shift();
@@ -130,8 +118,9 @@ export const predictScores = (players, week, leagueData) => {
     return powerScore;
 };
 
+// PREVENT INDEX OF CRASH BY ENSURING ARRAY ALWAYS EXISTS
 export const getStarterPositions = (leagueData) => {
-    const rosterPositions = leagueData?.roster_positions || leagueData?.settings?.roster_positions || ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF', 'BN', 'BN', 'BN', 'BN', 'BN'];
+    const rosterPositions = leagueData?.roster_positions || leagueData?.settings?.roster_positions || ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF', 'BN', 'BN', 'BN', 'BN', 'BN', 'BN'];
     const firstBench = rosterPositions.indexOf('BN');
     return firstBench > -1 ? rosterPositions.slice(0, firstBench) : rosterPositions;
 };
