@@ -15,6 +15,7 @@ export default function Rosters() {
     const [rosters, setRosters] = useState({});
     const [teamManagers, setTeamManagers] = useState(null);
     const [playersInfo, setPlayersInfo] = useState({});
+    const [yahooPlayersMeta, setYahooPlayersMeta] = useState({});
     const [leagueData, setLeagueData] = useState(null);
     const [standings, setStandings] = useState(null);
     const [viewMode, setViewMode] = useState('mine');
@@ -42,7 +43,7 @@ export default function Rosters() {
 
     const getPlayerObj = (pId) => {
         if (!pId || pId === "0") return null;
-        return playersInfo[pId] || playersInfo[String(pId)] || playersInfo[Number(pId)] || null;
+        return playersInfo[pId] || playersInfo[String(pId)] || playersInfo[Number(pId)] || yahooPlayersMeta[String(pId)] || null;
     };
 
     // 1. Initial Load
@@ -62,6 +63,7 @@ export default function Rosters() {
                 if (!isMounted) return;
                                  
                 setRosters(rData.rosters || {});
+                setYahooPlayersMeta(rData.yahooPlayersMeta || {});
                 setTeamManagers(tmData);
                 setPlayersInfo(pData.players || {});
                 setLeagueData(lData);
@@ -277,7 +279,17 @@ export default function Rosters() {
         return null;
     };
 
-    const getAvatar = (pId, pMeta) => pMeta?.pos === 'DEF' ? `https://sleepercdn.com/images/team_logos/nfl/${pId.toLowerCase()}.png` : `https://sleepercdn.com/content/nfl/players/thumb/${pId}.jpg`;
+    const getAvatar = (pId, pMeta) => {
+        // Yahoo player IDs don't correspond to sleepercdn's photo paths (which
+        // are keyed by Sleeper's own IDs) -- prefer Yahoo's own headshot when
+        // we have one, and otherwise fall back through the crosswalked
+        // sleeper_id rather than the raw (possibly Yahoo) id.
+        if (pMeta?.headshot) return pMeta.headshot;
+        const sleeperKey = pMeta?.sleeper_id || pId;
+        return pMeta?.pos === 'DEF'
+            ? `https://sleepercdn.com/images/team_logos/nfl/${String(sleeperKey).toLowerCase()}.png`
+            : `https://sleepercdn.com/content/nfl/players/thumb/${sleeperKey}.jpg`;
+    };
 
     const getPositionStyle = (cleanPos) => {
         const validPositions = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF', 'DL', 'LB', 'DB', 'BN', 'IR', 'TAXI'];

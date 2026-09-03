@@ -219,6 +219,12 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
 
         const rosterMap = {};
         const startersAndReserve = [];
+        // Yahoo's own roster response already carries each player's name/team/
+        // position/photo. Sleeper's yahoo_id crosswalk (used to key the shared
+        // player database) is community-maintained and has real gaps -- so this
+        // is captured as a fallback the UI can use for any player that crosswalk
+        // misses, instead of leaving those slots blank.
+        const yahooPlayersMeta = {};
 
         teamsDataArray.forEach(tData => {
             if (!tData) return;
@@ -267,13 +273,28 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
                         
                         const pId = pInfo.find(x => x.player_id)?.player_id;
                         const pSelectedPosition = pItemWrapper[1]?.selected_position?.[1]?.position;
-                        
+
                         if (pId) {
                             const stringId = String(pId);
                             playersArr.push(stringId);
                             if (pSelectedPosition && pSelectedPosition !== 'BN' && pSelectedPosition !== 'IR') {
                                 startersArr.push(stringId);
                                 startersAndReserve.push(stringId);
+                            }
+
+                            if (!yahooPlayersMeta[stringId]) {
+                                const pFullName = pInfo.find(x => x.name)?.name?.full || '';
+                                const [pFirstName, ...pLastParts] = pFullName.split(' ');
+                                yahooPlayersMeta[stringId] = {
+                                    id: stringId,
+                                    fn: pFirstName || pFullName,
+                                    ln: pLastParts.join(' '),
+                                    pos: pInfo.find(x => x.display_position)?.display_position || pSelectedPosition || '',
+                                    t: pInfo.find(x => x.editorial_team_abbr)?.editorial_team_abbr?.toUpperCase() || 'FA',
+                                    headshot: pInfo.find(x => x.headshot)?.headshot?.url || pInfo.find(x => x.image_url)?.image_url || null,
+                                    injStatus: pInfo.find(x => x.status)?.status || null,
+                                    wi: {}
+                                };
                             }
                         }
                     });
@@ -308,10 +329,10 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
             };
         });
 
-        return { rosters: rosterMap, startersAndReserve };
+        return { rosters: rosterMap, startersAndReserve, yahooPlayersMeta };
     } catch (err) {
         console.error("Yahoo Rosters Adapter Error:", err);
-        return { rosters: {}, startersAndReserve: [] };
+        return { rosters: {}, startersAndReserve: [], yahooPlayersMeta: {} };
     }
 };
 
