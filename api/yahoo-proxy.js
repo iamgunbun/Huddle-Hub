@@ -54,7 +54,9 @@ export default async function handler(req, res) {
             });
 
             if (!tokenResponse.ok) {
-                return res.status(401).json({ error: "Failed to refresh Yahoo session." });
+                const refreshErrorBody = await tokenResponse.text().catch(() => '');
+                console.error(`Yahoo token refresh failed (HTTP ${tokenResponse.status}) for user ${userId}: ${refreshErrorBody}`);
+                return res.status(401).json({ error: "Failed to refresh Yahoo session.", yahooStatus: tokenResponse.status, yahooError: refreshErrorBody });
             }
 
             const tokenData = await tokenResponse.json();
@@ -74,7 +76,13 @@ export default async function handler(req, res) {
         });
 
         if (!yahooResponse.ok) {
-            return res.status(yahooResponse.status).json({ error: `Yahoo returned status ${yahooResponse.status}` });
+            const yahooErrorBody = await yahooResponse.text().catch(() => '');
+            console.error(`Yahoo API error (HTTP ${yahooResponse.status}) for endpoint "${endpoint}": ${yahooErrorBody}`);
+            return res.status(yahooResponse.status).json({
+                error: `Yahoo returned status ${yahooResponse.status}`,
+                endpoint,
+                yahooError: yahooErrorBody
+            });
         }
 
         const data = await yahooResponse.json();
