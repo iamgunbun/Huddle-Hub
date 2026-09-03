@@ -11,13 +11,30 @@ export const loadPlayers = async (activeLeagueId) => {
         return { players: {}, stale: true };
     }
     
+    // The player database is identical for every league -- only the ID scheme it
+    // gets keyed by differs (Yahoo ids vs Sleeper ids). v9 keyed this cache per
+    // league, so each additional league wrote another multi-megabyte copy of
+    // essentially the same data and pushed localStorage past its ~5MB quota.
+    // Scoping the cache to the ID scheme caps it at two copies instead of N.
+    const cacheScope = isYahoo ? 'yahoo' : 'sleeper';
+    const cacheKey = `playersInfo_v10_${cacheScope}`;
+    const expirationKey = `expiration_v10_${cacheScope}`;
+
+    // Clear out the per-league v9 entries that are still occupying quota.
+    try {
+        Object.keys(localStorage)
+            .filter(k => k.startsWith('playersInfo_v9_') || k.startsWith('expiration_v9_'))
+            .forEach(k => localStorage.removeItem(k));
+    } catch (e) {
+        console.warn("Failed to prune legacy player caches:", e);
+    }
+
     let playersInfo = null;
     let expiration = null;
-    
+
     try {
-        // v9 cache key forces the browser to discard the Sleeper cache and map the new Yahoo IDs
-        playersInfo = JSON.parse(localStorage.getItem(`playersInfo_v9_${currentId}`));
-        expiration = parseInt(localStorage.getItem(`expiration_v9_${currentId}`));
+        playersInfo = JSON.parse(localStorage.getItem(cacheKey));
+        expiration = parseInt(localStorage.getItem(expirationKey));
     } catch (e) {
         console.warn("Failed to read local player cache safely:", e);
     }
@@ -143,13 +160,28 @@ export const loadPlayers = async (activeLeagueId) => {
             });
         });
         
+        // NEVER localStorage.clear() here. Supabase keeps the auth session in
+        // localStorage alongside this cache, so clearing it silently signs the
+        // user out (and drops the active league) the moment the player database
+        // doesn't fit -- which is what made switching leagues force a re-login.
+        // On a quota error, evict only our own player caches; if it still won't
+        // fit, run without a cache rather than touching anyone else's keys.
+        const writeCache = () => {
+            localStorage.setItem(cacheKey, JSON.stringify(data));
+            localStorage.setItem(expirationKey, (now + (24 * 3600)).toString());
+        };
+
         try {
-            localStorage.setItem(`playersInfo_v9_${currentId}`, JSON.stringify(data));
-            localStorage.setItem(`expiration_v9_${currentId}`, (now + (24 * 3600)).toString());
-        } catch (storageError) {
-            localStorage.clear();
-            localStorage.setItem(`playersInfo_v9_${currentId}`, JSON.stringify(data));
-            localStorage.setItem(`expiration_v9_${currentId}`, (now + (24 * 3600)).toString());
+            writeCache();
+        } catch {
+            try {
+                Object.keys(localStorage)
+                    .filter(k => k.startsWith('playersInfo_') || k.startsWith('expiration_'))
+                    .forEach(k => localStorage.removeItem(k));
+                writeCache();
+            } catch (retryError) {
+                console.warn("Player cache skipped -- localStorage quota exceeded:", retryError);
+            }
         }
 
         return { players: data, stale: false };

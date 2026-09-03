@@ -91,7 +91,13 @@ export const getLeagueRecords = async (refresh = false, queryLeagueID = null) =>
     const recordsData = { regularSeasonData, playoffData };
 
     if (typeof window !== 'undefined') {
-        localStorage.setItem("records", JSON.stringify(recordsData));
+        // A failed cache write (quota) must never break the page -- keep the
+        // in-memory cache either way.
+        try {
+            localStorage.setItem("records", JSON.stringify(recordsData));
+        } catch (e) {
+            console.warn("Records cache skipped:", e);
+        }
         recordsCache = recordsData;
     }
 

@@ -41,7 +41,11 @@ export const getLeagueTransactions = async (preview, refresh = false) => {
     };
 
     if(browser) {
-        localStorage.setItem("transactions", JSON.stringify(transactionPackage));
+        try {
+            localStorage.setItem("transactions", JSON.stringify(transactionPackage));
+        } catch (e) {
+            console.warn("Transactions cache skipped:", e);
+        }
         transactionsStore.update(() => transactionPackage);
     }
 
