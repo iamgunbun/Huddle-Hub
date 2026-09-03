@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLeague } from '../context/LeagueContext';
-import { getLeagueTeamManagers, getAwards } from '../utils/helper';
+import { getLeagueTeamManagers, getAwards, getLeagueData, getLeagueRosters } from '../utils/helper';
 import { syncActiveLeague } from '../utils/leagueInfo';
 import styles from './Standings.module.css';
 
@@ -18,27 +18,27 @@ export default function Standings() {
     const [selectedYear, setSelectedYear] = useState('');
     const [standingsList, setStandingsList] = useState([]);
 
-    // 1. Traverse Sleeper API to find all historical League IDs connected to this dynasty
+    // 1. Traverse the league's platform (Sleeper or Yahoo) to find all historical
+    // League IDs connected to this dynasty, via getLeagueData's previous_league_id chain.
     useEffect(() => {
         const fetchYears = async () => {
             if (!activeLeague?.sleeper_league_id) return;
             setLoadingYears(true);
-            
+
             let curId = activeLeague.sleeper_league_id;
             const years = [];
-            
+
             while (curId && curId !== "0" && curId !== 0) {
                 try {
-                    const res = await fetch(`https://api.sleeper.app/v1/league/${curId}`);
-                    if (!res.ok) break;
-                    const data = await res.json();
+                    const data = await getLeagueData(curId);
+                    if (!data) break;
                     years.push({ year: data.season, leagueId: curId, status: data.status });
                     curId = data.previous_league_id;
-                } catch (e) { 
-                    break; 
+                } catch (e) {
+                    break;
                 }
             }
-            
+
             setAvailableYears(years);
             if (years.length > 0) {
                 setSelectedLeagueId(years[0].leagueId);
@@ -60,13 +60,13 @@ export default function Standings() {
                     syncActiveLeague(activeLeague.sleeper_league_id, activeLeague.league_name);
                 }
 
-                const [rostersRes, tmData, podiumsData] = await Promise.all([
-                    fetch(`https://api.sleeper.app/v1/league/${selectedLeagueId}/rosters`),
+                const [rostersResult, tmData, podiumsData] = await Promise.all([
+                    getLeagueRosters(selectedLeagueId),
                     getLeagueTeamManagers(activeLeague.sleeper_league_id),
                     getAwards(true, activeLeague.sleeper_league_id)
                 ]);
 
-                const rostersData = await rostersRes.json();
+                const rostersData = Object.values(rostersResult?.rosters || {});
                 let totalGamesPlayed = 0;
 
                 const formatted = rostersData.map(r => {
