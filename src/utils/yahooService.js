@@ -4,11 +4,23 @@ export const cleanYahooKey = (rawId) => {
     if (!rawId) return null;
     let str = String(rawId).trim();
     if (/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(str)) return null;
-    
-    // UNIVERSAL YAHOO KEY ROUTER:
-    // Extract strictly the final numeric ID and prepend 'nfl.l.'
-    // This forces Yahoo to automatically route to the current active season
-    // and ignores invalid game keys (like 470 or .1.) that trigger 400 errors.
+
+    // Already a fully-formed Yahoo league key, e.g. "461.l.123456".
+    // The game key portion is season-specific -- it must be preserved as-is,
+    // since rewriting it to the generic "nfl" alias silently reroutes any
+    // lookup to the CURRENT season, breaking every past-season fetch.
+    if (/^\d+\.l\.\d+$/.test(str)) return str;
+
+    // Yahoo's league "renew"/"renewed" fields point at the adjacent season's
+    // league using "<game_key>_<league_id>" (e.g. "371_811308"). Convert that
+    // into a proper league key so it can be re-queried.
+    const renewMatch = str.match(/^(\d+)_(\d+)$/);
+    if (renewMatch) {
+        return `${renewMatch[1]}.l.${renewMatch[2]}`;
+    }
+
+    // Last-resort fallback for a bare numeric ID with no known game key --
+    // route through the current season since that's the best guess available.
     const match = str.match(/(\d+)$/);
     if (match) {
         return `nfl.l.${match[1]}`;
@@ -49,17 +61,24 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
         const totalRosters = parseInt(leagueData.num_teams) || 10;
         const playoffWeekStart = settingsData?.playoff_start_week ? parseInt(settingsData.playoff_start_week) : 15;
 
+        // Yahoo tracks cross-season lineage via "renew" (points at the prior
+        // season's league in "<game_key>_<league_id>" form). Mirroring Sleeper's
+        // previous_league_id lets every history-walking loop in the app (records,
+        // team managers, rivalry, drafts, etc.) traverse Yahoo leagues the same way.
+        const previousLeagueId = leagueData.renew ? cleanYahooKey(leagueData.renew) : null;
+
         return {
             league_id: cleanKey,
             sleeper_league_id: cleanKey,
             id: cleanKey,
+            previous_league_id: previousLeagueId,
             name: leagueData.name || `Yahoo League ${cleanKey}`,
             season: season,
             status: leagueData.is_finished ? 'complete' : 'in_season',
             total_rosters: totalRosters,
             avatar: leagueData.logo_url || '/brand.png',
             platform: 'yahoo',
-            roster_positions: DEFAULT_POSITIONS, 
+            roster_positions: DEFAULT_POSITIONS,
             settings: {
                 playoff_week_start: playoffWeekStart,
                 divisions: 0,

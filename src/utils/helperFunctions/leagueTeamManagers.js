@@ -18,31 +18,52 @@ export const getLeagueTeamManagers = async (queryLeagueID) => {
         return store;
     }
 
-    // Native Yahoo Handling
+    // Native Yahoo Handling -- walks the "renew" chain (via previous_league_id)
+    // the same way the Sleeper branch below walks previous_league_id, so past
+    // seasons' teams/managers show up instead of just the current season.
     if (id && (String(id).includes('.') || !/^\d+$/.test(String(id)))) {
-        const rostersData = await getLeagueRosters(id);
+        let currentLeagueID = id;
         const teamManagersMap = {};
-        const users = {}; 
-        const year = new Date().getFullYear();
-        teamManagersMap[year] = {};
-        
-        if (rostersData && rostersData.rosters) {
-            Object.values(rostersData.rosters).forEach(roster => {
-                teamManagersMap[year][roster.roster_id] = {
-                    team: {
-                        name: roster.team_name || `Team ${roster.roster_id}`,
-                        avatar: roster.avatar || '/brand.png'
-                    },
-                    managers: [roster.owner_id]
-                };
-                users[roster.owner_id] = {
-                    display_name: roster.manager_name || roster.team_name,
-                    avatar: roster.avatar || '/brand.png',
-                    user_id: roster.owner_id
-                };
-            });
+        const finalUsers = {};
+        let currentSeason = null;
+
+        while (currentLeagueID && currentLeagueID !== 0 && currentLeagueID !== "0") {
+            try {
+                const [leagueData, rostersData] = await Promise.all([
+                    getLeagueData(currentLeagueID),
+                    getLeagueRosters(currentLeagueID),
+                ]);
+                if (!leagueData || !rostersData) break;
+
+                const year = parseInt(leagueData.season) || new Date().getFullYear();
+                if (!currentSeason) currentSeason = year;
+                teamManagersMap[year] = {};
+
+                Object.values(rostersData.rosters || {}).forEach(roster => {
+                    teamManagersMap[year][roster.roster_id] = {
+                        team: {
+                            name: roster.team_name || `Team ${roster.roster_id}`,
+                            avatar: roster.avatar || '/brand.png'
+                        },
+                        managers: [roster.owner_id]
+                    };
+                    if (!finalUsers[roster.owner_id]) {
+                        finalUsers[roster.owner_id] = {
+                            display_name: roster.manager_name || roster.team_name,
+                            avatar: roster.avatar || '/brand.png',
+                            user_id: roster.owner_id
+                        };
+                    }
+                });
+
+                currentLeagueID = leagueData.previous_league_id || 0;
+            } catch (e) {
+                console.error("Yahoo team managers fetch broke for ID", currentLeagueID, e);
+                break;
+            }
         }
-        const response = { teamManagersMap, users, currentSeason: year, league_id: id };
+
+        const response = { teamManagersMap, users: finalUsers, currentSeason, league_id: id };
         teamManagersStore.update(() => response);
         return response;
     }
