@@ -15,9 +15,9 @@ export const loadPlayers = async (activeLeagueId) => {
     let expiration = null;
     
     try {
-        // v6 cache key forces the browser to map the new Yahoo IDs immediately
-        playersInfo = JSON.parse(localStorage.getItem(`playersInfo_v6_${currentId}`));
-        expiration = parseInt(localStorage.getItem(`expiration_v6_${currentId}`));
+        // v7 cache key forces the browser to discard the Sleeper cache and map the new Yahoo IDs
+        playersInfo = JSON.parse(localStorage.getItem(`playersInfo_v7_${currentId}`));
+        expiration = parseInt(localStorage.getItem(`expiration_v7_${currentId}`));
     } catch (e) {
         console.warn("Failed to read local player cache safely:", e);
     }
@@ -32,6 +32,7 @@ export const loadPlayers = async (activeLeagueId) => {
             fetch("https://api.sleeper.app/v1/state/nfl")
         ];
 
+        // ONLY fetch league data from Sleeper if it is NOT a Yahoo ID
         if (!isYahoo) {
             promises.push(fetch(`https://api.sleeper.app/v1/league/${currentId}`));
         }
@@ -72,7 +73,7 @@ export const loadPlayers = async (activeLeagueId) => {
                         }
                     }
                 }
-                // Projections map uses Sleeper ID natively
+                
                 projMap[proj.player_id] = {
                     p: customPoints,
                     opp: proj.opponent || 'BYE',
@@ -89,10 +90,9 @@ export const loadPlayers = async (activeLeagueId) => {
             if (!p) continue;
             
             // ==========================================
-            // THE ID MAPPING ENGINE 
+            // YAHOO ID MAPPING ENGINE 
             // ==========================================
             // If viewing a Yahoo league, key the player database by Yahoo ID 
-            // so UI components can successfully map roster arrays to players.
             let primaryId = p.player_id;
             if (isYahoo && p.yahoo_id) {
                 primaryId = String(p.yahoo_id);
@@ -119,7 +119,6 @@ export const loadPlayers = async (activeLeagueId) => {
                 posRank: 999999 
             };
 
-            // Link projections natively using the original Sleeper ID
             if (projMap[p.player_id] !== undefined) {
                 playerObj.wi[week] = { 
                     p: projMap[p.player_id].p,
@@ -144,12 +143,12 @@ export const loadPlayers = async (activeLeagueId) => {
         });
         
         try {
-            localStorage.setItem(`playersInfo_v6_${currentId}`, JSON.stringify(data));
-            localStorage.setItem(`expiration_v6_${currentId}`, (now + (24 * 3600)).toString());
+            localStorage.setItem(`playersInfo_v7_${currentId}`, JSON.stringify(data));
+            localStorage.setItem(`expiration_v7_${currentId}`, (now + (24 * 3600)).toString());
         } catch (storageError) {
             localStorage.clear();
-            localStorage.setItem(`playersInfo_v6_${currentId}`, JSON.stringify(data));
-            localStorage.setItem(`expiration_v6_${currentId}`, (now + (24 * 3600)).toString());
+            localStorage.setItem(`playersInfo_v7_${currentId}`, JSON.stringify(data));
+            localStorage.setItem(`expiration_v7_${currentId}`, (now + (24 * 3600)).toString());
         }
 
         return { players: data, stale: false };

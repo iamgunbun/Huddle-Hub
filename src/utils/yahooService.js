@@ -72,14 +72,13 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
     }
 };
 
-// 2. ROSTERS & STANDINGS
+// 2. ROSTERS & STANDINGS (Dual-Fetch Merge with ;out=roster)
 export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = null) => {
     const cleanKey = cleanYahooKey(leagueId);
     const userId = await getUserId(passedUserId);
     if (!cleanKey || !userId) return { rosters: {}, startersAndReserve: [] };
 
     try {
-        // Safe dual-fetch endpoints that will not trigger 400 Bad Requests
         const [standingsRes, teamsRes] = await Promise.all([
             fetch('/api/yahoo-proxy', {
                 method: 'POST',
@@ -89,7 +88,7 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
             fetch('/api/yahoo-proxy', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId, endpoint: `league/${cleanKey}/teams/roster` })
+                body: JSON.stringify({ userId, endpoint: `league/${cleanKey}/teams;out=roster` })
             }).catch(() => null)
         ]);
 
@@ -98,6 +97,7 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
 
         const standingsMap = {};
         const stLeagueObj = sData?.fantasy_content?.league;
+        
         if (Array.isArray(stLeagueObj)) {
             const stWrapper = stLeagueObj.find(x => x && x.standings);
             const stTeams = stWrapper?.standings?.[0]?.teams;
@@ -136,11 +136,6 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
             teamsData = teamsWrapper?.teams;
         }
 
-        if (!teamsData && Array.isArray(stLeagueObj)) {
-            const stWrapper = stLeagueObj.find(x => x && x.standings);
-            teamsData = stWrapper?.standings?.[0]?.teams;
-        }
-
         if (!teamsData) return { rosters: {}, startersAndReserve: [] };
 
         Object.keys(teamsData).forEach(k => {
@@ -169,6 +164,7 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
 
             const playersArr = [];
             const startersArr = [];
+            
             const rosterObjWrapper = teamWrapper.find(x => x && x.roster);
             
             if (rosterObjWrapper && rosterObjWrapper.roster) {
@@ -188,10 +184,11 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
                         const pSelectedPosition = pItemWrapper[1]?.selected_position?.[1]?.position;
                         
                         if (pId) {
-                            playersArr.push(pId);
+                            const stringId = String(pId);
+                            playersArr.push(stringId);
                             if (pSelectedPosition && pSelectedPosition !== 'BN' && pSelectedPosition !== 'IR') {
-                                startersArr.push(pId);
-                                startersAndReserve.push(pId);
+                                startersArr.push(stringId);
+                                startersAndReserve.push(stringId);
                             }
                         }
                     });
