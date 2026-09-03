@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
 import { getLeagueRosters, getLeagueTeamManagers, loadPlayers, getLeagueData, getLeagueStandings } from '../utils/helper';
 import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
+import { playerNameKey } from '../utils/helperFunctions/players';
 import { fetchAndNormalizeYahooMatchups } from '../utils/yahooService';
 import PlayerModal from '../components/PlayerModal';
 import styles from './Rosters.module.css';
@@ -15,6 +16,7 @@ export default function Rosters() {
     const [rosters, setRosters] = useState({});
     const [teamManagers, setTeamManagers] = useState(null);
     const [playersInfo, setPlayersInfo] = useState({});
+    const [playersByName, setPlayersByName] = useState({});
     const [yahooPlayersMeta, setYahooPlayersMeta] = useState({});
     const [leagueData, setLeagueData] = useState(null);
     const [standings, setStandings] = useState(null);
@@ -43,7 +45,20 @@ export default function Rosters() {
 
     const getPlayerObj = (pId) => {
         if (!pId || pId === "0") return null;
-        return playersInfo[pId] || playersInfo[String(pId)] || playersInfo[Number(pId)] || yahooPlayersMeta[String(pId)] || null;
+
+        const direct = playersInfo[pId] || playersInfo[String(pId)] || playersInfo[Number(pId)];
+        if (direct) return direct;
+
+        const yahooMeta = yahooPlayersMeta[String(pId)];
+        if (!yahooMeta) return null;
+
+        // Yahoo gave us this player but Sleeper's yahoo_id crosswalk didn't map
+        // them, so match on name to recover the full record (projections, stats,
+        // sleeper_id) instead of falling back to a bare name with no points.
+        const matched = playersByName[playerNameKey(yahooMeta.fn, yahooMeta.ln)];
+        if (matched) return { ...matched, headshot: yahooMeta.headshot || null };
+
+        return yahooMeta;
     };
 
     // 1. Initial Load
@@ -66,6 +81,7 @@ export default function Rosters() {
                 setYahooPlayersMeta(rData.yahooPlayersMeta || {});
                 setTeamManagers(tmData);
                 setPlayersInfo(pData.players || {});
+                setPlayersByName(pData.playersByName || {});
                 setLeagueData(lData);
                 setStandings(sData?.standingsInfo || {});
                 
@@ -208,7 +224,13 @@ export default function Rosters() {
 
     const getPlayerProjPts = (playerId) => {
         const playerObj = getPlayerObj(playerId);
-        const proj = weeklyProjections[playerId] || weeklyStats[playerId];
+        // Sleeper's projections/stats feeds are keyed by Sleeper player ids. In a
+        // Yahoo league the roster ids are Yahoo's, so look the player up by their
+        // crosswalked sleeper_id as well -- otherwise every lookup misses and the
+        // player falls through to a 0.
+        const sleeperKey = playerObj?.sleeper_id;
+        const proj = weeklyProjections[playerId] || weeklyStats[playerId]
+            || (sleeperKey ? (weeklyProjections[sleeperKey] || weeklyStats[sleeperKey]) : null);
         const scoringSettings = leagueData?.scoring_settings || {};
 
         if (proj) {
@@ -244,9 +266,10 @@ export default function Rosters() {
 
     const getMatchupText = (playerId) => {
         const playerObj = getPlayerObj(playerId);
-        const proj = weeklyProjections[playerId];
-        const stats = weeklyStats[playerId];
-        
+        const sleeperKey = playerObj?.sleeper_id;
+        const proj = weeklyProjections[playerId] || (sleeperKey ? weeklyProjections[sleeperKey] : null);
+        const stats = weeklyStats[playerId] || (sleeperKey ? weeklyStats[sleeperKey] : null);
+
         if (!playerObj && !proj && !stats) return '';
 
         const team = normalizeTeam(playerObj?.t || playerObj?.team);

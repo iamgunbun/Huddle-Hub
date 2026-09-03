@@ -137,7 +137,12 @@ export default function Players() {
 
     const getProjPts = (pId) => {
         if (!pId) return '0.00';
-        const proj = weeklyProjections[pId] || weeklyStats[pId];
+        // Sleeper's projections/stats feeds are keyed by Sleeper player ids, but
+        // in a Yahoo league these ids are Yahoo's -- fall back to the player's
+        // crosswalked sleeper_id so the lookup doesn't miss and report 0.
+        const sleeperKey = (playersInfo[pId] || playersInfo[String(pId)])?.sleeper_id;
+        const proj = weeklyProjections[pId] || weeklyStats[pId]
+            || (sleeperKey ? (weeklyProjections[sleeperKey] || weeklyStats[sleeperKey]) : null);
         if (proj) {
             const stats = proj.stats || proj || {};
             const scoringSettings = leagueData?.scoring_settings || {};
@@ -164,8 +169,9 @@ export default function Players() {
     const getMatchupText = (playerObj) => {
         if (!playerObj) return '';
         const pId = playerObj.player_id || playerObj.id;
-        const proj = weeklyProjections[pId];
-        const stats = weeklyStats[pId];
+        const sleeperKey = playerObj.sleeper_id;
+        const proj = weeklyProjections[pId] || (sleeperKey ? weeklyProjections[sleeperKey] : null);
+        const stats = weeklyStats[pId] || (sleeperKey ? weeklyStats[sleeperKey] : null);
         const team = normalizeTeam(playerObj.t || playerObj.team);
 
         if (team && nflScheduleMap[team]) {
