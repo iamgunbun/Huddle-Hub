@@ -116,28 +116,68 @@ export default function AddLeague() {
             const { data: { session }, error: authErr } = await supabase.auth.getSession();
             if (authErr || !session?.user) throw new Error("You must be logged in.");
 
-            const response = await fetch('/api/yahoo-proxy', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    userId: session.user.id, 
-                    endpoint: 'users;use_login=1/games;game_keys=nfl/leagues' 
-                })
-            });
+            // Fetch the account's leagues, and separately the account's own teams
+            // (Yahoo's "teams" collection returns only teams owned by the current
+            // login) so each league can be tagged with the user's real team name --
+            // without this, "connect" has no way to know which roster is theirs.
+            const [leaguesRes, teamsRes] = await Promise.all([
+                fetch('/api/yahoo-proxy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: session.user.id,
+                        endpoint: 'users;use_login=1/games;game_keys=nfl/leagues'
+                    })
+                }),
+                fetch('/api/yahoo-proxy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: session.user.id,
+                        endpoint: 'users;use_login=1/games;game_keys=nfl/teams'
+                    })
+                }).catch(() => null)
+            ]);
 
-            if (response.status === 401) {
+            if (leaguesRes.status === 401) {
                 setIsYahooLinked(false);
                 return;
             }
 
-            if (!response.ok) throw new Error("Failed to fetch Yahoo leagues.");
+            if (!leaguesRes.ok) throw new Error("Failed to fetch Yahoo leagues.");
 
-            const data = await response.json();
+            const data = await leaguesRes.json();
             setIsYahooLinked(true);
+
+            // Map league_key -> the account's own team name in that league
+            // (a team_key is "<league_key>.t.<team_id>", so trim the ".t.N" suffix)
+            const teamNameByLeagueKey = {};
+            if (teamsRes?.ok) {
+                const teamsData = await teamsRes.json();
+                const teamGames = teamsData?.fantasy_content?.users?.[0]?.user?.[1]?.games;
+                if (teamGames) {
+                    const gameCount = teamGames.count || 0;
+                    for (let i = 0; i < gameCount; i++) {
+                        const teamsObj = teamGames[i]?.game?.[1]?.teams;
+                        if (!teamsObj) continue;
+                        const teamCount = teamsObj.count || 0;
+                        for (let j = 0; j < teamCount; j++) {
+                            const teamInfo = teamsObj[j]?.team?.[0];
+                            if (!Array.isArray(teamInfo)) continue;
+                            const teamKey = teamInfo.find(x => x.team_key)?.team_key;
+                            const teamName = teamInfo.find(x => x.name)?.name;
+                            if (teamKey && teamName) {
+                                const leagueKey = teamKey.replace(/\.t\.\d+$/, '');
+                                teamNameByLeagueKey[leagueKey] = teamName;
+                            }
+                        }
+                    }
+                }
+            }
 
             const leaguesArray = [];
             const games = data?.fantasy_content?.users?.[0]?.user?.[1]?.games;
-            
+
             if (games) {
                 const gameCount = games.count || 0;
                 for (let i = 0; i < gameCount; i++) {
@@ -151,7 +191,8 @@ export default function AddLeague() {
                                     id: String(leagueData.league_key),
                                     name: leagueData.name,
                                     avatar: leagueData.logo_url || '/brand.png',
-                                    platform: 'yahoo'
+                                    platform: 'yahoo',
+                                    managerName: teamNameByLeagueKey[String(leagueData.league_key)] || null
                                 });
                             }
                         }
