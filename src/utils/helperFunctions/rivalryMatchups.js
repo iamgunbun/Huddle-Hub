@@ -1,5 +1,5 @@
-import { getLeagueData } from "./leagueData"
-import { getNflState } from "./nflState"
+import { getLeagueData } from "./leagueData";
+import { getNflState } from "./nflState";
 import { getLeagueTeamManagers } from "./leagueTeamManagers";
 import { getRosterIDFromManagerIDAndYear } from '$lib/utils/helperFunctions/universalFunctions';
 import { get } from 'svelte/store';
@@ -8,43 +8,43 @@ import { leagueID as defaultLeagueID } from '$lib/utils/leagueInfo.js';
 
 export const getRivalryMatchups = async (userOneID, userTwoID) => {
     if(!userOneID || !userTwoID) return null;
-    
+         
     const activeStore = get(activeLeague);
     let curLeagueID = activeStore?.sleeper_league_id || defaultLeagueID;
+
+    // Block non-numeric / Yahoo IDs from reaching the Sleeper API
+    if (curLeagueID && (String(curLeagueID).includes('.') || !/^\d+$/.test(String(curLeagueID)))) {
+        return { points: { one: 0, two: 0 }, wins: { one: 0, two: 0 }, ties: 0, matchups: [] };
+    }
 
     try {
         const [nflState, teamManagers] = await Promise.all([
             getNflState(),
             getLeagueTeamManagers(),
         ]);
-
         let week = 1;
         if(nflState.season_type === 'regular') week = nflState.display_week;
         else if(nflState.season_type === 'post') week = 18;
 
-        const rivalry = { points: { one: 0, two: 0 }, wins: { one: 0, two: 0 }, ties: 0, matchups: [] }
+        const rivalry = { points: { one: 0, two: 0 }, wins: { one: 0, two: 0 }, ties: 0, matchups: [] };
 
         while(curLeagueID && curLeagueID !== 0 && curLeagueID !== "0") {
             const leagueData = await getLeagueData(curLeagueID);
             if(!leagueData) break;
-
             const year = leagueData.season;
             const rosterIDOne = getRosterIDFromManagerIDAndYear(teamManagers, userOneID, year);
             const rosterIDTwo = getRosterIDFromManagerIDAndYear(teamManagers, userTwoID, year);
-
             if(!rosterIDOne || !rosterIDTwo || rosterIDOne === rosterIDTwo) {
                 curLeagueID = leagueData.previous_league_id;
                 week = 18;
                 continue;
             }
-
             const matchupsPromises = [];
             for(let i = 1; i < (leagueData.settings?.playoff_week_start || 15); i++) {
-                matchupsPromises.push(fetch(`https://api.sleeper.app/v1/league/${curLeagueID}/matchups/${i}`, {compress: true}))
+                matchupsPromises.push(fetch(`https://api.sleeper.app/v1/league/${curLeagueID}/matchups/${i}`, {compress: true}));
             }
             const matchupsRes = await Promise.all(matchupsPromises);
             const matchupsData = await Promise.all(matchupsRes.map(r => r.json()));
-
             for(let i = 1; i < matchupsData.length + 1; i++) {
                 const processed = processRivalryMatchups(matchupsData[i - 1], i, rosterIDOne, rosterIDTwo);
                 if(processed) {
@@ -60,20 +60,19 @@ export const getRivalryMatchups = async (userOneID, userTwoID) => {
                     else if(sideAPoints < sideBPoints) rivalry.wins.two++;
                     else rivalry.ties++;
                     
-                    rivalry.matchups.push({ week, year, matchup })
+                    rivalry.matchups.push({ week, year, matchup });
                 }
             }
             curLeagueID = leagueData.previous_league_id;
             week = 18;
         }
-
         rivalry.matchups.sort((a, b) => (b.year - a.year) || (b.week - a.week));
         return rivalry;
     } catch (e) {
         console.error("Rivalry fetch broke", e);
         return null;
     }
-}
+};
 
 const processRivalryMatchups = (inputMatchups, week, rosterIDOne, rosterIDTwo) => {
     if(!inputMatchups || inputMatchups.length === 0) return false;
@@ -85,7 +84,7 @@ const processRivalryMatchups = (inputMatchups, week, rosterIDOne, rosterIDTwo) =
                 roster_id: match.roster_id,
                 starters: match.starters || [],
                 points: match.starters_points || [],
-            })
+            });
         }
     }
     const keys = Object.keys(matchups);
@@ -94,4 +93,4 @@ const processRivalryMatchups = (inputMatchups, week, rosterIDOne, rosterIDTwo) =
     if(keys.length > 1 || matchup.length === 1) return false;
     if(matchup[0].roster_id == rosterIDTwo) matchup.push(matchup.shift());
     return {matchup, week};
-}
+};

@@ -24,6 +24,7 @@ export const predictScores = (players, week, leagueData) => {
     const dbs = projectedPlayers.filter(p => p.pos == 'DB');
 
     let powerScore = 0;
+
     // next, use the roster configuration to grab the highest scorer at each position
     for(const starterPosition of starterPositions) {
         const qb = parseFloat(qbs[0]?.wi && qbs[0]?.wi[week] ? qbs[0].wi[week].p : 0);
@@ -35,6 +36,7 @@ export const predictScores = (players, week, leagueData) => {
         const db = parseFloat(dbs[0]?.wi && dbs[0]?.wi[week] ? dbs[0].wi[week].p : 0);
         const k = parseFloat(ks[0]?.wi && ks[0]?.wi[week] ? ks[0].wi[week].p : 0);
         const def = parseFloat(defs[0]?.wi && defs[0]?.wi[week] ? defs[0].wi[week].p : 0);
+
         switch (starterPosition) {
             case 'QB':
                 qbs.shift();
@@ -45,7 +47,7 @@ export const predictScores = (players, week, leagueData) => {
                 powerScore += rb;
                 break;
             case 'WR':
-                wrs.shift()
+                wrs.shift();
                 powerScore += wr;
                 break;
             case 'TE':
@@ -126,11 +128,10 @@ export const predictScores = (players, week, leagueData) => {
         }
     }
     return powerScore;
-}
+};
 
 export const getStarterPositions = (leagueData) => {
-    const rosterPositions = leagueData.roster_positions;
+    const rosterPositions = leagueData?.roster_positions || leagueData?.settings?.roster_positions || ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF', 'BN', 'BN', 'BN', 'BN', 'BN'];
     const firstBench = rosterPositions.indexOf('BN');
-
-    return rosterPositions.slice(0, firstBench);
-}
+    return firstBench > -1 ? rosterPositions.slice(0, firstBench) : rosterPositions;
+};

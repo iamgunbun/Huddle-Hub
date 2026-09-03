@@ -5,6 +5,11 @@ import { waitForAll } from './multiPromise';
 let awardsCache = [];
 
 export const getAwards = async (refresh = false, queryLeagueID = null) => {
+    // If Yahoo league ID is passed, return empty array immediately
+    if (queryLeagueID && (String(queryLeagueID).includes('.') || !/^\d+$/.test(String(queryLeagueID)))) {
+        return [];
+    }
+
     if (queryLeagueID) refresh = true;
 
     if (!refresh && awardsCache.length) {
@@ -20,7 +25,9 @@ export const getAwards = async (refresh = false, queryLeagueID = null) => {
     }
     
     const leagueData = await getLeagueData(queryLeagueID).catch((err) => { console.error(err); });
-    if (!leagueData) return [];
+    if (!leagueData || leagueData.platform === 'yahoo' || (leagueData.id && String(leagueData.id).includes('.'))) {
+        return [];
+    }
     
     let previousSeasonID = leagueData.status === "complete" ? leagueData.league_id : leagueData.previous_league_id;
     
@@ -30,12 +37,11 @@ export const getAwards = async (refresh = false, queryLeagueID = null) => {
         localStorage.setItem("awards", JSON.stringify(podiums));
     }
     return podiums;
-}
+};
 
 const getPodiums = async (previousSeasonID) => {
     const podiums = [];
     
-    // CRITICAL FIX: Safe check for string "0"
     while (previousSeasonID && previousSeasonID !== 0 && previousSeasonID !== "0") {
         const previousSeasonData = await getPreviousLeagueData(previousSeasonID);
         if (!previousSeasonData) break;
@@ -44,7 +50,7 @@ const getPodiums = async (previousSeasonID) => {
         previousSeasonID = previousSeasonData.previousSeasonID;
 
         const divisions = buildDivisionsAndManagers({previousRosters, leagueMetadata, numDivisions});
-        const divisionArr = []
+        const divisionArr = [];
         for(const key in divisions) {
             divisionArr.push(divisions[key]);
         }
@@ -68,19 +74,23 @@ const getPodiums = async (previousSeasonID) => {
             third,
             divisions: divisionArr,
             toilet
-        }
+        };
         podiums.push(podium);
     }
     return podiums;
-}
+};
 
 const getPreviousLeagueData = async (previousSeasonID) => {
+    if (!previousSeasonID || String(previousSeasonID).includes('.') || !/^\d+$/.test(String(previousSeasonID))) {
+        return null;
+    }
+
     const resPromises = [
         fetch(`https://api.sleeper.app/v1/league/${previousSeasonID}`, {compress: true}),
         getLeagueRosters(previousSeasonID),
         fetch(`https://api.sleeper.app/v1/league/${previousSeasonID}/losers_bracket`, {compress: true}),
         fetch(`https://api.sleeper.app/v1/league/${previousSeasonID}/winners_bracket`, {compress: true}),
-    ]
+    ];
 
     const [leagueRes, rostersData, losersRes, winnersRes] = await waitForAll(...resPromises).catch((err) => { console.error(err); return []; });
 
@@ -92,7 +102,7 @@ const getPreviousLeagueData = async (previousSeasonID) => {
         leagueRes.json(),
         losersRes.json(),
         winnersRes.json(),
-    ]
+    ];
 
     const [prevLeagueData, losersData, winnersData] = await waitForAll(...jsonPromises).catch((err) => { console.error(err); return []; });
 
@@ -114,8 +124,8 @@ const getPreviousLeagueData = async (previousSeasonID) => {
         playoffRounds,
         toiletRounds,
         leagueMetadata: prevLeagueData.metadata
-    }
-}
+    };
+};
 
 const buildDivisionsAndManagers = ({previousRosters, leagueMetadata, numDivisions}) => {
     const divisions = {};
@@ -124,7 +134,7 @@ const buildDivisionsAndManagers = ({previousRosters, leagueMetadata, numDivision
             name: leagueMetadata ? leagueMetadata[`division_${i}`] : null,
             wins: -1,
             points: -1
-        }
+        };
     }
 
     for(const rosterID in previousRosters) {
@@ -138,4 +148,4 @@ const buildDivisionsAndManagers = ({previousRosters, leagueMetadata, numDivision
         }
     }
     return divisions;
-}
+};
