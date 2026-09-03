@@ -15,6 +15,7 @@ export default function Matchups() {
     const [rosters, setRosters] = useState({});
     const [teamManagers, setTeamManagers] = useState(null);
     const [playersInfo, setPlayersInfo] = useState({});
+    const [yahooPlayersMeta, setYahooPlayersMeta] = useState({});
     const [leagueData, setLeagueData] = useState(null);
     const [myRosterId, setMyRosterId] = useState(null);
     
@@ -42,7 +43,7 @@ export default function Matchups() {
 
     const getPlayerObj = (pId) => {
         if (!pId || pId === "0") return null;
-        return playersInfo[pId] || playersInfo[String(pId)] || playersInfo[Number(pId)] || null;
+        return playersInfo[pId] || playersInfo[String(pId)] || playersInfo[Number(pId)] || yahooPlayersMeta[String(pId)] || null;
     };
 
     useEffect(() => {
@@ -61,6 +62,7 @@ export default function Matchups() {
                 if (!isMounted) return;
                 
                 setRosters(rData.rosters || {});
+                setYahooPlayersMeta(rData.yahooPlayersMeta || {});
                 setTeamManagers(tmData);
                 setPlayersInfo(pData.players || {});
                 setLeagueData(lData);
