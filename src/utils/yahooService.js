@@ -36,6 +36,49 @@ const getUserId = async (explicitUserId) => {
 
 const DEFAULT_POSITIONS = ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF', 'BN', 'BN', 'BN', 'BN', 'BN', 'BN'];
 
+// Crosswalk from Yahoo's numeric stat_id (league scoring stat_modifiers) to the
+// stat key names Sleeper's projections/stats API uses -- letting the app's
+// existing points calculator (built around Sleeper's key names) work unchanged
+// against a Yahoo league's actual scoring rules instead of always assuming
+// standard/PPR defaults. Limited to core passing/rushing/receiving stats we
+// could verify against two independent sources; kicking/defense stat_ids are
+// intentionally left out rather than guessed, so those positions keep using
+// the existing fallback scoring instead of risking silently wrong numbers.
+const YAHOO_STAT_ID_TO_SLEEPER_KEY = {
+    4: 'pass_yd',
+    5: 'pass_td',
+    6: 'pass_int',
+    9: 'rush_yd',
+    10: 'rush_td',
+    11: 'rec',
+    12: 'rec_yd',
+    13: 'rec_td',
+    18: 'fum_lost',
+};
+
+const parseYahooScoringSettings = (settingsData) => {
+    const scoring = {};
+    const statsNode = settingsData?.stat_modifiers?.stats;
+    if (!statsNode) return scoring;
+
+    // Yahoo's collections show up either as a real array or as an object with
+    // numeric keys plus a "count" field -- handle both defensively.
+    const entries = Array.isArray(statsNode)
+        ? statsNode
+        : Object.keys(statsNode).filter(k => k !== 'count').map(k => statsNode[k]);
+
+    entries.forEach(entry => {
+        const stat = entry?.stat || entry;
+        if (!stat) return;
+        const key = YAHOO_STAT_ID_TO_SLEEPER_KEY[parseInt(stat.stat_id)];
+        if (!key) return;
+        const value = parseFloat(stat.value);
+        if (!isNaN(value)) scoring[key] = value;
+    });
+
+    return scoring;
+};
+
 // The "nfl" literal is a Yahoo-supported alias for "whatever game key is
 // currently active" -- it can only ever resolve the CURRENT season, but it's
 // a useful fallback if a request built with the real (season-specific) game
@@ -109,6 +152,7 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
         // previous_league_id lets every history-walking loop in the app (records,
         // team managers, rivalry, drafts, etc.) traverse Yahoo leagues the same way.
         const previousLeagueId = leagueData.renew ? cleanYahooKey(leagueData.renew) : null;
+        const scoringSettings = parseYahooScoringSettings(settingsData);
 
         return {
             league_id: cleanKey,
@@ -122,6 +166,7 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
             avatar: leagueData.logo_url || '/brand.png',
             platform: 'yahoo',
             roster_positions: DEFAULT_POSITIONS,
+            scoring_settings: scoringSettings,
             settings: {
                 playoff_week_start: playoffWeekStart,
                 divisions: 0,
