@@ -26,6 +26,31 @@ if (typeof window !== 'undefined' && !window.Notification) {
     };
 }
 
+// ==========================================
+// GLOBAL SLEEPER LEAK SHIELD
+// ==========================================
+const originalFetch = window.fetch;
+window.fetch = async (...args) => {
+    const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
+
+    // Check if any file is trying to fire a Yahoo ID at the Sleeper API
+    if (url && url.includes('api.sleeper.app/v1/league/')) {
+        const idMatch = url.match(/league\/([^\/]+)/);
+        const leagueId = idMatch ? idMatch[1] : '';
+
+        // If the ID has a dot or non-numeric characters (Yahoo format), kill the request
+        if (leagueId.includes('.') || !/^\d+$/.test(leagueId)) {
+            // Silently return a valid empty JSON response so components don't crash
+            return new Response(JSON.stringify([]), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+    }
+
+    return originalFetch(...args);
+};
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <App />

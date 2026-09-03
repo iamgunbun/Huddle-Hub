@@ -40,7 +40,7 @@ export const getLeagueMatchups = async (queryLeagueID) => {
         const year = leagueData.season;
         const regularSeasonLength = leagueData.settings?.playoff_week_start ? leagueData.settings.playoff_week_start - 1 : 14;
 
-        // --- YAHOO PLATFORM ROUTING ---
+        // --- YAHOO PLATFORM ROUTING (Uses /api/yahoo-proxy) ---
         if (isYahooLeague(id)) {
             const yPromises = [];
             for (let i = 1; i <= week; i++) {

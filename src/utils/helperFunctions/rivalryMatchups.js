@@ -12,7 +12,7 @@ export const getRivalryMatchups = async (userOneID, userTwoID) => {
     const activeStore = get(activeLeague);
     let curLeagueID = activeStore?.sleeper_league_id || defaultLeagueID;
 
-    // YAHOO SHIELD: Block Yahoo IDs from hitting the Sleeper Matchups API
+    // SHIELD: Do not run Sleeper rivalry loops on Yahoo leagues
     if (curLeagueID && (String(curLeagueID).includes('.') || !/^\d+$/.test(String(curLeagueID)))) {
         return { points: { one: 0, two: 0 }, wins: { one: 0, two: 0 }, ties: 0, matchups: [] };
     }
@@ -45,7 +45,6 @@ export const getRivalryMatchups = async (userOneID, userTwoID) => {
             }
             const matchupsRes = await Promise.all(matchupsPromises);
             const matchupsData = await Promise.all(matchupsRes.map(r => r.json()));
-            
             for(let i = 1; i < matchupsData.length + 1; i++) {
                 const processed = processRivalryMatchups(matchupsData[i - 1], i, rosterIDOne, rosterIDTwo);
                 if(processed) {
