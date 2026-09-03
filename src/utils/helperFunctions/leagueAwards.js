@@ -34,7 +34,11 @@ export const getAwards = async (refresh = false, queryLeagueID = null) => {
     const podiums = await getPodiums(previousSeasonID);
     awardsCache = podiums;
     if (typeof window !== 'undefined') {
-        localStorage.setItem("awards", JSON.stringify(podiums));
+        try {
+            localStorage.setItem("awards", JSON.stringify(podiums));
+        } catch (e) {
+            console.warn("Awards cache skipped:", e);
+        }
     }
     return podiums;
 };
