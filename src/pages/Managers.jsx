@@ -193,7 +193,7 @@ export default function Managers() {
 
             setEvalLoading(true);
             
-            const pData = await loadPlayers();
+            const pData = await loadPlayers(activeLeague?.sleeper_league_id);
             const rData = await getLeagueRosters(activeLeague.sleeper_league_id);
             const playersMap = pData?.players || {};
             

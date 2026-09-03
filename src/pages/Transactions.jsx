@@ -37,7 +37,7 @@ export default function Transactions() {
                 const [lData, tmData, pData] = await Promise.all([
                     getLeagueData(sleeperId),
                     getLeagueTeamManagers(sleeperId),
-                    loadPlayers()
+                    loadPlayers(sleeperId)
                 ]);
 
                 if (!isMounted) return;

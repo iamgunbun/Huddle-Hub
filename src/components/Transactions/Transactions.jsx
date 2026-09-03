@@ -22,7 +22,7 @@ export default function Transactions({ preview = false }) {
             setLoading(true);
             try {
                 const [pData, tmData] = await Promise.all([
-                    loadPlayers(),
+                    loadPlayers(activeLeague.sleeper_league_id),
                     getLeagueTeamManagers(activeLeague.sleeper_league_id)
                 ]);
                 setPlayersMap(pData?.players || {});

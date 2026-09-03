@@ -128,7 +128,7 @@ export default function Home() {
                     // --- SLEEPER PLATFORM ROUTING ---
                     const [managersData, pData, currentLeagueData] = await Promise.all([
                         getLeagueTeamManagers(targetId),
-                        loadPlayers(),
+                        loadPlayers(targetId),
                         getLeagueData(targetId)
                     ]);
                     

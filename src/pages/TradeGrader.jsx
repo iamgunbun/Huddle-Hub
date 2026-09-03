@@ -48,7 +48,7 @@ export default function TradeGrader() {
             setLoading(true);
             try {
                 const [pData, lData] = await Promise.all([
-                    loadPlayers(),
+                    loadPlayers(activeLeague.sleeper_league_id),
                     getLeagueData(activeLeague.sleeper_league_id)
                 ]);
                 if (isMounted) {
