@@ -55,7 +55,7 @@ export default function Matchups() {
                 const [rData, tmData, pData, lData] = await Promise.all([
                     getLeagueRosters(sleeperId),
                     getLeagueTeamManagers(sleeperId),
-                    loadPlayers(),
+                    loadPlayers(sleeperId),
                     getLeagueData(sleeperId)
                 ]);
                 if (!isMounted) return;

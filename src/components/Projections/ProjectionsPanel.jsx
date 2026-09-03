@@ -26,7 +26,7 @@ export default function ProjectionsPanel() {
                     getLeagueRosters(id),
                     getLeagueTeamManagers(id),
                     getLeagueData(id),
-                    loadPlayers(),
+                    loadPlayers(id),
                     getNflState()
                 ]);
 

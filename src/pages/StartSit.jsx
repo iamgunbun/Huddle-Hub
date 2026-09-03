@@ -67,7 +67,7 @@ export default function StartSit() {
             setLoading(true);
             try {
                 const [pData, lData] = await Promise.all([
-                    loadPlayers(),
+                    loadPlayers(activeLeague.sleeper_league_id),
                     getLeagueData(activeLeague.sleeper_league_id)
                 ]);
                 

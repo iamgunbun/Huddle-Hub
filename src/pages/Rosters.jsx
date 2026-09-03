@@ -55,7 +55,7 @@ export default function Rosters() {
                 const [rData, tmData, pData, lData, sData] = await Promise.all([
                     getLeagueRosters(activeLeague.sleeper_league_id),
                     getLeagueTeamManagers(activeLeague.sleeper_league_id),
-                    loadPlayers(),
+                    loadPlayers(activeLeague.sleeper_league_id),
                     getLeagueData(activeLeague.sleeper_league_id),
                     getLeagueStandings(activeLeague.sleeper_league_id)
                 ]);

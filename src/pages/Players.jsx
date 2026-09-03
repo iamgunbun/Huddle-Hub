@@ -45,7 +45,7 @@ export default function Players() {
             try {
                 const sleeperId = activeLeague.sleeper_league_id;
                 const [pData, lData, rData] = await Promise.all([
-                    loadPlayers(),
+                    loadPlayers(sleeperId),
                     getLeagueData(sleeperId),
                     getLeagueRosters(sleeperId)
                 ]);

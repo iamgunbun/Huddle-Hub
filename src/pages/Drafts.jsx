@@ -32,7 +32,7 @@ export default function Drafts() {
             try {
                 const [tmData, pData] = await Promise.all([
                     getLeagueTeamManagers(activeLeague.sleeper_league_id),
-                    loadPlayers()
+                    loadPlayers(activeLeague.sleeper_league_id)
                 ]);
                 setTeamManagers(tmData);
                 setPlayersMap(pData?.players || {});
