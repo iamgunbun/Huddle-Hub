@@ -3,8 +3,11 @@ import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
 import { getLeagueRosters, getLeagueTeamManagers, loadPlayers, getLeagueData, getLeagueStandings } from '../utils/helper';
 import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
+import { fetchAndNormalizeYahooMatchups } from '../utils/yahooService';
 import PlayerModal from '../components/PlayerModal';
 import styles from './Rosters.module.css';
+
+const isYahooLeagueId = (id) => id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
 
 export default function Rosters() {
     const { activeLeague } = useLeague();
@@ -90,10 +93,23 @@ export default function Rosters() {
         if (!activeLeague?.sleeper_league_id) return;
         let isMounted = true;
 
-        fetch(`https://api.sleeper.app/v1/league/${activeLeague.sleeper_league_id}/matchups/${activeWeek}`)
-            .then(res => res.json())
-            .then(data => { if (isMounted) setWeeklyMatchups(data || []); })
-            .catch(err => console.error("Matchups fetch err:", err));
+        if (isYahooLeagueId(activeLeague.sleeper_league_id)) {
+            fetchAndNormalizeYahooMatchups(activeLeague.sleeper_league_id, activeWeek)
+                .then(({ matchups }) => {
+                    if (!isMounted) return;
+                    const flat = [];
+                    Object.entries(matchups || {}).forEach(([mId, pair]) => {
+                        pair.forEach(team => flat.push({ ...team, matchup_id: mId }));
+                    });
+                    setWeeklyMatchups(flat);
+                })
+                .catch(err => console.error("Yahoo matchups fetch err:", err));
+        } else {
+            fetch(`https://api.sleeper.app/v1/league/${activeLeague.sleeper_league_id}/matchups/${activeWeek}`)
+                .then(res => res.json())
+                .then(data => { if (isMounted) setWeeklyMatchups(data || []); })
+                .catch(err => console.error("Matchups fetch err:", err));
+        }
 
         fetch(`https://api.sleeper.com/projections/nfl/${season}/${activeWeek}?season_type=regular`)
             .then(res => res.json())
