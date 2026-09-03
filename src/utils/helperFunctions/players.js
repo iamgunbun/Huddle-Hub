@@ -15,9 +15,9 @@ export const loadPlayers = async (activeLeagueId) => {
     let expiration = null;
     
     try {
-        // v7 cache key forces the browser to discard the Sleeper cache and map the new Yahoo IDs
-        playersInfo = JSON.parse(localStorage.getItem(`playersInfo_v7_${currentId}`));
-        expiration = parseInt(localStorage.getItem(`expiration_v7_${currentId}`));
+        // v8 cache key forces the browser to discard the Sleeper cache and map the new Yahoo IDs
+        playersInfo = JSON.parse(localStorage.getItem(`playersInfo_v8_${currentId}`));
+        expiration = parseInt(localStorage.getItem(`expiration_v8_${currentId}`));
     } catch (e) {
         console.warn("Failed to read local player cache safely:", e);
     }
@@ -73,7 +73,7 @@ export const loadPlayers = async (activeLeagueId) => {
                         }
                     }
                 }
-                
+                // Projections natively map to the standard Sleeper ID
                 projMap[proj.player_id] = {
                     p: customPoints,
                     opp: proj.opponent || 'BYE',
@@ -92,10 +92,10 @@ export const loadPlayers = async (activeLeagueId) => {
             // ==========================================
             // YAHOO ID MAPPING ENGINE 
             // ==========================================
-            // If viewing a Yahoo league, key the player database by Yahoo ID 
+            // Force Yahoo IDs into the primary dictionary key if the user is viewing a Yahoo League
             let primaryId = p.player_id;
-            if (isYahoo && p.yahoo_id) {
-                primaryId = String(p.yahoo_id);
+            if (isYahoo) {
+                primaryId = String(p.yahoo_id || p.player_id);
             }
 
             const playerObj = {
@@ -119,6 +119,7 @@ export const loadPlayers = async (activeLeagueId) => {
                 posRank: 999999 
             };
 
+            // Link projections directly to the original sleeper ID
             if (projMap[p.player_id] !== undefined) {
                 playerObj.wi[week] = { 
                     p: projMap[p.player_id].p,
@@ -143,12 +144,12 @@ export const loadPlayers = async (activeLeagueId) => {
         });
         
         try {
-            localStorage.setItem(`playersInfo_v7_${currentId}`, JSON.stringify(data));
-            localStorage.setItem(`expiration_v7_${currentId}`, (now + (24 * 3600)).toString());
+            localStorage.setItem(`playersInfo_v8_${currentId}`, JSON.stringify(data));
+            localStorage.setItem(`expiration_v8_${currentId}`, (now + (24 * 3600)).toString());
         } catch (storageError) {
             localStorage.clear();
-            localStorage.setItem(`playersInfo_v7_${currentId}`, JSON.stringify(data));
-            localStorage.setItem(`expiration_v7_${currentId}`, (now + (24 * 3600)).toString());
+            localStorage.setItem(`playersInfo_v8_${currentId}`, JSON.stringify(data));
+            localStorage.setItem(`expiration_v8_${currentId}`, (now + (24 * 3600)).toString());
         }
 
         return { players: data, stale: false };

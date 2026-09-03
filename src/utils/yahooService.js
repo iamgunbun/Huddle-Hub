@@ -5,7 +5,6 @@ export const cleanYahooKey = (rawId) => {
     let str = String(rawId).trim();
     if (/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(str)) return null;
     
-    // Automatically correct the number '1' to lowercase 'l'
     str = str.replace(/\.1\./g, '.l.');
     
     if (str.includes('.l.')) return str;
@@ -72,32 +71,25 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
     }
 };
 
-// 2. ROSTERS & STANDINGS (Dual-Fetch Merge with ;out=roster)
+// 2. ROSTERS & STANDINGS (Parallel Fetch)
 export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = null) => {
     const cleanKey = cleanYahooKey(leagueId);
     const userId = await getUserId(passedUserId);
     if (!cleanKey || !userId) return { rosters: {}, startersAndReserve: [] };
 
     try {
-        const [standingsRes, teamsRes] = await Promise.all([
-            fetch('/api/yahoo-proxy', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId, endpoint: `league/${cleanKey}/standings` })
-            }).catch(() => null),
-            fetch('/api/yahoo-proxy', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId, endpoint: `league/${cleanKey}/teams;out=roster` })
-            }).catch(() => null)
-        ]);
+        // Step 1: Fetch Standings to map records and get team keys
+        const standingsRes = await fetch('/api/yahoo-proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, endpoint: `league/${cleanKey}/standings` })
+        }).catch(() => null);
 
         const sData = standingsRes?.ok ? await standingsRes.json() : {};
-        const rData = teamsRes?.ok ? await teamsRes.json() : {};
-
         const standingsMap = {};
-        const stLeagueObj = sData?.fantasy_content?.league;
+        const teamKeys = [];
         
+        const stLeagueObj = sData?.fantasy_content?.league;
         if (Array.isArray(stLeagueObj)) {
             const stWrapper = stLeagueObj.find(x => x && x.standings);
             const stTeams = stWrapper?.standings?.[0]?.teams;
@@ -109,11 +101,21 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
                     
                     const tmInfo = tm[0];
                     const tmStats = tm[1]?.team_standings;
-                    const tId = parseInt(tmInfo?.find(x => x.team_id)?.team_id);
+                    
+                    let tKey = '';
+                    let tId = null;
+
+                    if (Array.isArray(tmInfo)) {
+                        tKey = tmInfo.find(x => x.team_key)?.team_key;
+                        tId = parseInt(tmInfo.find(x => x.team_id)?.team_id);
+                    }
+
+                    if (tKey) teamKeys.push(tKey);
                     
                     if (tId && tmStats) {
                         const totals = tmStats.outcome_totals || {};
-                        standingsMap[tId] = {
+                        standingsMap[tKey] = {
+                            roster_id: tId,
                             wins: parseInt(totals.wins) || 0,
                             losses: parseInt(totals.losses) || 0,
                             ties: parseInt(totals.ties) || 0,
@@ -126,41 +128,41 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
             }
         }
 
+        // Step 2: Fetch every team's roster explicitly in parallel to avoid 400 Bad Request
+        const teamPromises = teamKeys.map(tKey => 
+            fetch('/api/yahoo-proxy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, endpoint: `team/${tKey}/roster` })
+            }).then(res => res.ok ? res.json() : null)
+        );
+
+        const teamsDataArray = await Promise.all(teamPromises);
+
         const rosterMap = {};
         const startersAndReserve = [];
-        
-        let teamsData = null;
-        const rLeagueObj = rData?.fantasy_content?.league;
-        if (Array.isArray(rLeagueObj)) {
-            const teamsWrapper = rLeagueObj.find(x => x && x.teams);
-            teamsData = teamsWrapper?.teams;
-        }
 
-        if (!teamsData) return { rosters: {}, startersAndReserve: [] };
-
-        Object.keys(teamsData).forEach(k => {
-            if (k === 'count') return;
-            const teamWrapper = teamsData[k]?.team;
+        teamsDataArray.forEach(tData => {
+            if (!tData) return;
+            const teamWrapper = tData?.fantasy_content?.team;
             if (!Array.isArray(teamWrapper)) return;
 
             const teamInfoArray = teamWrapper[0];
             if (!Array.isArray(teamInfoArray)) return;
 
-            const teamKey = teamInfoArray.find(x => x.team_key)?.team_key || `team_${k}`;
-            const teamId = parseInt(teamInfoArray.find(x => x.team_id)?.team_id) || (parseInt(k) + 1);
+            const teamKey = teamInfoArray.find(x => x.team_key)?.team_key;
+            if (!teamKey) return;
+
+            const teamId = parseInt(teamInfoArray.find(x => x.team_id)?.team_id);
             const teamName = teamInfoArray.find(x => x.name)?.name || `Team ${teamId}`;
             
             let teamLogo = '/brand.png';
             const logosArr = teamInfoArray.find(x => x.team_logos)?.team_logos;
-            if (Array.isArray(logosArr) && logosArr[0]?.team_logo?.url) {
-                teamLogo = logosArr[0].team_logo.url;
-            }
+            if (Array.isArray(logosArr) && logosArr[0]?.team_logo?.url) teamLogo = logosArr[0].team_logo.url;
 
             let primaryManager = teamName;
             const managersArr = teamInfoArray.find(x => x.managers)?.managers;
-            if (Array.isArray(managersArr) && managersArr[0]?.manager?.nickname) {
-                primaryManager = managersArr[0].manager.nickname;
-            }
+            if (Array.isArray(managersArr) && managersArr[0]?.manager?.nickname) primaryManager = managersArr[0].manager.nickname;
 
             const playersArr = [];
             const startersArr = [];
@@ -195,7 +197,7 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
                 }
             }
 
-            const sMap = standingsMap[teamId] || {};
+            const sMap = standingsMap[teamKey] || {};
             const fpts = sMap.fpts || 0;
             const fptsAgainst = sMap.fpts_against || 0;
 
@@ -240,7 +242,7 @@ export const fetchAndNormalizeYahooMatchups = async (leagueId, week = 1, passedU
         const response = await fetch('/api/yahoo-proxy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId, endpoint: `league/${cleanKey}/scoreboard;type=week;week=${safeWeek}` })
+            body: JSON.stringify({ userId, endpoint: `league/${cleanKey}/scoreboard;week=${safeWeek}` })
         });
 
         if (!response.ok) return { matchups: {}, week: safeWeek };
