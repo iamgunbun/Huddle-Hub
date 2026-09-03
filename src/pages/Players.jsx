@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useLeague } from '../context/LeagueContext';
 import { loadPlayers, getLeagueData, getLeagueRosters } from '../utils/helper';
 import PlayerModal from '../components/PlayerModal';
+import { scoreStatLine } from '../utils/yahooScoring';
 import styles from './Players.module.css';
 
 export default function Players() {
@@ -146,15 +147,11 @@ export default function Players() {
         if (proj) {
             const stats = proj.stats || proj || {};
             const scoringSettings = leagueData?.scoring_settings || {};
-            let customPts = 0;
-            let hasValidStats = false;
-            for (const [statKey, statMultiplier] of Object.entries(scoringSettings)) {
-                if (stats[statKey] !== undefined && typeof stats[statKey] === 'number') {
-                    customPts += (stats[statKey] * statMultiplier);
-                    hasValidStats = true;
-                }
-            }
-            if (hasValidStats && customPts > 0) return customPts.toFixed(2);
+            const playerPos = (playersInfo[pId] || playersInfo[String(pId)])?.pos;
+            // Score against the league's own rules (defense tiers, kicker FG
+            // distances); null means the line carried none of the scored stats.
+            const scored = scoreStatLine(stats, scoringSettings, playerPos);
+            if (scored !== null) return scored.toFixed(2);
             
             const rec = scoringSettings.rec || 0;
             let key = 'pts_std';
