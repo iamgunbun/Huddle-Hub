@@ -68,18 +68,27 @@ export default function Rosters() {
                 setStandings(sData?.standingsInfo || {});
                 
                 if (lData?.display_week) setActiveWeek(lData.display_week);
-                                 
-                const { data: sessionData } = await supabase.auth.getSession();
-                if (sessionData?.session?.user && activeLeague?.id) {
-                    const { data: ulData } = await supabase.from('user_leagues').select('team_name').eq('user_id', sessionData.session.user.id).eq('league_id', activeLeague.id).single();
-                    const searchName = normalizeStr(ulData?.team_name);
-                    
-                    if (searchName && searchName !== normalizeStr('commissioner team')) {
-                        const rostersMap = tmData.teamManagersMap[tmData.currentSeason] || {};
-                        let foundRosterId = Object.keys(rostersMap).find(rId => normalizeStr(rostersMap[rId].team?.name) === searchName);
-                        if (foundRosterId) setMyRosterId(foundRosterId);
-                        else setViewMode('all'); 
-                    } else setViewMode('all');
+
+                if (isYahooLeagueId(activeLeague.sleeper_league_id)) {
+                    // Yahoo flags the requesting user's own team directly -- this is
+                    // reliable regardless of what (if anything) got stored as the
+                    // connection's team_name, unlike the string-matching path below.
+                    const ownedRoster = Object.values(rData.rosters || {}).find(r => r.is_owned_by_current_login);
+                    if (ownedRoster) setMyRosterId(ownedRoster.roster_id);
+                    else setViewMode('all');
+                } else {
+                    const { data: sessionData } = await supabase.auth.getSession();
+                    if (sessionData?.session?.user && activeLeague?.id) {
+                        const { data: ulData } = await supabase.from('user_leagues').select('team_name').eq('user_id', sessionData.session.user.id).eq('league_id', activeLeague.id).single();
+                        const searchName = normalizeStr(ulData?.team_name);
+
+                        if (searchName && searchName !== normalizeStr('commissioner team')) {
+                            const rostersMap = tmData.teamManagersMap[tmData.currentSeason] || {};
+                            let foundRosterId = Object.keys(rostersMap).find(rId => normalizeStr(rostersMap[rId].team?.name) === searchName);
+                            if (foundRosterId) setMyRosterId(foundRosterId);
+                            else setViewMode('all');
+                        } else setViewMode('all');
+                    }
                 }
             } catch (e) { console.error(e); } finally { if (isMounted) setLoading(false); }
         };

@@ -242,6 +242,11 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
             const managersArr = teamInfoArray.find(x => x.managers)?.managers;
             if (Array.isArray(managersArr) && managersArr[0]?.manager?.nickname) primaryManager = managersArr[0].manager.nickname;
 
+            // Yahoo flags the requesting user's own team directly -- far more
+            // reliable than matching a stored team name string, which can be
+            // stale or (for older connections) never captured correctly at all.
+            const isOwnedByCurrentLogin = Number(teamInfoArray.find(x => x.is_owned_by_current_login)?.is_owned_by_current_login) === 1;
+
             const playersArr = [];
             const startersArr = [];
             
@@ -288,6 +293,7 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
                 players: playersArr,
                 starters: startersArr,
                 reserve: [],
+                is_owned_by_current_login: isOwnedByCurrentLogin,
                 settings: {
                     wins: sMap.wins || 0,
                     losses: sMap.losses || 0,
