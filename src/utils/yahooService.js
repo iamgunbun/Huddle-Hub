@@ -7,6 +7,8 @@ import {
     buildYahooDraftBoard,
     parseYahooUserLeagueKeys,
     isKeyInUserLeagues,
+    assignManagerIdentities,
+    yahooText,
     yahooCollection,
 } from './yahooHistory';
 
@@ -260,12 +262,16 @@ const standingsRowToRoster = (row, overrides = {}) => {
     const fptsAgainst = sMap.pointsAgainst || 0;
     const rosterId = overrides.rosterId ?? sMap.rosterId;
     const teamKey = overrides.teamKey ?? sMap.teamKey;
-    const managerGuids = (sMap.managerGuids?.length ? sMap.managerGuids : overrides.managerGuids) || [];
+    // Identity is decided for the season as a whole (see assignManagerIdentities)
+    // so it can be rejected if it doesn't actually tell the teams apart.
+    const managerIds = (overrides.managerIds?.length ? overrides.managerIds : null)
+        || (sMap.managerGuids?.length ? sMap.managerGuids : [])
+        || [];
 
     return {
         roster_id: rosterId,
-        owner_id: managerGuids[0] || teamKey,
-        co_owners: managerGuids.slice(1),
+        owner_id: yahooText(managerIds[0]) || teamKey || `team-${rosterId}`,
+        co_owners: managerIds.slice(1).map(yahooText).filter(Boolean),
         team_key: teamKey || null,
         team_name: overrides.teamName ?? sMap.teamName ?? `Team ${rosterId}`,
         avatar: overrides.teamLogo ?? sMap.logoUrl ?? '/brand.png',
@@ -298,12 +304,27 @@ const standingsRowToRoster = (row, overrides = {}) => {
 // answers everything the history pages ask for in a single call.
 export const fetchYahooSeasonTeams = async (leagueId, passedUserId = null) => {
     const rows = await fetchYahooStandings(leagueId, passedUserId);
+    const identities = assignManagerIdentities(rows);
+    warnIfIdentityDegraded(leagueId, identities);
+
     const rosters = {};
     rows.forEach(row => {
         if (row.rosterId === null || row.rosterId === undefined) return;
-        rosters[row.rosterId] = standingsRowToRoster(row);
+        rosters[row.rosterId] = standingsRowToRoster(row, {
+            managerIds: identities.byRosterId.get(row.rosterId),
+        });
     });
     return { rosters, startersAndReserve: [], yahooPlayersMeta: {} };
+};
+
+// Cross-season records only work when managers are identified by something
+// stable, so it's worth saying out loud when they aren't.
+const warnIfIdentityDegraded = (leagueId, identities) => {
+    if (identities.source === 'guid' || !identities.byRosterId.size) return;
+    console.warn(
+        `Yahoo league ${leagueId}: managers identified by ${identities.source} rather than guid. ` +
+        `Records still work within each season, but the same person may not be recognised across seasons.`
+    );
 };
 
 // 2. ROSTERS & STANDINGS (Parallel Fetch)
@@ -322,6 +343,9 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
         ) || {};
 
         const standingsRows = parseYahooStandings(sData);
+        const identities = assignManagerIdentities(standingsRows);
+        warnIfIdentityDegraded(cleanKey, identities);
+
         const standingsMap = {};
         const teamKeys = [];
 
@@ -391,7 +415,8 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
 
             let primaryManager = teamName;
             const managersArr = teamInfoArray.find(x => x.managers)?.managers;
-            if (Array.isArray(managersArr) && managersArr[0]?.manager?.nickname) primaryManager = managersArr[0].manager.nickname;
+            const nickname = yahooText(managersArr?.[0]?.manager?.nickname);
+            if (nickname) primaryManager = nickname;
 
             // Yahoo flags the requesting user's own team directly -- far more
             // reliable than matching a stored team name string, which can be
@@ -446,8 +471,12 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
                 }
             }
 
+            // Same identity the standings resolved. Falling back to this team's
+            // own guids only when standings had nothing for it -- and only
+            // real strings, since an empty Yahoo element arrives as {} and would
+            // otherwise become the identity "[object Object]" for every team.
             const rosterManagerGuids = yahooCollection(teamInfoArray.find(x => x.managers)?.managers)
-                .map(m => m?.manager?.guid)
+                .map(m => yahooText(m?.manager?.guid))
                 .filter(Boolean);
 
             rosterMap[teamId] = {
@@ -458,7 +487,7 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
                     teamLogo,
                     managerName: primaryManager,
                     isOwnedByCurrentLogin,
-                    managerGuids: rosterManagerGuids,
+                    managerIds: identities.byRosterId.get(teamId) || rosterManagerGuids,
                 }),
                 players: playersArr,
                 starters: startersArr,

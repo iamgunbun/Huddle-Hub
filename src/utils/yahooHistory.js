@@ -50,6 +50,25 @@ const num = (value, fallback = 0) => {
     return Number.isFinite(n) ? n : fallback;
 };
 
+/**
+ * A usable string, or null.
+ *
+ * Yahoo's JSON is converted from XML, and an EMPTY element comes across as an
+ * empty OBJECT rather than an empty string or null: `<guid/>` becomes `{}`.
+ * `{}` is truthy, so a plain truthiness check happily accepts it -- and an
+ * object used as an identity collapses to the key "[object Object]", which is
+ * the SAME for every team. That is how ten teams end up sharing one manager and
+ * one set of all-time records.
+ */
+export const yahooText = (value) => {
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        return trimmed ? trimmed : null;
+    }
+    if (typeof value === 'number') return String(value);
+    return null;
+};
+
 // --------------------------------------------------------------------------
 // Standings
 // --------------------------------------------------------------------------
@@ -78,7 +97,7 @@ export const parseYahooStandings = (data) => {
         if (!team) return;
 
         const info = Array.isArray(team) ? team[0] : team;
-        const teamKey = yahooField(info, 'team_key');
+        const teamKey = yahooText(yahooField(info, 'team_key'));
         const teamId = parseInt(yahooField(info, 'team_id'));
         if (!teamKey && !Number.isFinite(teamId)) return;
 
@@ -97,11 +116,12 @@ export const parseYahooStandings = (data) => {
         rows.push({
             rosterId: Number.isFinite(teamId) ? teamId : null,
             teamKey: teamKey || null,
-            teamName: yahooField(info, 'name') || (Number.isFinite(teamId) ? `Team ${teamId}` : 'Team'),
-            logoUrl: logoUrl || null,
+            teamName: yahooText(yahooField(info, 'name')) || (Number.isFinite(teamId) ? `Team ${teamId}` : 'Team'),
+            logoUrl: yahooText(logoUrl),
             // guid is Yahoo's stable per-user id; nickname is only a display name.
-            managerGuids: managers.map(m => m.guid).filter(Boolean),
-            managerName: managers[0]?.nickname || null,
+            managerGuids: managers.map(m => yahooText(m.guid)).filter(Boolean),
+            managerNicknames: managers.map(m => yahooText(m.nickname)).filter(Boolean),
+            managerName: yahooText(managers[0]?.nickname),
             isOwnedByCurrentLogin: Number(yahooField(info, 'is_owned_by_current_login')) === 1,
             rank: standingsNode?.rank !== undefined ? parseInt(standingsNode.rank) : null,
             playoffSeed: standingsNode?.playoff_seed !== undefined ? parseInt(standingsNode.playoff_seed) : null,
@@ -166,6 +186,52 @@ const buildDivisionWinners = (ranked) => {
         if (!current) best.set(r.divisionId, { name: `Division ${r.divisionId}`, rosterID: r.rosterId, wins: r.wins, points: r.pointsFor });
     });
     return [...best.values()];
+};
+
+/**
+ * Decides what identifies a manager across seasons, for one season's teams.
+ *
+ * The guid is the right answer when Yahoo supplies it -- it's the only id
+ * that's stable from season to season. But it isn't always supplied, and a
+ * missing one arrives as an empty element, so a scheme has to be checked
+ * before it's trusted rather than assumed to work.
+ *
+ * The check is simply that distinct teams get distinct ids. An identity that
+ * collapses is far worse than a crude one: every team's record lands in one
+ * bucket, so the league's entire win AND loss totals get attributed to a single
+ * manager and everyone inherits the champion's trophies. Falling back to the
+ * team key instead only costs cross-season continuity -- each season's managers
+ * stand alone, which is visibly incomplete rather than quietly wrong.
+ */
+export const assignManagerIdentities = (rows) => {
+    const teams = (rows || []).filter(r => r && (r.rosterId !== null && r.rosterId !== undefined));
+    if (!teams.length) return { source: 'team_key', byRosterId: new Map() };
+
+    const schemes = [
+        { source: 'guid', idsFor: (r) => r.managerGuids || [] },
+        { source: 'nickname', idsFor: (r) => (r.managerNicknames || []).filter(n => n.toLowerCase() !== '--hidden--') },
+        { source: 'team_key', idsFor: (r) => (r.teamKey ? [r.teamKey] : []) },
+    ];
+
+    for (const scheme of schemes) {
+        const candidate = teams.map(r => ({ rosterId: r.rosterId, ids: scheme.idsFor(r).map(String).filter(Boolean) }));
+
+        // Every team needs an id, and no two teams may share their primary one.
+        if (candidate.some(c => !c.ids.length)) continue;
+        const primaries = candidate.map(c => c.ids[0]);
+        if (new Set(primaries).size !== primaries.length) continue;
+
+        return {
+            source: scheme.source,
+            byRosterId: new Map(candidate.map(c => [c.rosterId, c.ids])),
+        };
+    }
+
+    // Last resort: the roster id itself. Unique within a season by definition.
+    return {
+        source: 'roster_id',
+        byRosterId: new Map(teams.map(r => [r.rosterId, [`team-${r.rosterId}`]])),
+    };
 };
 
 /**
