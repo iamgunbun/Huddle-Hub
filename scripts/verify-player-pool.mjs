@@ -5,7 +5,7 @@
 // incomplete, rostered players are presented as free agents and nothing
 // about the page looks broken.
 
-import { buildOwnedIndex, isPlayerOwned, isRosterableNflPlayer } from '../src/utils/playerPool.js';
+import { buildOwnedIndex, isPlayerOwned, isRosterableNflPlayer, resolvePlayerFromMeta, playerNameKeyNoSuffix } from '../src/utils/playerPool.js';
 
 let pass = 0;
 let fail = 0;
@@ -90,6 +90,28 @@ eq('team defense is rosterable',
     isRosterableNflPlayer({ fn: 'San Francisco', ln: '', t: 'SF', active: true, status: 'Active' }), true);
 eq('injured but rostered player stays available',
     isRosterableNflPlayer({ fn: 'X', ln: 'Y', t: 'BUF', active: true, status: 'Injured Reserve' }), true);
+
+// --- Resolving a roster entry back to a dictionary record ---
+// Team defenses: Sleeper keys them by team abbreviation and gives them no
+// yahoo_id, so a Yahoo defense can only be matched on the team.
+const dictWithDef = {
+    SF: { fn: 'San Francisco', ln: '49ers', pos: 'DEF', t: 'SF', sleeper_id: 'SF' },
+    '99': { fn: 'Michael', ln: 'Pittman', pos: 'WR', t: 'IND', sleeper_id: '99', searchRank: 50 },
+};
+const byName = {
+    'san francisco 49ers': dictWithDef.SF,
+    'michael pittman': dictWithDef['99'],
+};
+eq('yahoo defense resolves via team abbreviation',
+    resolvePlayerFromMeta({ fn: 'San Francisco', ln: '', pos: 'DEF', t: 'SF' }, dictWithDef, byName)?.sleeper_id, 'SF');
+eq('name suffix mismatch still resolves',
+    resolvePlayerFromMeta({ fn: 'Michael', ln: 'Pittman Jr.', pos: 'WR', t: 'IND' }, dictWithDef, byName)?.sleeper_id, '99');
+eq('unknown player resolves to null',
+    resolvePlayerFromMeta({ fn: 'Nobody', ln: 'Here', pos: 'WR', t: 'KC' }, dictWithDef, byName), null);
+eq('suffix stripper keeps real two-part names',
+    playerNameKeyNoSuffix('Justin', 'Jefferson'), 'justin jefferson');
+eq('suffix stripper removes Jr',
+    playerNameKeyNoSuffix('Michael', 'Pittman Jr.'), 'michael pittman');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

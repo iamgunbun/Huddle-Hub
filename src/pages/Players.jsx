@@ -284,8 +284,21 @@ export default function Players() {
             });
         }
         
+        // One line that says exactly how availability was decided, so a wrong
+        // pool can be diagnosed from the console instead of guessed at.
+        console.info('[Players] availability', {
+            league: activeLeague?.sleeper_league_id,
+            platform: isYahooLeague ? 'yahoo' : 'sleeper',
+            source: yahooAvailableIds ? 'yahoo status=A pool' : 'roster subtraction',
+            teamsLoaded: Object.keys(rosters || {}).length,
+            teamsExpected: leagueData?.total_rosters ?? null,
+            rosteredIdsIndexed: ownedIndex.ids.size,
+            yahooPoolSize: yahooAvailable?.length ?? null,
+            available: list.length,
+        });
+
         return list.sort((a, b) => b.projVal - a.projVal).slice(0, 100);
-    }, [playersInfo, rosters, yahooPlayersMeta, yahooAvailable, activeLeague, posFilter, searchQuery, weeklyProjections, weeklyStats, nflScheduleMap]);
+    }, [playersInfo, rosters, yahooPlayersMeta, yahooAvailable, activeLeague, leagueData, posFilter, searchQuery, weeklyProjections, weeklyStats, nflScheduleMap]);
 
     const renderPlayerRow = (pId, pObj = null, trendCount = null) => {
         const player = pObj || playersInfo[pId] || playersInfo[String(pId)];
