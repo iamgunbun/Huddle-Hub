@@ -423,3 +423,65 @@ export const fetchAndNormalizeYahooMatchups = async (leagueId, week = 1, passedU
         return { matchups: {}, week: safeWeek };
     }
 };
+
+// 4. AVAILABLE PLAYERS (league free agents + waivers)
+//
+// Yahoo tracks its own pool, so ask it rather than inferring availability by
+// subtracting rosters from a league-agnostic player database. status=A is
+// "available" (free agents and waivers). Pages are fetched sequentially --
+// bursts of parallel proxy calls are what produced intermittent 400s before.
+export const fetchYahooAvailablePlayers = async (leagueId, { maxPlayers = 200, passedUserId = null } = {}) => {
+    const cleanKey = cleanYahooKey(leagueId);
+    const userId = await getUserId(passedUserId);
+    if (!cleanKey || !userId) return null;
+
+    const PAGE = 25;
+    const players = [];
+
+    try {
+        for (let start = 0; start < maxPlayers; start += PAGE) {
+            const data = await yahooProxyRequest(
+                userId,
+                (key) => `league/${key}/players;status=A;sort=AR;start=${start};count=${PAGE}`,
+                cleanKey,
+                getNflAliasKey(cleanKey),
+                `available players ${start}-${start + PAGE}`
+            );
+            if (!data) break;
+
+            const leagueNode = data?.fantasy_content?.league;
+            const playersNode = Array.isArray(leagueNode)
+                ? leagueNode.find(x => x && x.players)?.players
+                : null;
+            if (!playersNode) break;
+
+            const before = players.length;
+            Object.keys(playersNode).forEach(k => {
+                if (k === 'count') return;
+                const meta = playersNode[k]?.player?.[0];
+                if (!Array.isArray(meta)) return;
+
+                const pId = meta.find(x => x?.player_id)?.player_id;
+                if (!pId) return;
+
+                const fullName = meta.find(x => x?.name)?.name?.full || '';
+                const [first, ...rest] = fullName.split(' ');
+                players.push({
+                    id: String(pId),
+                    fn: first || fullName,
+                    ln: rest.join(' '),
+                    pos: meta.find(x => x?.display_position)?.display_position || '',
+                    t: meta.find(x => x?.editorial_team_abbr)?.editorial_team_abbr?.toUpperCase() || 'FA',
+                });
+            });
+
+            // No new rows means we've reached the end of the pool.
+            if (players.length === before) break;
+        }
+    } catch (err) {
+        console.error("Yahoo available-players fetch failed:", err);
+        return players.length ? players : null;
+    }
+
+    return players.length ? players : null;
+};

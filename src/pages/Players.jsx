@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLeague } from '../context/LeagueContext';
 import { loadPlayers, getLeagueData, getLeagueRosters } from '../utils/helper';
-import { buildOwnedIndex, isPlayerOwned } from '../utils/playerPool';
+import { buildOwnedIndex, isPlayerOwned, isRosterableNflPlayer, playerNameKey } from '../utils/playerPool';
+import { fetchYahooAvailablePlayers } from '../utils/yahooService';
 import PlayerModal from '../components/PlayerModal';
 import { scoreStatLine } from '../utils/yahooScoring';
 import styles from './Players.module.css';
@@ -13,6 +14,8 @@ export default function Players() {
     const [leagueData, setLeagueData] = useState(null);
     const [rosters, setRosters] = useState({});
     const [yahooPlayersMeta, setYahooPlayersMeta] = useState({});
+    // Yahoo's own free-agent/waiver pool, when we can get it.
+    const [yahooAvailable, setYahooAvailable] = useState(null);
     
     // Live Data
     const [activeWeek, setActiveWeek] = useState(1);
@@ -58,6 +61,16 @@ export default function Players() {
                 setLeagueData(lData);
                 setRosters(rData.rosters || {});
                 setYahooPlayersMeta(rData.yahooPlayersMeta || {});
+
+                // For a Yahoo league, ask Yahoo who is actually available rather
+                // than inferring it. Falls back to roster subtraction below if
+                // this can't be fetched, so a failure degrades instead of
+                // emptying the page.
+                if (String(sleeperId).includes('.')) {
+                    fetchYahooAvailablePlayers(sleeperId)
+                        .then(list => { if (isMounted && list?.length) setYahooAvailable(list); })
+                        .catch(err => console.warn("Yahoo available-players lookup failed:", err));
+                }
                 if (lData?.display_week) setActiveWeek(lData.display_week);
                 
             } catch (e) {
@@ -204,14 +217,28 @@ export default function Players() {
     // presented as free agents -- so surface that instead of quietly lying.
     const expectedTeams = leagueData?.total_rosters || 0;
     const loadedTeams = Object.keys(rosters || {}).length;
-    const rosterPoolIncomplete = loadedTeams === 0 || (expectedTeams > 0 && loadedTeams < expectedTeams);
+    const rosterPoolIncomplete = !yahooAvailable
+        && (loadedTeams === 0 || (expectedTeams > 0 && loadedTeams < expectedTeams));
 
     const availablePlayers = useMemo(() => {
         if (!playersInfo || Object.keys(playersInfo).length === 0) return [];
         
-        // Matches on id, crosswalked sleeper_id and name, because roster entries
-        // and the player dictionary don't always agree on which id they used.
-        const ownedIndex = buildOwnedIndex(rosters, yahooPlayersMeta, playersInfo);
+        // Name matching only where ids genuinely can't be trusted to line up.
+        // A Yahoo league's rosters carry Yahoo ids while the dictionary falls back
+        // to Sleeper ids for uncrosswalked players, so names bridge that gap. On
+        // Sleeper both sides are Sleeper ids already, and adding names there can
+        // only hide a real free agent who shares a name with a rostered player.
+        const isYahooLeague = String(activeLeague?.sleeper_league_id || '').includes('.');
+        const ownedIndex = buildOwnedIndex(rosters, {
+            matchNames: isYahooLeague,
+            nameSources: [yahooPlayersMeta, playersInfo],
+        });
+
+        // When Yahoo told us its actual pool, that is the answer -- no inference.
+        const yahooAvailableIds = yahooAvailable ? new Set(yahooAvailable.map(p => String(p.id))) : null;
+        const yahooAvailableNames = yahooAvailable
+            ? new Set(yahooAvailable.map(p => playerNameKey(p.fn, p.ln)).filter(Boolean))
+            : null;
         
         const validPositions = new Set(['QB', 'RB', 'WR', 'TE', 'DEF', 'K']);
         let list = Object.entries(playersInfo).map(([id, p]) => {
@@ -231,10 +258,16 @@ export default function Players() {
                 projVal: parseFloat(getProjPts(pId)) || 0
             };
         }).filter(p => {
-            const isOwned = isPlayerOwned(p, ownedIndex);
             const isValidPos = validPositions.has(p.pos);
-            const isActive = p.active !== false && p.status !== 'Inactive';
-            return !isOwned && isValidPos && isActive;
+            // Must actually be on an NFL roster -- the dictionary carries every
+            // player Sleeper has ever known, including the long retired.
+            if (!isValidPos || !isRosterableNflPlayer(p)) return false;
+
+            if (yahooAvailableIds) {
+                return yahooAvailableIds.has(String(p.player_id))
+                    || yahooAvailableNames.has(playerNameKey(p.fn, p.ln));
+            }
+            return !isPlayerOwned(p, ownedIndex);
         });
 
         if (posFilter !== 'ALL') {
@@ -252,7 +285,7 @@ export default function Players() {
         }
         
         return list.sort((a, b) => b.projVal - a.projVal).slice(0, 100);
-    }, [playersInfo, rosters, yahooPlayersMeta, posFilter, searchQuery, weeklyProjections, weeklyStats, nflScheduleMap]);
+    }, [playersInfo, rosters, yahooPlayersMeta, yahooAvailable, activeLeague, posFilter, searchQuery, weeklyProjections, weeklyStats, nflScheduleMap]);
 
     const renderPlayerRow = (pId, pObj = null, trendCount = null) => {
         const player = pObj || playersInfo[pId] || playersInfo[String(pId)];
