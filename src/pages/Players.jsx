@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLeague } from '../context/LeagueContext';
-import { loadPlayers, getLeagueData, getLeagueRosters } from '../utils/helper';
+import { loadPlayers, getLeagueData, getLeagueRosters, getNflState } from '../utils/helper';
+import { resolveCurrentSeasonLeagueId } from '../utils/leagueSeason';
 import { buildOwnedIndex, isPlayerOwned, isRosterableNflPlayer, playerNameKey } from '../utils/playerPool';
 import { fetchYahooAvailablePlayers } from '../utils/yahooService';
 import PlayerModal from '../components/PlayerModal';
@@ -16,6 +17,8 @@ export default function Players() {
     const [yahooPlayersMeta, setYahooPlayersMeta] = useState({});
     // Yahoo's own free-agent/waiver pool, when we can get it.
     const [yahooAvailable, setYahooAvailable] = useState(null);
+    // Set when the connected Sleeper league id turns out to be a past season's.
+    const [staleSeason, setStaleSeason] = useState(null);
     
     // Live Data
     const [activeWeek, setActiveWeek] = useState(1);
@@ -66,6 +69,32 @@ export default function Players() {
                 // than inferring it. Falls back to roster subtraction below if
                 // this can't be fetched, so a failure degrades instead of
                 // emptying the page.
+                // A Sleeper league gets a new id every season, and the id captured
+                // at connect time keeps answering with that season's rosters. Follow
+                // it forward so availability is judged against the current roster.
+                if (!String(sleeperId).includes('.')) {
+                    const nflState = await getNflState().catch(() => null);
+                    const currentSeason = nflState?.season;
+                    const currentId = await resolveCurrentSeasonLeagueId({
+                        storedLeagueId: sleeperId,
+                        leagueSeason: lData?.season,
+                        currentSeason,
+                        rosters: rData.rosters,
+                    });
+                    if (currentId && isMounted) {
+                        console.info(`[Players] league ${sleeperId} is from ${lData?.season}; using current-season league ${currentId}`);
+                        const freshRosters = await getLeagueRosters(currentId);
+                        if (isMounted && Object.keys(freshRosters?.rosters || {}).length) {
+                            setRosters(freshRosters.rosters);
+                            setStaleSeason(null);
+                        }
+                    } else if (isMounted && currentSeason && lData?.season && String(lData.season) !== String(currentSeason)) {
+                        // Couldn't find the successor -- say so rather than quietly
+                        // judging availability against a past season.
+                        setStaleSeason({ league: lData.season, current: currentSeason });
+                    }
+                }
+
                 if (String(sleeperId).includes('.')) {
                     fetchYahooAvailablePlayers(sleeperId)
                         .then(list => { if (isMounted && list?.length) setYahooAvailable(list); })
@@ -376,6 +405,13 @@ export default function Players() {
                                 </button>
                             ))}
                         </div>
+                        {staleSeason && (
+                            <div className={styles.emptyState} style={{ marginBottom: '12px', color: '#eebf1c' }}>
+                                This league is connected to its {staleSeason.league} season, but the current season is
+                                {' '}{staleSeason.current}. Availability is being judged against {staleSeason.league} rosters.
+                                Reconnect the league to pick up the current season.
+                            </div>
+                        )}
                         {rosterPoolIncomplete && (
                             <div className={styles.emptyState} style={{ marginBottom: '12px', color: '#eebf1c' }}>
                                 Only {loadedTeams} of {expectedTeams || '?'} team rosters loaded, so this list may
