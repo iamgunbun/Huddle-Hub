@@ -6,19 +6,21 @@ import { scoreStatLine } from '../yahooScoring';
 // testable); re-exported here for the callers that already import it from this
 // module.
 export { playerNameKey } from '../playerPool';
-import { playerNameKey } from '../playerPool';
+import { playerNameKey, playerNameKeyNoSuffix } from '../playerPool';
 
 const buildNameIndex = (data) => {
     const byName = {};
     Object.values(data || {}).forEach(p => {
         if (!p) return;
-        const key = playerNameKey(p.fn, p.ln);
-        if (!key) return;
-        const existing = byName[key];
-        // On a name collision, keep the more prominent player (lower searchRank).
-        if (!existing || (p.searchRank || 999999) < (existing.searchRank || 999999)) {
-            byName[key] = p;
-        }
+        const rank = p.searchRank || 999999;
+        // Indexed under both the exact name and a suffix-free variant, since the
+        // platforms disagree about whether "Jr."/"III" is part of the name.
+        [playerNameKey(p.fn, p.ln), playerNameKeyNoSuffix(p.fn, p.ln)].forEach(key => {
+            if (!key) return;
+            const existing = byName[key];
+            // On a name collision, keep the more prominent player (lower searchRank).
+            if (!existing || rank < (existing.searchRank || 999999)) byName[key] = p;
+        });
     });
     return byName;
 };

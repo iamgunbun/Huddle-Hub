@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
 import { getLeagueRosters, getLeagueTeamManagers, loadPlayers, getLeagueData, getLeagueStandings } from '../utils/helper';
 import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
-import { playerNameKey } from '../utils/helperFunctions/players';
+import { resolvePlayerFromMeta } from '../utils/playerPool';
 import { scoreStatLine } from '../utils/yahooScoring';
 import { fetchAndNormalizeYahooMatchups } from '../utils/yahooService';
 import PlayerModal from '../components/PlayerModal';
@@ -54,9 +54,10 @@ export default function Rosters() {
         if (!yahooMeta) return null;
 
         // Yahoo gave us this player but Sleeper's yahoo_id crosswalk didn't map
-        // them, so match on name to recover the full record (projections, stats,
-        // sleeper_id) instead of falling back to a bare name with no points.
-        const matched = playersByName[playerNameKey(yahooMeta.fn, yahooMeta.ln)];
+        // them. Recover the full record (projections, stats, sleeper_id) via team
+        // abbreviation for defenses -- Sleeper keys those by team and gives them
+        // no yahoo_id -- and by name, suffix-tolerantly, for everyone else.
+        const matched = resolvePlayerFromMeta(yahooMeta, playersInfo, playersByName);
         if (matched) return { ...matched, headshot: yahooMeta.headshot || null };
 
         return yahooMeta;

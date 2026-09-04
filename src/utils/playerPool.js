@@ -23,6 +23,45 @@
 export const playerNameKey = (fn, ln) =>
     `${fn || ''} ${ln || ''}`.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
 
+// Generational suffixes are inconsistent between platforms -- Yahoo tends to
+// carry "Michael Pittman Jr." in the full name while Sleeper's last_name is
+// just "Pittman" -- so a suffix-free key is tried as a second pass.
+const NAME_SUFFIXES = new Set(['jr', 'sr', 'ii', 'iii', 'iv', 'v']);
+
+export const playerNameKeyNoSuffix = (fn, ln) => {
+    const parts = playerNameKey(fn, ln).split(' ').filter(Boolean);
+    while (parts.length > 2 && NAME_SUFFIXES.has(parts[parts.length - 1])) parts.pop();
+    return parts.join(' ');
+};
+
+/**
+ * Resolves a player the league's roster referred to, given whatever metadata the
+ * platform supplied alongside it, against the shared player dictionary.
+ *
+ * Team defenses are the case that needs special handling: Sleeper keys them by
+ * team abbreviation ("SF") and gives them no yahoo_id, so a Yahoo league's
+ * numeric defense id can never match by id, and the names don't line up either
+ * ("San Francisco" vs Sleeper's own wording). The team abbreviation is the one
+ * thing both platforms agree on.
+ */
+export const resolvePlayerFromMeta = (meta, playersInfo = {}, playersByName = {}) => {
+    if (!meta) return null;
+
+    const pos = String(meta.pos || '').toUpperCase();
+    const team = String(meta.t || meta.team || '').toUpperCase().trim();
+
+    if (pos.includes('DEF') || pos === 'DST') {
+        const byTeam = playersInfo[team];
+        if (byTeam) return byTeam;
+    }
+
+    const exact = playersByName[playerNameKey(meta.fn, meta.ln)];
+    if (exact) return exact;
+
+    const noSuffix = playerNameKeyNoSuffix(meta.fn, meta.ln);
+    return (noSuffix && playersByName[noSuffix]) || null;
+};
+
 export const NFL_TEAMS = new Set([
     'ARI', 'ATL', 'BAL', 'BUF', 'CAR', 'CHI', 'CIN', 'CLE', 'DAL', 'DEN', 'DET', 'GB',
     'HOU', 'IND', 'JAX', 'KC', 'LV', 'LAC', 'LAR', 'MIA', 'MIN', 'NE', 'NO', 'NYG',
