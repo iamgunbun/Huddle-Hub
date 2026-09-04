@@ -76,6 +76,20 @@ export default function Awards() {
         };
     };
 
+    // What span of seasons are these "all-time" numbers actually built from?
+    // Without this the totals are unfalsifiable: a figure that looks far too
+    // large for the league reads the same whether it's eleven real seasons or
+    // one season counted wrong.
+    const historySpan = useMemo(() => {
+        const years = Object.keys(teamManagers?.teamManagersMap || {})
+            .map(Number)
+            .filter(Number.isFinite)
+            .sort((a, b) => a - b);
+        if (!years.length) return null;
+        const span = years.length === 1 ? `${years[0]}` : `${years[0]}–${years[years.length - 1]}`;
+        return `${span} · ${years.length} season${years.length > 1 ? 's' : ''}`;
+    }, [teamManagers]);
+
     const calculatedRecords = useMemo(() => {
         let hScore = { val: 0, text: '-', sub: '-' };
         let mChamps = { val: 0, text: '-', sub: '-' };
@@ -264,6 +278,7 @@ export default function Awards() {
             {/* --- LEAGUE RECORDS --- */}
             <div className={styles.recordsSection}>
                 <h2 className={styles.wingTitle}>📜 League Records</h2>
+                {historySpan && <div className={styles.historySpan}>All-time across {historySpan}</div>}
                 
                 <div className={styles.recordsGrid}>
                     <div className={styles.recordCard}>

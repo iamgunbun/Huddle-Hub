@@ -192,6 +192,60 @@ export const isSameLeagueChain = (previous, successor) => {
     return true;
 };
 
+/**
+ * Every league key the logged-in Yahoo account belongs to, across all seasons,
+ * from `users;use_login=1/games;game_codes=nfl/leagues`.
+ *
+ * This is the authoritative answer to "is this season actually theirs?".
+ * Yahoo's renew pointers describe a league's lineage, not the user's -- a
+ * league can be eleven seasons old while the account joined last year, and
+ * nothing in the league response says so. Without this, history reaches back
+ * into seasons the user was never part of.
+ */
+export const parseYahooUserLeagueKeys = (data) => {
+    const keys = new Set();
+
+    yahooCollection(data?.fantasy_content?.users).forEach(userEntry => {
+        const user = userEntry?.user;
+        const gamesNode = findNode(user, 'games') || (Array.isArray(user) ? user.find(x => x?.games)?.games : null);
+
+        yahooCollection(gamesNode).forEach(gameEntry => {
+            const game = gameEntry?.game;
+            const leaguesNode = findNode(game, 'leagues');
+
+            yahooCollection(leaguesNode).forEach(leagueEntry => {
+                const league = leagueEntry?.league;
+                const key = yahooField(Array.isArray(league) ? league[0] : league, 'league_key');
+                if (key) keys.add(String(key));
+            });
+        });
+    });
+
+    return keys;
+};
+
+/**
+ * Does `leagueKey` name one of the user's own leagues?
+ *
+ * A stored key may be the "nfl.l.<id>" alias rather than a season-specific one,
+ * which is still this league -- Yahoo just resolves the game key at request
+ * time -- so the alias matches on the league id alone.
+ */
+export const isKeyInUserLeagues = (leagueKey, userLeagueKeys) => {
+    if (!leagueKey || !userLeagueKeys?.size) return false;
+
+    const key = String(leagueKey);
+    if (userLeagueKeys.has(key)) return true;
+
+    if (key.startsWith('nfl.l.')) {
+        const suffix = `.l.${key.slice('nfl.l.'.length)}`;
+        for (const known of userLeagueKeys) {
+            if (known.endsWith(suffix)) return true;
+        }
+    }
+    return false;
+};
+
 // --------------------------------------------------------------------------
 // Scoreboard / matchups
 // --------------------------------------------------------------------------

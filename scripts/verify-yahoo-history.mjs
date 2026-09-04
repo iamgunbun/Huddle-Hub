@@ -17,6 +17,8 @@ import {
     isSameLeagueChain,
     parseYahooDraftResults,
     buildYahooDraftBoard,
+    parseYahooUserLeagueKeys,
+    isKeyInUserLeagues,
 } from '../src/utils/yahooHistory.js';
 
 let pass = 0;
@@ -122,6 +124,48 @@ eq('a "previous" season that is not older is rejected',
 eq('a "previous" season from the future is rejected',
     isSameLeagueChain(season('461.l.777', 2026), season('461.l.123', 2025)), false);
 eq('a missing season is rejected', isSameLeagueChain(null, season('461.l.123', 2025)), false);
+
+// --- Which leagues does this account actually belong to? -----------------
+// A renew chain describes the LEAGUE's lineage, not the user's: an eleven-year
+// league whose account joined last year would otherwise report ten seasons of
+// "all-time" records the user was never part of.
+const userLeaguesPayload = {
+    fantasy_content: {
+        users: {
+            0: {
+                user: [
+                    { guid: 'MY-GUID' },
+                    {
+                        games: {
+                            0: { game: [{ game_key: '461', season: '2025' }, { leagues: {
+                                0: { league: [{ league_key: '461.l.123', name: 'This League' }] },
+                                count: 1,
+                            } }] },
+                            1: { game: [{ game_key: '449', season: '2024' }, { leagues: {
+                                0: { league: [{ league_key: '449.l.555', name: 'Another League' }] },
+                                count: 1,
+                            } }] },
+                            count: 2,
+                        },
+                    },
+                ],
+            },
+            count: 1,
+        },
+    },
+};
+
+const myLeagues = parseYahooUserLeagueKeys(userLeaguesPayload);
+eq('league keys collected across every season', myLeagues.size, 2);
+eq('this season\'s league is present', myLeagues.has('461.l.123'), true);
+eq('a season the user IS in is accepted', isKeyInUserLeagues('449.l.555', myLeagues), true);
+// The one that matters: a renew pointer at a season the user never played in.
+eq('a season the user is NOT in is rejected', isKeyInUserLeagues('423.l.999', myLeagues), false);
+// A stored id can be the alias form; that's still this league.
+eq('the nfl alias matches on league id', isKeyInUserLeagues('nfl.l.123', myLeagues), true);
+eq('the alias does not match an unrelated id', isKeyInUserLeagues('nfl.l.999', myLeagues), false);
+eq('an unknown list blocks nothing here', isKeyInUserLeagues('461.l.123', new Set()), false);
+eq('no leagues parsed from junk', parseYahooUserLeagueKeys({}).size, 0);
 
 // --- Scoreboard ----------------------------------------------------------
 const sbTeam = (id, points) => ({

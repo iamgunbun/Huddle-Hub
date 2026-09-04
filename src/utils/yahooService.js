@@ -1,6 +1,14 @@
 import { supabase } from '../supabaseClient';
 import { buildYahooScoringSettings } from './yahooScoring';
-import { parseYahooStandings, parseYahooScoreboard, parseYahooDraftResults, buildYahooDraftBoard, yahooCollection } from './yahooHistory';
+import {
+    parseYahooStandings,
+    parseYahooScoreboard,
+    parseYahooDraftResults,
+    buildYahooDraftBoard,
+    parseYahooUserLeagueKeys,
+    isKeyInUserLeagues,
+    yahooCollection,
+} from './yahooHistory';
 
 export const cleanYahooKey = (rawId) => {
     if (!rawId) return null;
@@ -74,6 +82,52 @@ const yahooProxyRequest = async (userId, endpointForKey, key, label) => {
     }
 };
 
+// Which leagues does this account actually belong to?
+//
+// A league's renew chain describes the LEAGUE's lineage, not the user's. A
+// league can be eleven seasons old while the account joined last year, and
+// nothing in the league response says which is which -- so following the chain
+// blindly builds "all-time" records out of seasons the user was never in, and
+// crowns champions they never played against. Yahoo will answer this directly:
+// game_codes=nfl (as opposed to game_keys=nfl, which is only the current
+// season) lists every NFL league the login has ever been part of.
+//
+// Fetched once per page load. If it can't be determined the walk is left alone
+// rather than blocked -- the league-key and renew-chain checks still apply.
+const userLeagueKeysByUser = new Map();
+
+const loadUserLeagueKeys = async (userId) => {
+    if (!userLeagueKeysByUser.has(userId)) {
+        userLeagueKeysByUser.set(userId, (async () => {
+            const data = await yahooProxyRequest(
+                userId,
+                () => 'users;use_login=1/games;game_codes=nfl/leagues',
+                'user-leagues',
+                'user league list'
+            );
+            if (!data) return null;
+            const keys = parseYahooUserLeagueKeys(data);
+            return keys.size ? keys : null;
+        })());
+    }
+    return userLeagueKeysByUser.get(userId);
+};
+
+/**
+ * True when this league key is one the account is a member of, OR when
+ * membership couldn't be established (in which case we don't block).
+ */
+const isUsersOwnLeague = async (leagueKey, userId) => {
+    try {
+        const keys = await loadUserLeagueKeys(userId);
+        if (!keys) return true;
+        return isKeyInUserLeagues(leagueKey, keys);
+    } catch (err) {
+        console.warn("Couldn't confirm which Yahoo leagues this account is in:", err);
+        return true;
+    }
+};
+
 // 1. LEAGUE INFO & SETTINGS
 export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null) => {
     const cleanKey = cleanYahooKey(leagueId);
@@ -81,6 +135,14 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
     if (!cleanKey || !userId) return null;
 
     try {
+        // A season the account was never part of isn't this user's history.
+        if (!(await isUsersOwnLeague(cleanKey, userId))) {
+            console.warn(
+                `Yahoo league "${cleanKey}" isn't one this account is a member of -- leaving it out of the league's history.`
+            );
+            return null;
+        }
+
         const data = await yahooProxyRequest(
             userId,
             (key) => `league/${key}/settings`,

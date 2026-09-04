@@ -112,13 +112,17 @@ export const getLeagueRecords = async (refresh = false, queryLeagueID = null) =>
     // of these two numbers being wrong -- too many seasons (a chain that
     // wandered into another league) or too few managers (everyone collapsing
     // into a single identity, which merges the whole league into one record).
-    const managerIds = Object.keys(regularSeason.leagueManagerRecords || {});
+    const managerRecords = regularSeason.leagueManagerRecords || {};
+    const managerIds = Object.keys(managerRecords);
     console.log('[League history]', {
         league: queryLeagueID,
         seasonsWalked: [...visitedSeasons],
         seasonCount: visitedSeasons.size,
         distinctManagers: managerIds.length,
-        managerIds,
+        // One manager holding the league's entire win AND loss total means every
+        // team collapsed into a single identity; a plausible spread across many
+        // managers means the season count is what to look at.
+        records: managerIds.map(id => `${id}: ${managerRecords[id].wins}-${managerRecords[id].losses}`),
     });
 
     playoffRecords.currentYear = regularSeason.currentYear;
