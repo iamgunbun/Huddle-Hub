@@ -2,11 +2,11 @@ import { leagueID as defaultLeagueID } from '../leagueInfo';
 import { getLeagueData } from './leagueData';
 import { scoreStatLine } from '../yahooScoring';
 
-// Normalized "first last" key, used to reconcile a player across platforms when
-// an ID crosswalk isn't available -- Yahoo rosters routinely include players
-// Sleeper's yahoo_id mapping doesn't cover, and those still need projections.
-export const playerNameKey = (fn, ln) =>
-    `${fn || ''} ${ln || ''}`.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+// Single definition lives in playerPool.js (dependency-free so it stays
+// testable); re-exported here for the callers that already import it from this
+// module.
+export { playerNameKey } from '../playerPool';
+import { playerNameKey } from '../playerPool';
 
 const buildNameIndex = (data) => {
     const byName = {};

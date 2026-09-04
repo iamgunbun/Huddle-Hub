@@ -8,7 +8,9 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "verify:scoring": "node scripts/verify-yahoo-scoring.mjs"
+    "verify:scoring": "node scripts/verify-yahoo-scoring.mjs",
+    "verify:pool": "node scripts/verify-player-pool.mjs",
+    "verify": "npm run verify:scoring && npm run verify:pool"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",
