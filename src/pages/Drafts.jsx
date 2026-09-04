@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useLeague } from '../context/LeagueContext';
-import { getLeagueTeamManagers, loadPlayers } from '../utils/helper';
+import { getLeagueTeamManagers, loadPlayers, getLeagueData } from '../utils/helper';
+import { fetchYahooDraft } from '../utils/yahooService';
+import { isSameLeagueChain } from '../utils/yahooHistory';
 import styles from './Drafts.module.css';
+
+const isYahooLeagueId = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
+const DEFAULT_PLAYER_IMG = 'https://sleepercdn.com/images/v2/icons/player_default.webp';
 
 export default function Drafts() {
     const { activeLeague } = useLeague();
@@ -18,11 +23,18 @@ export default function Drafts() {
         return map[pos] || '#64748b';
     };
 
-    // Safely handles defenses and transparent rookie PNGs by layering a fallback behind it
+    // Safely handles defenses and transparent rookie PNGs by layering a fallback behind it.
+    // In a Yahoo league the pick id is a YAHOO player id, which means nothing to
+    // Sleeper's image CDN -- the dictionary entry carries the crosswalked
+    // sleeper_id, and for a defense the team abbreviation is what names the logo.
     const getAvatar = (playerId, playerMeta) => {
-        if (!playerMeta) return `url(https://sleepercdn.com/images/v2/icons/player_default.webp)`;
-        if (playerMeta.pos === 'DEF') return `url(https://sleepercdn.com/images/team_logos/nfl/${playerId.toLowerCase()}.png)`;
-        return `url(https://sleepercdn.com/content/nfl/players/thumb/${playerId}.jpg), url(https://sleepercdn.com/images/v2/icons/player_default.webp)`;
+        if (!playerMeta) return `url(${DEFAULT_PLAYER_IMG})`;
+        if (playerMeta.pos === 'DEF') {
+            const team = String(playerMeta.t || playerMeta.sleeper_id || playerId || '').toLowerCase();
+            return `url(https://sleepercdn.com/images/team_logos/nfl/${team}.png), url(${DEFAULT_PLAYER_IMG})`;
+        }
+        const imageId = playerMeta.sleeper_id || playerId;
+        return `url(https://sleepercdn.com/content/nfl/players/thumb/${imageId}.jpg), url(${DEFAULT_PLAYER_IMG})`;
     };
 
     useEffect(() => {
@@ -39,6 +51,41 @@ export default function Drafts() {
 
                 let curId = activeLeague.sleeper_league_id;
                 let allDrafts = [];
+
+                if (isYahooLeagueId(curId)) {
+                    // Yahoo has no drafts-per-league listing: each season's league
+                    // key holds exactly one draft, so the season chain IS the list.
+                    const visited = new Set();
+                    const picksByDraft = {};
+                    let successor = null;
+
+                    while (curId && curId !== "0" && curId !== 0 && !visited.has(curId)) {
+                        visited.add(curId);
+                        const leagueData = await getLeagueData(curId);
+                        if (!leagueData) break;
+
+                        // Same guard the records and trophy-room walks use, so a
+                        // stray renew pointer can't show another league's draft.
+                        if (successor && !isSameLeagueChain(leagueData, successor)) break;
+                        successor = leagueData;
+
+                        const board = await fetchYahooDraft(curId, {
+                            season: leagueData.season,
+                            isAuction: !!leagueData.settings?.is_auction_draft,
+                        });
+                        if (board) {
+                            picksByDraft[board.draft_id] = board.picks;
+                            allDrafts.push(board);
+                        }
+
+                        curId = leagueData.previous_league_id;
+                    }
+
+                    setDraftsDataMap(picksByDraft);
+                    setDraftsList(allDrafts.sort((a, b) => b.season - a.season));
+                    return;
+                }
+
                 while (curId && curId !== "0" && curId !== 0) {
                     const res = await fetch(`https://api.sleeper.app/v1/league/${curId}/drafts`);
                     if (!res.ok) break;
@@ -57,8 +104,13 @@ export default function Drafts() {
 
     useEffect(() => {
         const fetchAllPicks = async () => {
+            // A Yahoo board arrives with its picks already attached, built from
+            // draftresults -- there's nothing further to fetch.
+            const sleeperDrafts = draftsList.filter(d => !d.picks);
+            if (!sleeperDrafts.length) return;
+
             const map = {};
-            await Promise.all(draftsList.map(async (d) => {
+            await Promise.all(sleeperDrafts.map(async (d) => {
                 const res = await fetch(`https://api.sleeper.app/v1/draft/${d.draft_id}/picks`);
                 if (res.ok) {
                     const picks = await res.json();

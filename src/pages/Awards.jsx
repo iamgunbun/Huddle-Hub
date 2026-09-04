@@ -45,8 +45,13 @@ export default function Awards() {
     }, [activeLeague]);
 
     const getTeamInfo = (rosterId, year) => {
-        if (!teamManagers || !teamManagers.teamManagersMap) return { name: 'Unknown', avatar: 'https://sleepercdn.com/images/v2/icons/player_default.webp' };
-        const yRosters = teamManagers.teamManagersMap[year] || teamManagers.teamManagersMap[teamManagers.currentSeason] || {};
+        if (!teamManagers || !teamManagers.teamManagersMap) return { name: 'Unknown', avatar: DEFAULT_AVATAR };
+        // Only ever the roster map for THAT year. This used to fall back to the
+        // current season, which silently credited whoever holds that roster id
+        // today -- and since both platforms reuse roster ids 1..N every season,
+        // a podium from a year we don't have loaded handed a championship to an
+        // unrelated manager. An unknown year has to read as unknown.
+        const yRosters = teamManagers.teamManagersMap[year] || {};
         const roster = yRosters[rosterId];
         if (roster && roster.team) {
             return {
@@ -55,7 +60,7 @@ export default function Awards() {
                 managerId: roster.managers?.[0]
             };
         }
-        return { name: `Team ${rosterId}`, avatar: 'https://sleepercdn.com/images/v2/icons/player_default.webp' };
+        return { name: `Team ${rosterId}`, avatar: DEFAULT_AVATAR };
     };
 
     const getUserInfo = (managerId) => {

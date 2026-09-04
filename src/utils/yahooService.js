@@ -1,6 +1,6 @@
 import { supabase } from '../supabaseClient';
 import { buildYahooScoringSettings } from './yahooScoring';
-import { parseYahooStandings, parseYahooScoreboard, yahooCollection } from './yahooHistory';
+import { parseYahooStandings, parseYahooScoreboard, parseYahooDraftResults, buildYahooDraftBoard, yahooCollection } from './yahooHistory';
 
 export const cleanYahooKey = (rawId) => {
     if (!rawId) return null;
@@ -38,47 +38,40 @@ const getUserId = async (explicitUserId) => {
 
 const DEFAULT_POSITIONS = ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF', 'BN', 'BN', 'BN', 'BN', 'BN', 'BN'];
 
-// The "nfl" literal is a Yahoo-supported alias for "whatever game key is
-// currently active" -- it can only ever resolve the CURRENT season, but it's
-// a useful fallback if a request built with the real (season-specific) game
-// key gets rejected for some account/scope reason we can't fully diagnose
-// from here. Only meaningful for a key that isn't already using the alias.
-const getNflAliasKey = (cleanKey) => {
-    if (!cleanKey || cleanKey.startsWith('nfl.l.')) return null;
-    const match = cleanKey.match(/(\d+)$/);
-    return match ? `nfl.l.${match[1]}` : null;
-};
-
 // Calls /api/yahoo-proxy for the given key, logging the real Yahoo error
-// (status + body) instead of silently swallowing it. If the primary key
-// fails and a fallback key is supplied, retries once with that key.
-const yahooProxyRequest = async (userId, endpointForKey, primaryKey, fallbackKey, label) => {
-    const attempt = async (key) => {
-        if (!key) return null;
-        try {
-            const res = await fetch('/api/yahoo-proxy', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId, endpoint: endpointForKey(key) })
-            });
-            if (!res.ok) {
-                const bodyText = await res.text().catch(() => '');
-                console.error(`Yahoo proxy [${label}] failed for key "${key}" (HTTP ${res.status}): ${bodyText}`);
-                return null;
-            }
-            return await res.json();
-        } catch (err) {
-            console.error(`Yahoo proxy [${label}] threw for key "${key}":`, err);
+// (status + body) instead of silently swallowing it.
+//
+// There used to be a retry here against Yahoo's "nfl" alias key (nfl.l.<id>)
+// whenever a request with the real season key failed. That alias means "the
+// league with this id IN THE CURRENT SEASON", and Yahoo mints a NEW league id
+// every season -- so for any past-season key the alias does not name this
+// league at all. It names whichever unrelated league happens to hold that id
+// this year, and because Yahoo serves public leagues to any authenticated
+// caller, it would happily return one. A past season the user can't read
+// (they joined the league later, say) therefore came back as a STRANGER'S
+// league, and the walk then followed that league's own renew chain: bogus
+// champions, and all-time records built out of other people's seasons.
+//
+// For a current-season key the alias resolves to the same league and adds
+// nothing; for a past-season key it is actively wrong. So it's gone.
+const yahooProxyRequest = async (userId, endpointForKey, key, label) => {
+    if (!key) return null;
+    try {
+        const res = await fetch('/api/yahoo-proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, endpoint: endpointForKey(key) })
+        });
+        if (!res.ok) {
+            const bodyText = await res.text().catch(() => '');
+            console.error(`Yahoo proxy [${label}] failed for key "${key}" (HTTP ${res.status}): ${bodyText}`);
             return null;
         }
-    };
-
-    let data = await attempt(primaryKey);
-    if (!data && fallbackKey && fallbackKey !== primaryKey) {
-        console.warn(`Yahoo proxy [${label}] retrying with fallback key "${fallbackKey}" after "${primaryKey}" failed.`);
-        data = await attempt(fallbackKey);
+        return await res.json();
+    } catch (err) {
+        console.error(`Yahoo proxy [${label}] threw for key "${key}":`, err);
+        return null;
     }
-    return data;
 };
 
 // 1. LEAGUE INFO & SETTINGS
@@ -92,7 +85,6 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
             userId,
             (key) => `league/${key}/settings`,
             cleanKey,
-            getNflAliasKey(cleanKey),
             'league settings'
         );
         if (!data) return null;
@@ -102,6 +94,25 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
 
         if (!leagueData) return null;
 
+        // Never ingest a league we didn't ask for. Walking a season chain means
+        // requesting keys derived from Yahoo's own "renew" pointers, and a
+        // wrong or stale pointer would otherwise splice another league's teams,
+        // champions and records into this league's history without a trace.
+        // The one legitimate mismatch is the "nfl" alias form, which Yahoo
+        // resolves to the current season's real game key.
+        const returnedKey = leagueData.league_key;
+        if (returnedKey && returnedKey !== cleanKey) {
+            const aliasedToSameLeague = cleanKey.startsWith('nfl.l.')
+                && returnedKey.endsWith(`.l.${cleanKey.slice('nfl.l.'.length)}`);
+            if (!aliasedToSameLeague) {
+                console.warn(
+                    `Yahoo returned league "${returnedKey}" for a request for "${cleanKey}" -- ignoring it ` +
+                    `rather than mixing another league's history into this one.`
+                );
+                return null;
+            }
+        }
+
         const season = leagueData.season || new Date().getFullYear().toString();
         const totalRosters = parseInt(leagueData.num_teams) || 10;
         const playoffWeekStart = settingsData?.playoff_start_week ? parseInt(settingsData.playoff_start_week) : 15;
@@ -110,12 +121,19 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
         // weeks of postseason to ask for instead of guessing three rounds.
         const startWeek = parseInt(leagueData.start_week) || 1;
         const endWeek = parseInt(leagueData.end_week) || (playoffWeekStart + 2);
+        // An auction draft has costs instead of a pick order, so the draft board
+        // has to be laid out differently.
+        const isAuctionDraft = Number(settingsData?.is_auction_draft) === 1;
 
         // Yahoo tracks cross-season lineage via "renew" (points at the prior
         // season's league in "<game_key>_<league_id>" form). Mirroring Sleeper's
         // previous_league_id lets every history-walking loop in the app (records,
         // team managers, rivalry, drafts, etc.) traverse Yahoo leagues the same way.
         const previousLeagueId = leagueData.renew ? cleanYahooKey(leagueData.renew) : null;
+        // Yahoo's forward pointer. A previous season should name THIS league as
+        // what it was renewed into; when it doesn't, the chain has wandered
+        // somewhere it shouldn't and the walk stops.
+        const renewedLeagueId = leagueData.renewed ? cleanYahooKey(leagueData.renewed) : null;
         // Built from Yahoo's own stat_categories + stat_modifiers, so the league's
         // exact scoring (including kicker and defense categories) carries over.
         const scoringSettings = buildYahooScoringSettings(settingsData);
@@ -137,9 +155,11 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
             sleeper_league_id: cleanKey,
             id: cleanKey,
             previous_league_id: previousLeagueId,
+            renewed_league_id: renewedLeagueId,
             name: leagueData.name || `Yahoo League ${cleanKey}`,
             season: season,
             status: leagueData.is_finished ? 'complete' : 'in_season',
+            draft_status: leagueData.draft_status || null,
             total_rosters: totalRosters,
             avatar: leagueData.logo_url || '/brand.png',
             platform: 'yahoo',
@@ -149,6 +169,7 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
                 playoff_week_start: playoffWeekStart,
                 start_week: startWeek,
                 end_week: endWeek,
+                is_auction_draft: isAuctionDraft,
                 divisions: 0,
                 playoff_teams: 6,
                 type: 0,
@@ -235,7 +256,6 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
             userId,
             (key) => `league/${key}/standings`,
             cleanKey,
-            getNflAliasKey(cleanKey),
             'league standings'
         ) || {};
 
@@ -405,7 +425,6 @@ export const fetchYahooStandings = async (leagueId, passedUserId = null) => {
             userId,
             (key) => `league/${key}/standings`,
             cleanKey,
-            getNflAliasKey(cleanKey),
             'league standings'
         );
         if (!data) return [];
@@ -446,7 +465,6 @@ export const fetchYahooScoreboardWeeks = async (leagueId, weeks, passedUserId = 
             userId,
             (key) => `league/${key}/scoreboard;week=${group.join(',')}`,
             cleanKey,
-            getNflAliasKey(cleanKey),
             `scoreboard weeks ${group[0]}-${group[group.length - 1]}`
         );
 
@@ -461,7 +479,6 @@ export const fetchYahooScoreboardWeeks = async (leagueId, weeks, passedUserId = 
                 userId,
                 (key) => `league/${key}/scoreboard;week=${week}`,
                 cleanKey,
-                getNflAliasKey(cleanKey),
                 `scoreboard week ${week}`
             );
             if (single) collected.push(...parseYahooScoreboard(single, week));
@@ -483,7 +500,6 @@ export const fetchAndNormalizeYahooMatchups = async (leagueId, week = 1, passedU
             userId,
             (key) => `league/${key}/scoreboard;week=${safeWeek}`,
             cleanKey,
-            getNflAliasKey(cleanKey),
             `scoreboard week ${safeWeek}`
         );
         if (!data) return { matchups: {}, week: safeWeek };
@@ -505,7 +521,36 @@ export const fetchAndNormalizeYahooMatchups = async (leagueId, week = 1, passedU
     }
 };
 
-// 5. AVAILABLE PLAYERS (league free agents + waivers)
+// 5. DRAFT RESULTS
+//
+// Yahoo returns a flat list of picks with no slot map and no draft order, so the
+// board is reconstructed from the picks themselves (see buildYahooDraftBoard).
+// Auction drafts come back with a cost per pick and no meaningful order.
+export const fetchYahooDraft = async (leagueId, { season = null, isAuction = false, passedUserId = null } = {}) => {
+    const cleanKey = cleanYahooKey(leagueId);
+    const userId = await getUserId(passedUserId);
+    if (!cleanKey || !userId) return null;
+
+    try {
+        const data = await yahooProxyRequest(
+            userId,
+            (key) => `league/${key}/draftresults`,
+            cleanKey,
+            'draft results'
+        );
+        if (!data) return null;
+
+        const picks = parseYahooDraftResults(data);
+        if (!picks.length) return null;
+
+        return buildYahooDraftBoard(picks, { leagueKey: cleanKey, season, isAuction });
+    } catch (err) {
+        console.error("Yahoo Draft Adapter Error:", err);
+        return null;
+    }
+};
+
+// 6. AVAILABLE PLAYERS (league free agents + waivers)
 //
 // Yahoo tracks its own pool, so ask it rather than inferring availability by
 // subtracting rosters from a league-agnostic player database. status=A is
@@ -525,7 +570,6 @@ export const fetchYahooAvailablePlayers = async (leagueId, { maxPlayers = 200, p
                 userId,
                 (key) => `league/${key}/players;status=A;sort=AR;start=${start};count=${PAGE}`,
                 cleanKey,
-                getNflAliasKey(cleanKey),
                 `available players ${start}-${start + PAGE}`
             );
             if (!data) break;

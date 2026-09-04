@@ -7,7 +7,7 @@ import { getManagers, round, sortHighAndLow } from './universalFunctions';
 import { Records } from '../dataClasses';
 import { getBrackets } from './leagueBrackets';
 import { fetchYahooScoreboardWeeks } from '../yahooService';
-import { groupPlayoffRounds } from '../yahooHistory';
+import { groupPlayoffRounds, isSameLeagueChain } from '../yahooHistory';
 
 const isYahooLeague = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
 
@@ -55,6 +55,7 @@ export const getLeagueRecords = async (refresh = false, queryLeagueID = null) =>
     let allPlayoffDiffs = [];
 
     const visitedSeasons = new Set();
+    let previousLeagueData = null;
 
     while (curSeason && curSeason !== 0 && curSeason !== "0" && !visitedSeasons.has(curSeason)) {
         visitedSeasons.add(curSeason);
@@ -70,6 +71,16 @@ export const getLeagueRecords = async (refresh = false, queryLeagueID = null) =>
         const [rosterRes, leagueData] = res || [null, null];
 
         if (!leagueData || !rosterRes) break;
+
+        // Guard the walk: a season that isn't genuinely this league's previous
+        // one would otherwise add another league's records to these totals.
+        if (previousLeagueData && !isSameLeagueChain(leagueData, previousLeagueData)) {
+            console.warn(
+                `Stopping the season walk at "${curSeason}": it isn't the season "${previousLeagueData.league_id}" was renewed from.`
+            );
+            break;
+        }
+        previousLeagueData = leagueData;
 
         const rosters = rosterRes?.rosters || {};
 
@@ -94,6 +105,21 @@ export const getLeagueRecords = async (refresh = false, queryLeagueID = null) =>
         }
         curSeason = leagueData.previous_league_id || 0;
     }
+
+    // One line that makes a wrong history diagnosable instead of guessable:
+    // which seasons were actually walked, and how many distinct managers came
+    // out of them. All-time totals that look far too big are almost always one
+    // of these two numbers being wrong -- too many seasons (a chain that
+    // wandered into another league) or too few managers (everyone collapsing
+    // into a single identity, which merges the whole league into one record).
+    const managerIds = Object.keys(regularSeason.leagueManagerRecords || {});
+    console.log('[League history]', {
+        league: queryLeagueID,
+        seasonsWalked: [...visitedSeasons],
+        seasonCount: visitedSeasons.size,
+        distinctManagers: managerIds.length,
+        managerIds,
+    });
 
     playoffRecords.currentYear = regularSeason.currentYear;
     playoffRecords.lastYear = regularSeason.lastYear;

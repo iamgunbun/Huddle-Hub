@@ -2,7 +2,7 @@ import { getLeagueData } from './leagueData';
 import { getLeagueRosters } from './leagueRosters';
 import { waitForAll } from './multiPromise';
 import { fetchYahooStandings } from '../yahooService';
-import { buildPodiumFromStandings } from '../yahooHistory';
+import { buildPodiumFromStandings, isSameLeagueChain } from '../yahooHistory';
 
 const isYahooLeague = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
 
@@ -67,12 +67,20 @@ const getYahooPodiums = async (startingSeasonID) => {
     const podiums = [];
     let seasonID = startingSeasonID;
     const visited = new Set();
+    let successor = null;
 
     while (seasonID && seasonID !== 0 && seasonID !== "0" && !visited.has(seasonID)) {
         visited.add(seasonID);
 
         const seasonData = await getLeagueData(seasonID).catch((err) => { console.error(err); return null; });
         if (!seasonData) break;
+
+        // Same guard as the records walk: don't crown another league's champion.
+        if (successor && !isSameLeagueChain(seasonData, successor)) {
+            console.warn(`Stopping the trophy-room walk at "${seasonID}": it isn't "${successor.league_id}"'s previous season.`);
+            break;
+        }
+        successor = seasonData;
 
         if (seasonData.status === 'complete') {
             const standings = await fetchYahooStandings(seasonID).catch((err) => { console.error(err); return []; });
