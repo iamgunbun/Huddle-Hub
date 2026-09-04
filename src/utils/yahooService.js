@@ -37,6 +37,49 @@ const getUserId = async (explicitUserId) => {
 
 const DEFAULT_POSITIONS = ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF', 'BN', 'BN', 'BN', 'BN', 'BN', 'BN'];
 
+// The "nfl" literal is a Yahoo-supported alias for "whatever game key is
+// currently active" -- it can only ever resolve the CURRENT season, but it's
+// a useful fallback if a request built with the real (season-specific) game
+// key gets rejected for some account/scope reason we can't fully diagnose
+// from here. Only meaningful for a key that isn't already using the alias.
+const getNflAliasKey = (cleanKey) => {
+    if (!cleanKey || cleanKey.startsWith('nfl.l.')) return null;
+    const match = cleanKey.match(/(\d+)$/);
+    return match ? `nfl.l.${match[1]}` : null;
+};
+
+// Calls /api/yahoo-proxy for the given key, logging the real Yahoo error
+// (status + body) instead of silently swallowing it. If the primary key
+// fails and a fallback key is supplied, retries once with that key.
+const yahooProxyRequest = async (userId, endpointForKey, primaryKey, fallbackKey, label) => {
+    const attempt = async (key) => {
+        if (!key) return null;
+        try {
+            const res = await fetch('/api/yahoo-proxy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, endpoint: endpointForKey(key) })
+            });
+            if (!res.ok) {
+                const bodyText = await res.text().catch(() => '');
+                console.error(`Yahoo proxy [${label}] failed for key "${key}" (HTTP ${res.status}): ${bodyText}`);
+                return null;
+            }
+            return await res.json();
+        } catch (err) {
+            console.error(`Yahoo proxy [${label}] threw for key "${key}":`, err);
+            return null;
+        }
+    };
+
+    let data = await attempt(primaryKey);
+    if (!data && fallbackKey && fallbackKey !== primaryKey) {
+        console.warn(`Yahoo proxy [${label}] retrying with fallback key "${fallbackKey}" after "${primaryKey}" failed.`);
+        data = await attempt(fallbackKey);
+    }
+    return data;
+};
+
 // 1. LEAGUE INFO & SETTINGS
 export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null) => {
     const cleanKey = cleanYahooKey(leagueId);
