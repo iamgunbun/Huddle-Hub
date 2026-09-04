@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { buildYahooScoringSettings } from './yahooScoring';
 
 export const cleanYahooKey = (rawId) => {
     if (!rawId) return null;
@@ -36,92 +37,6 @@ const getUserId = async (explicitUserId) => {
 
 const DEFAULT_POSITIONS = ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF', 'BN', 'BN', 'BN', 'BN', 'BN', 'BN'];
 
-// Crosswalk from Yahoo's numeric stat_id (league scoring stat_modifiers) to the
-// stat key names Sleeper's projections/stats API uses -- letting the app's
-// existing points calculator (built around Sleeper's key names) work unchanged
-// against a Yahoo league's actual scoring rules instead of always assuming
-// standard/PPR defaults. Limited to core passing/rushing/receiving stats we
-// could verify against two independent sources; kicking/defense stat_ids are
-// intentionally left out rather than guessed, so those positions keep using
-// the existing fallback scoring instead of risking silently wrong numbers.
-const YAHOO_STAT_ID_TO_SLEEPER_KEY = {
-    4: 'pass_yd',
-    5: 'pass_td',
-    6: 'pass_int',
-    9: 'rush_yd',
-    10: 'rush_td',
-    11: 'rec',
-    12: 'rec_yd',
-    13: 'rec_td',
-    18: 'fum_lost',
-};
-
-const parseYahooScoringSettings = (settingsData) => {
-    const scoring = {};
-    const statsNode = settingsData?.stat_modifiers?.stats;
-    if (!statsNode) return scoring;
-
-    // Yahoo's collections show up either as a real array or as an object with
-    // numeric keys plus a "count" field -- handle both defensively.
-    const entries = Array.isArray(statsNode)
-        ? statsNode
-        : Object.keys(statsNode).filter(k => k !== 'count').map(k => statsNode[k]);
-
-    entries.forEach(entry => {
-        const stat = entry?.stat || entry;
-        if (!stat) return;
-        const key = YAHOO_STAT_ID_TO_SLEEPER_KEY[parseInt(stat.stat_id)];
-        if (!key) return;
-        const value = parseFloat(stat.value);
-        if (!isNaN(value)) scoring[key] = value;
-    });
-
-    return scoring;
-};
-
-// The "nfl" literal is a Yahoo-supported alias for "whatever game key is
-// currently active" -- it can only ever resolve the CURRENT season, but it's
-// a useful fallback if a request built with the real (season-specific) game
-// key gets rejected for some account/scope reason we can't fully diagnose
-// from here. Only meaningful for a key that isn't already using the alias.
-const getNflAliasKey = (cleanKey) => {
-    if (!cleanKey || cleanKey.startsWith('nfl.l.')) return null;
-    const match = cleanKey.match(/(\d+)$/);
-    return match ? `nfl.l.${match[1]}` : null;
-};
-
-// Calls /api/yahoo-proxy for the given key, logging the real Yahoo error
-// (status + body) instead of silently swallowing it. If the primary key
-// fails and a fallback key is supplied, retries once with that key.
-const yahooProxyRequest = async (userId, endpointForKey, primaryKey, fallbackKey, label) => {
-    const attempt = async (key) => {
-        if (!key) return null;
-        try {
-            const res = await fetch('/api/yahoo-proxy', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId, endpoint: endpointForKey(key) })
-            });
-            if (!res.ok) {
-                const bodyText = await res.text().catch(() => '');
-                console.error(`Yahoo proxy [${label}] failed for key "${key}" (HTTP ${res.status}): ${bodyText}`);
-                return null;
-            }
-            return await res.json();
-        } catch (err) {
-            console.error(`Yahoo proxy [${label}] threw for key "${key}":`, err);
-            return null;
-        }
-    };
-
-    let data = await attempt(primaryKey);
-    if (!data && fallbackKey && fallbackKey !== primaryKey) {
-        console.warn(`Yahoo proxy [${label}] retrying with fallback key "${fallbackKey}" after "${primaryKey}" failed.`);
-        data = await attempt(fallbackKey);
-    }
-    return data;
-};
-
 // 1. LEAGUE INFO & SETTINGS
 export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null) => {
     const cleanKey = cleanYahooKey(leagueId);
@@ -152,7 +67,9 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
         // previous_league_id lets every history-walking loop in the app (records,
         // team managers, rivalry, drafts, etc.) traverse Yahoo leagues the same way.
         const previousLeagueId = leagueData.renew ? cleanYahooKey(leagueData.renew) : null;
-        const scoringSettings = parseYahooScoringSettings(settingsData);
+        // Built from Yahoo's own stat_categories + stat_modifiers, so the league's
+        // exact scoring (including kicker and defense categories) carries over.
+        const scoringSettings = buildYahooScoringSettings(settingsData);
 
         return {
             league_id: cleanKey,

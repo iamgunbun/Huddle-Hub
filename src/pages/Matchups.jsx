@@ -4,6 +4,7 @@ import { useLeague } from '../context/LeagueContext';
 import { getLeagueRosters, getLeagueTeamManagers, loadPlayers, getLeagueData } from '../utils/helper';
 import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
 import { playerNameKey } from '../utils/helperFunctions/players';
+import { scoreStatLine } from '../utils/yahooScoring';
 import { fetchAndNormalizeYahooMatchups } from '../utils/yahooService';
 import PlayerModal from '../components/PlayerModal';
 import styles from './Matchups.module.css';
@@ -235,18 +236,10 @@ export default function Matchups() {
 
         if (proj) {
             const stats = proj.stats || proj || {};
-            let customPts = 0;
-            let hasValidStats = false;
-            for (const [statKey, statMultiplier] of Object.entries(scoringSettings)) {
-                if (stats[statKey] !== undefined && typeof stats[statKey] === 'number') {
-                    customPts += (stats[statKey] * statMultiplier);
-                    hasValidStats = true;
-                }
-            }
-            if (playerObj?.pos === 'TE' && scoringSettings.bonus_rec_te && stats.rec) {
-                customPts += (stats.rec * scoringSettings.bonus_rec_te);
-            }
-            if (hasValidStats && customPts > 0) return customPts.toFixed(2);
+            // Score against the league's own rules (defense tiers, kicker FG
+            // distances); null means the line carried none of the scored stats.
+            const scored = scoreStatLine(stats, scoringSettings, playerObj?.pos);
+            if (scored !== null) return scored.toFixed(2);
             
             const rec = scoringSettings.rec || 0;
             let key = 'pts_std';
