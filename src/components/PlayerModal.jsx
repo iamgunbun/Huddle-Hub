@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLeague } from '../context/LeagueContext';
 import { getLeagueData } from '../utils/helper';
+import { scoreStatLine } from '../utils/yahooScoring';
 import styles from './PlayerModal.module.css';
 
 export default function PlayerModal({ player, week = 1, onClose }) {
@@ -17,13 +18,14 @@ export default function PlayerModal({ player, week = 1, onClose }) {
     const [yearsPlayed, setYearsPlayed] = useState([]);
     const [loadingLogs, setLoadingLogs] = useState(true);
 
-    if (!player) return null;
-
-    const pId = player.player_id || player.id;
-    const pos = (player.pos || player.position || 'BN').toUpperCase();
-    const firstName = player.fn || player.first_name || '';
-    const lastName = player.ln || player.last_name || '';
-    const number = player.number ? `#${player.number}` : '';
+    // No early return here: the effects below are hooks, and bailing out above
+    // them changed the hook count between renders. These derivations are
+    // null-safe instead, and the guard now sits after every hook.
+    const pId = player?.player_id || player?.id;
+    const pos = (player?.pos || player?.position || 'BN').toUpperCase();
+    const firstName = player?.fn || player?.first_name || '';
+    const lastName = player?.ln || player?.last_name || '';
+    const number = player?.number ? `#${player.number}` : '';
 
     const normalizeTeam = (t) => {
         if (!t) return '';
@@ -32,7 +34,7 @@ export default function PlayerModal({ player, week = 1, onClose }) {
         return map[upper] || upper;
     };
 
-    const team = normalizeTeam(player.t || player.team || 'FA');
+    const team = normalizeTeam(player?.t || player?.team || 'FA');
 
     // 1. Initial Load of League Data & Season History
     useEffect(() => {
@@ -46,7 +48,7 @@ export default function PlayerModal({ player, week = 1, onClose }) {
             const season = lData?.season || currentYear;
             setSelectedGameLogYear(season);
 
-            const exp = parseInt(player.years_exp ?? player.exp) || 0;
+            const exp = parseInt(player?.years_exp ?? player?.exp) || 0;
             const yearsToFetch = [];
             for (let i = 0; i <= exp && i < 6; i++) { 
                 yearsToFetch.push(parseInt(season) - i);
@@ -70,7 +72,7 @@ export default function PlayerModal({ player, week = 1, onClose }) {
         });
 
         return () => { isMounted = false; };
-    }, [pId, activeLeague, player.years_exp, player.exp, currentYear]);
+    }, [pId, activeLeague, player?.years_exp, player?.exp, currentYear]);
 
     // 2. Fetch Game Logs & Projections for Selected Year
     useEffect(() => {
@@ -97,8 +99,8 @@ export default function PlayerModal({ player, week = 1, onClose }) {
         return () => { isMounted = false; };
     }, [pId, selectedGameLogYear]);
 
-    const getAvatar = () => pos === 'DEF' 
-        ? `https://sleepercdn.com/images/team_logos/nfl/${pId.toLowerCase()}.png` 
+    const getAvatar = () => pos === 'DEF'
+        ? `https://sleepercdn.com/images/team_logos/nfl/${String(pId || '').toLowerCase()}.png`
         : `https://sleepercdn.com/content/nfl/players/thumb/${pId}.jpg`;
 
     const formatHeight = (ht) => {
@@ -118,21 +120,10 @@ export default function PlayerModal({ player, week = 1, onClose }) {
         const s = rawStatsObj.stats || rawStatsObj; 
         const scoringSettings = leagueData?.scoring_settings || {};
         
-        let customPts = 0;
-        let hasValidStats = false;
-
-        for (const [statKey, statMultiplier] of Object.entries(scoringSettings)) {
-            if (s[statKey] !== undefined && typeof s[statKey] === 'number') {
-                customPts += (s[statKey] * statMultiplier);
-                hasValidStats = true;
-            }
-        }
-
-        if (pos === 'TE' && scoringSettings.bonus_rec_te && s.rec !== undefined) {
-            customPts += (s.rec * scoringSettings.bonus_rec_te);
-        }
-
-        if (hasValidStats) return customPts.toFixed(1);
+        // Same tested scorer used elsewhere, so defense points-allowed tiers and
+        // kicker field-goal distances are handled here too.
+        const scored = scoreStatLine(s, scoringSettings, pos);
+        if (scored !== null) return scored.toFixed(1);
         
         if (s.pts_ppr !== undefined) return parseFloat(s.pts_ppr).toFixed(1);
         if (s.pts_half_ppr !== undefined) return parseFloat(s.pts_half_ppr).toFixed(1);
@@ -185,6 +176,8 @@ export default function PlayerModal({ player, week = 1, onClose }) {
     const currentWeekProj = gameProjs[week] || {};
     const projPtsDisplay = calcCustomPts(currentWeekProj);
     const upcomingOppDisplay = getOpponentDisplay(currentWeekProj);
+
+    if (!player) return null;
 
     return (
         <div className={styles.overlay} onClick={handleOverlayClick}>

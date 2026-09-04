@@ -4,18 +4,22 @@ import PlayerModal from '../PlayerModal';
 import styles from './Matchup.module.css';
 
 export default function Matchup({ matchup, players, leagueTeamManagers, year, week, leagueData, initialExpanded = false }) {
+    // Hooks must run on every render in the same order. The guard below used to
+    // sit above them, so an incomplete matchup returned before any hook ran --
+    // React then saw the hook count change between renders of the same
+    // component and corrupted state (or threw) once a matchup filled in.
+    const [isExpanded, setIsExpanded] = useState(false);
+    const [selectedPlayer, setSelectedPlayer] = useState(null);
+
+    useEffect(() => {
+        setIsExpanded(window.innerWidth > 1100 ? initialExpanded : false);
+    }, [initialExpanded]);
+
     if (!matchup || matchup.length < 2) return null;
 
     const [teamA, teamB] = matchup;
     const metaA = getTeamFromTeamManagers(leagueTeamManagers, teamA.roster_id, year);
     const metaB = getTeamFromTeamManagers(leagueTeamManagers, teamB.roster_id, year);
-
-    const [isExpanded, setIsExpanded] = useState(false);
-    const [selectedPlayer, setSelectedPlayer] = useState(null);
-    
-    useEffect(() => {
-        setIsExpanded(window.innerWidth > 1100 ? initialExpanded : false);
-    }, [initialExpanded]);
 
     const scoreA = teamA.points?.reduce((acc, val) => acc + val, 0) || 0;
     const scoreB = teamB.points?.reduce((acc, val) => acc + val, 0) || 0;
