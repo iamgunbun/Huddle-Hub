@@ -14,6 +14,11 @@ import {
     buildPodiumFromStandings,
     parseYahooScoreboard,
     groupPlayoffRounds,
+    isSameLeagueChain,
+    parseYahooDraftResults,
+    buildYahooDraftBoard,
+    parseYahooUserLeagueKeys,
+    isKeyInUserLeagues,
 } from '../src/utils/yahooHistory.js';
 
 let pass = 0;
@@ -101,6 +106,66 @@ eq('empty standings -> no podium', buildPodiumFromStandings([], 2024), null);
 // A 2-team result shouldn't claim a wooden spoon that overlaps the podium.
 eq('too few teams -> no toilet bowl',
     buildPodiumFromStandings([{ rosterId: 1, rank: 1 }, { rosterId: 2, rank: 2 }], 2024).toilet, undefined);
+
+// --- Season chain integrity ----------------------------------------------
+// A bad renew pointer isn't a visible failure: it splices another league's
+// teams, champions and records into this league's history. These are the
+// checks that stop the walk instead.
+const season = (league_id, yr, renewed_league_id = null) => ({ league_id, season: String(yr), renewed_league_id });
+
+eq('a genuine previous season is accepted',
+    isSameLeagueChain(season('423.l.999', 2024, '461.l.123'), season('461.l.123', 2025)), true);
+eq('a missing forward pointer is accepted (Yahoo omits it on older leagues)',
+    isSameLeagueChain(season('423.l.999', 2024), season('461.l.123', 2025)), true);
+eq('a forward pointer naming a DIFFERENT league is rejected',
+    isSameLeagueChain(season('423.l.999', 2024, '461.l.777'), season('461.l.123', 2025)), false);
+eq('a "previous" season that is not older is rejected',
+    isSameLeagueChain(season('461.l.777', 2025), season('461.l.123', 2025)), false);
+eq('a "previous" season from the future is rejected',
+    isSameLeagueChain(season('461.l.777', 2026), season('461.l.123', 2025)), false);
+eq('a missing season is rejected', isSameLeagueChain(null, season('461.l.123', 2025)), false);
+
+// --- Which leagues does this account actually belong to? -----------------
+// A renew chain describes the LEAGUE's lineage, not the user's: an eleven-year
+// league whose account joined last year would otherwise report ten seasons of
+// "all-time" records the user was never part of.
+const userLeaguesPayload = {
+    fantasy_content: {
+        users: {
+            0: {
+                user: [
+                    { guid: 'MY-GUID' },
+                    {
+                        games: {
+                            0: { game: [{ game_key: '461', season: '2025' }, { leagues: {
+                                0: { league: [{ league_key: '461.l.123', name: 'This League' }] },
+                                count: 1,
+                            } }] },
+                            1: { game: [{ game_key: '449', season: '2024' }, { leagues: {
+                                0: { league: [{ league_key: '449.l.555', name: 'Another League' }] },
+                                count: 1,
+                            } }] },
+                            count: 2,
+                        },
+                    },
+                ],
+            },
+            count: 1,
+        },
+    },
+};
+
+const myLeagues = parseYahooUserLeagueKeys(userLeaguesPayload);
+eq('league keys collected across every season', myLeagues.size, 2);
+eq('this season\'s league is present', myLeagues.has('461.l.123'), true);
+eq('a season the user IS in is accepted', isKeyInUserLeagues('449.l.555', myLeagues), true);
+// The one that matters: a renew pointer at a season the user never played in.
+eq('a season the user is NOT in is rejected', isKeyInUserLeagues('423.l.999', myLeagues), false);
+// A stored id can be the alias form; that's still this league.
+eq('the nfl alias matches on league id', isKeyInUserLeagues('nfl.l.123', myLeagues), true);
+eq('the alias does not match an unrelated id', isKeyInUserLeagues('nfl.l.999', myLeagues), false);
+eq('an unknown list blocks nothing here', isKeyInUserLeagues('461.l.123', new Set()), false);
+eq('no leagues parsed from junk', parseYahooUserLeagueKeys({}).size, 0);
 
 // --- Scoreboard ----------------------------------------------------------
 const sbTeam = (id, points) => ({
@@ -194,6 +259,90 @@ eq('championship rounds counted without consolation', rounds[0].totalRounds, 2);
 const finals = rounds.find(r => !r.consolation && r.week === 16);
 eq('final week is the last round', finals.roundIndex, finals.totalRounds - 1);
 eq('no playoff games -> no rounds', groupPlayoffRounds(sb).length, 0);
+
+// --- Draft results -------------------------------------------------------
+// A 4-team snake: round 1 runs 1,2,3,4 and round 2 runs back 4,3,2,1.
+const draftResult = (pick, round, teamId, playerId, cost) => ({
+    draft_result: {
+        pick: String(pick),
+        round: String(round),
+        team_key: `461.l.999.t.${teamId}`,
+        player_key: `461.p.${playerId}`,
+        ...(cost !== undefined ? { cost: String(cost) } : {}),
+    },
+});
+
+const snakePayload = {
+    fantasy_content: {
+        league: [
+            { league_key: '461.l.999', season: '2024' },
+            {
+                draft_results: {
+                    0: draftResult(1, 1, 1, 100),
+                    1: draftResult(2, 1, 2, 200),
+                    2: draftResult(3, 1, 3, 300),
+                    3: draftResult(4, 1, 4, 400),
+                    4: draftResult(5, 2, 4, 500),
+                    5: draftResult(6, 2, 3, 600),
+                    6: draftResult(7, 2, 2, 700),
+                    7: draftResult(8, 2, 1, 800),
+                    count: 8,
+                },
+            },
+        ],
+    },
+};
+
+const draftPicks = parseYahooDraftResults(snakePayload);
+eq('every pick parsed', draftPicks.length, 8);
+eq('roster id pulled from the team key', draftPicks[0].rosterId, 1);
+eq('player id pulled from the player key', draftPicks[0].playerId, '100');
+eq('picks come back in draft order', draftPicks[4].pick, 5);
+
+const board = buildYahooDraftBoard(draftPicks, { leagueKey: '461.l.999', season: '2024' });
+eq('team count derived from round one', board.settings.teams, 4);
+eq('rounds derived from the picks', board.settings.rounds, 2);
+eq('snake order detected from the data, not assumed', board.type, 'snake');
+eq('slot map built from round one', board.slot_to_roster_id[1], 1);
+eq('last slot of round one', board.slot_to_roster_id[4], 4);
+// The point of the snake handling: pick 5 belongs to the team in the LAST
+// column, so it must land there rather than in column one.
+eq('first pick of a reversed round sits in the last column',
+    board.picks.find(p => p.pick_no === 5).draft_slot, 4);
+eq('last pick of a reversed round sits in the first column',
+    board.picks.find(p => p.pick_no === 8).draft_slot, 1);
+eq('round one is left to right', board.picks.find(p => p.pick_no === 3).draft_slot, 3);
+eq('the drafting team is kept on the pick', board.picks.find(p => p.pick_no === 5).roster_id, 4);
+
+// A linear draft repeats the same order; mirroring its even rounds would put
+// every pick in the wrong column.
+const linearPayload = {
+    fantasy_content: {
+        league: [{}, { draft_results: {
+            0: draftResult(1, 1, 1, 100), 1: draftResult(2, 1, 2, 200),
+            2: draftResult(3, 2, 1, 300), 3: draftResult(4, 2, 2, 400), count: 4,
+        } }],
+    },
+};
+const linearBoard = buildYahooDraftBoard(parseYahooDraftResults(linearPayload), { leagueKey: 'x', season: '2024' });
+eq('a repeating order is read as linear', linearBoard.type, 'linear');
+eq('linear round two is not mirrored',
+    linearBoard.picks.find(p => p.pick_no === 3).draft_slot, 1);
+
+// Auction: costs come through and the order carries no meaning.
+const auctionPayload = {
+    fantasy_content: {
+        league: [{}, { draft_results: {
+            0: draftResult(1, 1, 1, 100, 45), 1: draftResult(2, 1, 2, 200, 12), count: 2,
+        } }],
+    },
+};
+const auctionPicks = parseYahooDraftResults(auctionPayload);
+eq('auction cost parsed', auctionPicks[0].cost, 45);
+eq('auction board is typed as auction',
+    buildYahooDraftBoard(auctionPicks, { leagueKey: 'x', season: '2024', isAuction: true }).type, 'auction');
+eq('no picks -> no board', buildYahooDraftBoard([], { leagueKey: 'x' }), null);
+eq('missing draft results -> nothing', parseYahooDraftResults({}).length, 0);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

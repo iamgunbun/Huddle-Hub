@@ -168,6 +168,84 @@ const buildDivisionWinners = (ranked) => {
     return [...best.values()];
 };
 
+/**
+ * Is `previous` really the season that `successor` was renewed from?
+ *
+ * A history walk follows Yahoo's `renew` pointers backwards, and a bad pointer
+ * is not a visible failure -- it just splices someone else's teams, champions
+ * and records into this league's history. Two things have to hold: Yahoo's own
+ * forward pointer on the older season has to name the newer one, and the walk
+ * has to actually move backwards in time. Yahoo omits the forward pointer on
+ * some older leagues, so its absence is accepted; a contradiction is not.
+ */
+export const isSameLeagueChain = (previous, successor) => {
+    if (!previous || !successor) return false;
+
+    const previousSeason = parseInt(previous.season);
+    const successorSeason = parseInt(successor.season);
+    if (Number.isFinite(previousSeason) && Number.isFinite(successorSeason)
+        && previousSeason >= successorSeason) return false;
+
+    const renewedInto = previous.renewed_league_id;
+    if (renewedInto && successor.league_id && String(renewedInto) !== String(successor.league_id)) return false;
+
+    return true;
+};
+
+/**
+ * Every league key the logged-in Yahoo account belongs to, across all seasons,
+ * from `users;use_login=1/games;game_codes=nfl/leagues`.
+ *
+ * This is the authoritative answer to "is this season actually theirs?".
+ * Yahoo's renew pointers describe a league's lineage, not the user's -- a
+ * league can be eleven seasons old while the account joined last year, and
+ * nothing in the league response says so. Without this, history reaches back
+ * into seasons the user was never part of.
+ */
+export const parseYahooUserLeagueKeys = (data) => {
+    const keys = new Set();
+
+    yahooCollection(data?.fantasy_content?.users).forEach(userEntry => {
+        const user = userEntry?.user;
+        const gamesNode = findNode(user, 'games') || (Array.isArray(user) ? user.find(x => x?.games)?.games : null);
+
+        yahooCollection(gamesNode).forEach(gameEntry => {
+            const game = gameEntry?.game;
+            const leaguesNode = findNode(game, 'leagues');
+
+            yahooCollection(leaguesNode).forEach(leagueEntry => {
+                const league = leagueEntry?.league;
+                const key = yahooField(Array.isArray(league) ? league[0] : league, 'league_key');
+                if (key) keys.add(String(key));
+            });
+        });
+    });
+
+    return keys;
+};
+
+/**
+ * Does `leagueKey` name one of the user's own leagues?
+ *
+ * A stored key may be the "nfl.l.<id>" alias rather than a season-specific one,
+ * which is still this league -- Yahoo just resolves the game key at request
+ * time -- so the alias matches on the league id alone.
+ */
+export const isKeyInUserLeagues = (leagueKey, userLeagueKeys) => {
+    if (!leagueKey || !userLeagueKeys?.size) return false;
+
+    const key = String(leagueKey);
+    if (userLeagueKeys.has(key)) return true;
+
+    if (key.startsWith('nfl.l.')) {
+        const suffix = `.l.${key.slice('nfl.l.'.length)}`;
+        for (const known of userLeagueKeys) {
+            if (known.endsWith(suffix)) return true;
+        }
+    }
+    return false;
+};
+
 // --------------------------------------------------------------------------
 // Scoreboard / matchups
 // --------------------------------------------------------------------------
@@ -276,4 +354,106 @@ export const groupPlayoffRounds = (matchups) => {
         roundIndex: championshipWeeks.indexOf(group.week),
         totalRounds: championshipWeeks.length,
     }));
+};
+
+// --------------------------------------------------------------------------
+// Draft results
+// --------------------------------------------------------------------------
+
+/** One row per pick from `league/{key}/draftresults`. */
+export const parseYahooDraftResults = (data) => {
+    const league = data?.fantasy_content?.league;
+    const node = findNode(league, 'draft_results');
+    const picks = [];
+
+    yahooCollection(node).forEach(entry => {
+        const result = entry?.draft_result;
+        if (!result) return;
+
+        const round = parseInt(result.round);
+        const pick = parseInt(result.pick);
+        if (!Number.isFinite(round) || !Number.isFinite(pick)) return;
+
+        // "461.l.999.t.3" -> 3, and "461.p.31883" -> "31883". The player id is
+        // the Yahoo id, which is exactly how the player dictionary is keyed when
+        // a Yahoo league is active, so picks resolve to real players.
+        const teamKey = result.team_key || '';
+        const rosterId = parseInt(String(teamKey).split('.t.')[1]);
+        const playerId = String(result.player_key || '').split('.p.')[1] || null;
+
+        picks.push({
+            round,
+            pick,
+            teamKey: teamKey || null,
+            rosterId: Number.isFinite(rosterId) ? rosterId : null,
+            playerId,
+            cost: result.cost !== undefined ? num(result.cost, null) : null,
+        });
+    });
+
+    return picks.sort((a, b) => a.pick - b.pick);
+};
+
+/**
+ * Lays Yahoo's flat pick list out as a draft board.
+ *
+ * Yahoo doesn't publish a slot-to-team map, so round one supplies it: the teams
+ * in round-one pick order ARE the columns. Later rounds then need to know
+ * whether the order snakes back or repeats -- which is read off round two rather
+ * than assumed, since assuming wrong mirrors every even round.
+ *
+ * A pick's column is its POSITION in the round (so a team holding two picks in
+ * one round occupies two columns rather than overwriting itself), while
+ * `roster_id` stays the team that actually made it -- which is what lets the
+ * board mark a traded pick.
+ */
+export const buildYahooDraftBoard = (picks, { leagueKey, season, isAuction = false } = {}) => {
+    if (!picks?.length) return null;
+
+    const firstRound = picks.filter(p => p.round === 1);
+    const slotToRosterId = {};
+    firstRound.forEach((p, idx) => {
+        if (p.rosterId !== null) slotToRosterId[idx + 1] = p.rosterId;
+    });
+
+    const teams = firstRound.length || new Set(picks.map(p => p.rosterId)).size;
+    if (!teams) return null;
+
+    // Snake or linear, decided by the data: if round two opens with the team
+    // that closed round one, the order snakes.
+    const secondRound = picks.filter(p => p.round === 2);
+    const snakes = secondRound.length > 1
+        && firstRound.length > 1
+        && secondRound[0].rosterId === firstRound[firstRound.length - 1].rosterId;
+
+    const byRound = new Map();
+    const boardPicks = picks.map(p => {
+        const positionInRound = (byRound.get(p.round) || 0) + 1;
+        byRound.set(p.round, positionInRound);
+
+        // An auction has no draft order at all, so picks just fill left to right.
+        const slot = (!isAuction && snakes && p.round % 2 === 0)
+            ? (teams + 1 - positionInRound)
+            : positionInRound;
+
+        return {
+            round: p.round,
+            pick_no: p.pick,
+            draft_slot: slot,
+            player_id: p.playerId,
+            roster_id: p.rosterId,
+            amount: p.cost,
+        };
+    });
+
+    return {
+        draft_id: `yahoo-${leagueKey}`,
+        season: String(season),
+        status: 'complete',
+        type: isAuction ? 'auction' : (snakes ? 'snake' : 'linear'),
+        settings: { teams, rounds: Math.max(...picks.map(p => p.round)) },
+        metadata: { name: 'Draft' },
+        slot_to_roster_id: slotToRosterId,
+        picks: boardPicks,
+    };
 };

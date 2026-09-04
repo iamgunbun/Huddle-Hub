@@ -5,6 +5,7 @@ import { leagueID as defaultLeagueID } from '$lib/utils/leagueInfo.js';
 import { getManagers, getTeamData } from './universalFunctions';
 import { getLeagueData } from './leagueData';
 import { getLeagueRosters } from './leagueRosters';
+import { isSameLeagueChain } from '../yahooHistory';
 
 export const getLeagueTeamManagers = async (queryLeagueID) => {
     let id = queryLeagueID;
@@ -27,6 +28,7 @@ export const getLeagueTeamManagers = async (queryLeagueID) => {
         const finalUsers = {};
         let currentSeason = null;
         const visited = new Set();
+        let successor = null;
 
         while (currentLeagueID && currentLeagueID !== 0 && currentLeagueID !== "0" && !visited.has(currentLeagueID)) {
             visited.add(currentLeagueID);
@@ -38,6 +40,15 @@ export const getLeagueTeamManagers = async (queryLeagueID) => {
                     getLeagueRosters(currentLeagueID, { teamsOnly: true }),
                 ]);
                 if (!leagueData || !rostersData) break;
+
+                // Same guard the records and trophy-room walks use: a bad renew
+                // pointer would otherwise list another league's teams as this
+                // league's past seasons.
+                if (successor && !isSameLeagueChain(leagueData, successor)) {
+                    console.warn(`Stopping the Yahoo season walk at "${currentLeagueID}": it isn't "${successor.league_id}"'s previous season.`);
+                    break;
+                }
+                successor = leagueData;
 
                 const year = parseInt(leagueData.season) || new Date().getFullYear();
                 if (!currentSeason) currentSeason = year;

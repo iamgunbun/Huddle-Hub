@@ -45,8 +45,13 @@ export default function Awards() {
     }, [activeLeague]);
 
     const getTeamInfo = (rosterId, year) => {
-        if (!teamManagers || !teamManagers.teamManagersMap) return { name: 'Unknown', avatar: 'https://sleepercdn.com/images/v2/icons/player_default.webp' };
-        const yRosters = teamManagers.teamManagersMap[year] || teamManagers.teamManagersMap[teamManagers.currentSeason] || {};
+        if (!teamManagers || !teamManagers.teamManagersMap) return { name: 'Unknown', avatar: DEFAULT_AVATAR };
+        // Only ever the roster map for THAT year. This used to fall back to the
+        // current season, which silently credited whoever holds that roster id
+        // today -- and since both platforms reuse roster ids 1..N every season,
+        // a podium from a year we don't have loaded handed a championship to an
+        // unrelated manager. An unknown year has to read as unknown.
+        const yRosters = teamManagers.teamManagersMap[year] || {};
         const roster = yRosters[rosterId];
         if (roster && roster.team) {
             return {
@@ -55,7 +60,7 @@ export default function Awards() {
                 managerId: roster.managers?.[0]
             };
         }
-        return { name: `Team ${rosterId}`, avatar: 'https://sleepercdn.com/images/v2/icons/player_default.webp' };
+        return { name: `Team ${rosterId}`, avatar: DEFAULT_AVATAR };
     };
 
     const getUserInfo = (managerId) => {
@@ -70,6 +75,20 @@ export default function Awards() {
             avatar: resolveAvatarUrl(user.avatar, DEFAULT_AVATAR)
         };
     };
+
+    // What span of seasons are these "all-time" numbers actually built from?
+    // Without this the totals are unfalsifiable: a figure that looks far too
+    // large for the league reads the same whether it's eleven real seasons or
+    // one season counted wrong.
+    const historySpan = useMemo(() => {
+        const years = Object.keys(teamManagers?.teamManagersMap || {})
+            .map(Number)
+            .filter(Number.isFinite)
+            .sort((a, b) => a - b);
+        if (!years.length) return null;
+        const span = years.length === 1 ? `${years[0]}` : `${years[0]}–${years[years.length - 1]}`;
+        return `${span} · ${years.length} season${years.length > 1 ? 's' : ''}`;
+    }, [teamManagers]);
 
     const calculatedRecords = useMemo(() => {
         let hScore = { val: 0, text: '-', sub: '-' };
@@ -259,6 +278,7 @@ export default function Awards() {
             {/* --- LEAGUE RECORDS --- */}
             <div className={styles.recordsSection}>
                 <h2 className={styles.wingTitle}>📜 League Records</h2>
+                {historySpan && <div className={styles.historySpan}>All-time across {historySpan}</div>}
                 
                 <div className={styles.recordsGrid}>
                     <div className={styles.recordCard}>
