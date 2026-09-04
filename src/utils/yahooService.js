@@ -114,6 +114,18 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
         // exact scoring (including kicker and defense categories) carries over.
         const scoringSettings = buildYahooScoringSettings(settingsData);
 
+        // An empty result means no category resolved, and every projection would
+        // then quietly fall back to Sleeper's generic standard scoring -- numbers
+        // that look plausible but aren't this league's. Surface it rather than
+        // letting it pass unnoticed.
+        if (!Object.keys(scoringSettings).length) {
+            console.warn(
+                `Yahoo league ${cleanKey}: could not resolve any scoring categories from the league settings. ` +
+                `Projections will fall back to generic scoring instead of this league's format.`,
+                { stat_categories: settingsData?.stat_categories, stat_modifiers: settingsData?.stat_modifiers }
+            );
+        }
+
         return {
             league_id: cleanKey,
             sleeper_league_id: cleanKey,
