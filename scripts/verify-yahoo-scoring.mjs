@@ -82,5 +82,37 @@ eq('unscoreable line returns null', scoreStatLine({ unrelated: 5 }, scoring), nu
 // A legitimately negative total must survive (it is not "no data").
 eq('negative total is preserved', scoreStatLine({ pass_int: 2 }, scoring), -4);
 
+// --- Sleeper leagues run through this same scorer ---
+// Sleeper's scoring_settings and stat feed are already keyed this way, and its
+// feed reports defensive points-allowed as explicit per-tier flags rather than
+// one continuous number. Those must be scored directly, not ignored in favour
+// of a tier derivation, or defenses would silently drop to zero.
+const sleeperScoring = {
+    pass_yd: 0.04, pass_td: 4, pass_int: -1,
+    rush_yd: 0.1, rush_td: 6,
+    rec: 1, rec_yd: 0.1, rec_td: 6,
+    sack: 1, int: 2, fum_rec: 2, def_td: 6,
+    pts_allow_0: 10, pts_allow_1_6: 7, pts_allow_7_13: 4, pts_allow_35p: -4,
+};
+
+// Full PPR offense: 250*0.04 + 1*4 + 90*0.1 + 8*1 + 110*0.1 + 1*6 = 10+4+9+8+11+6 = 48
+eq('sleeper full-PPR offense',
+    scoreStatLine({ pass_yd: 250, pass_td: 1, rush_yd: 90, rec: 8, rec_yd: 110, rec_td: 1 }, sleeperScoring), 48);
+
+// Explicit tier flag form: 3 sacks + 1 INT + the 7-13 flag = 3 + 2 + 4 = 9
+eq('sleeper defense via explicit tier flags',
+    scoreStatLine({ sack: 3, int: 1, pts_allow_7_13: 1 }, sleeperScoring), 9);
+
+// Continuous form still works when no flags are present: 3 + 2 + tier(1-6)=7 => 12
+eq('defense via continuous pts_allow when no flags',
+    scoreStatLine({ sack: 3, int: 1, pts_allow: 3 }, sleeperScoring), 12);
+
+// Both present: the explicit flag wins, and the tier is not added twice.
+eq('flags win over continuous, no double count',
+    scoreStatLine({ sack: 3, int: 1, pts_allow_7_13: 1, pts_allow: 10 }, sleeperScoring), 9);
+
+// A PPR reception value must not be mistaken for half-PPR.
+eq('full PPR reception value applied', scoreStatLine({ rec: 5 }, sleeperScoring), 5);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

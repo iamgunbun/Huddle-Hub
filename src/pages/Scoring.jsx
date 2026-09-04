@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLeague } from '../context/LeagueContext';
 import styles from './Scoring.module.css';
+import { getLeagueData } from '../utils/helper';
 
 export default function Scoring() {
     const { activeLeague } = useLeague();
@@ -52,9 +53,11 @@ export default function Scoring() {
             if (!activeLeague?.sleeper_league_id) return;
             setLoading(true);
             try {
-                const res = await fetch(`https://api.sleeper.app/v1/league/${activeLeague.sleeper_league_id}`);
-                const data = await res.json();
-                
+                // Goes through getLeagueData so this works for Yahoo leagues too --
+                // hitting Sleeper's API directly with a Yahoo league key just 404s,
+                // which left this page blank for every Yahoo league.
+                const data = await getLeagueData(activeLeague.sleeper_league_id);
+
                 if (data?.scoring_settings) {
                     setScoringSettings(data.scoring_settings);
                 }
