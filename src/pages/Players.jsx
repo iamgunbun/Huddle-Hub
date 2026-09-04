@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLeague } from '../context/LeagueContext';
 import { loadPlayers, getLeagueData, getLeagueRosters } from '../utils/helper';
-import { playerNameKey } from '../utils/helperFunctions/players';
+import { buildOwnedIndex, isPlayerOwned } from '../utils/playerPool';
 import PlayerModal from '../components/PlayerModal';
 import { scoreStatLine } from '../utils/yahooScoring';
 import styles from './Players.module.css';
@@ -199,28 +199,19 @@ export default function Players() {
             : `https://sleepercdn.com/content/nfl/players/thumb/${key}.jpg`;
     };
 
+    // "Available" is only meaningful if every team's roster actually loaded. If
+    // any are missing, their players are absent from the owned set and would be
+    // presented as free agents -- so surface that instead of quietly lying.
+    const expectedTeams = leagueData?.total_rosters || 0;
+    const loadedTeams = Object.keys(rosters || {}).length;
+    const rosterPoolIncomplete = loadedTeams === 0 || (expectedTeams > 0 && loadedTeams < expectedTeams);
+
     const availablePlayers = useMemo(() => {
         if (!playersInfo || Object.keys(playersInfo).length === 0) return [];
         
-        // Roster ids are the platform's own (Yahoo ids for a Yahoo league), but
-        // the candidate list is keyed by yahoo_id || player_id -- so any player
-        // Sleeper's crosswalk doesn't map falls back to a Sleeper id and would
-        // never match, leaking a rostered player into "available". Match on name
-        // as well, using the names Yahoo returned with the rosters themselves.
-        const ownedSet = new Set();
-        const ownedNames = new Set();
-        if (rosters && typeof rosters === 'object') {
-            Object.values(rosters).forEach(r => {
-                if (!r || !Array.isArray(r.players)) return;
-                r.players.forEach(pId => {
-                    const key = String(pId);
-                    ownedSet.add(key);
-                    const meta = yahooPlayersMeta[key] || playersInfo[key];
-                    const nameKey = meta ? playerNameKey(meta.fn, meta.ln) : '';
-                    if (nameKey) ownedNames.add(nameKey);
-                });
-            });
-        }
+        // Matches on id, crosswalked sleeper_id and name, because roster entries
+        // and the player dictionary don't always agree on which id they used.
+        const ownedIndex = buildOwnedIndex(rosters, yahooPlayersMeta, playersInfo);
         
         const validPositions = new Set(['QB', 'RB', 'WR', 'TE', 'DEF', 'K']);
         let list = Object.entries(playersInfo).map(([id, p]) => {
@@ -240,8 +231,7 @@ export default function Players() {
                 projVal: parseFloat(getProjPts(pId)) || 0
             };
         }).filter(p => {
-            const isOwned = ownedSet.has(String(p.player_id))
-                || ownedNames.has(playerNameKey(p.fn, p.ln));
+            const isOwned = isPlayerOwned(p, ownedIndex);
             const isValidPos = validPositions.has(p.pos);
             const isActive = p.active !== false && p.status !== 'Inactive';
             return !isOwned && isValidPos && isActive;
@@ -340,6 +330,12 @@ export default function Players() {
                                 </button>
                             ))}
                         </div>
+                        {rosterPoolIncomplete && (
+                            <div className={styles.emptyState} style={{ marginBottom: '12px', color: '#eebf1c' }}>
+                                Only {loadedTeams} of {expectedTeams || '?'} team rosters loaded, so this list may
+                                include players who are already on a roster. Refresh to try again.
+                            </div>
+                        )}
                         <div className={styles.playerListContainer}>
                             {availablePlayers.length > 0 ? (
                                 availablePlayers.map(p => renderPlayerRow(p.player_id, p))

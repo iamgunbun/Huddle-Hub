@@ -234,6 +234,17 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
 
         const teamsDataArray = await Promise.all(teamPromises);
 
+        // A failed team fetch is dropped below, which silently removes that
+        // team's players from the league's "owned" set -- they then look like
+        // free agents. Say so rather than letting the gap pass unnoticed.
+        const failedTeams = teamsDataArray.filter(t => !t).length;
+        if (failedTeams) {
+            console.warn(
+                `Yahoo league ${cleanKey}: ${failedTeams} of ${teamKeys.length} team rosters failed to load. ` +
+                `Players on those teams may incorrectly appear as available.`
+            );
+        }
+
         const rosterMap = {};
         const startersAndReserve = [];
         // Yahoo's own roster response already carries each player's name/team/
