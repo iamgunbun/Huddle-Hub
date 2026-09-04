@@ -6,6 +6,7 @@
 // about the page looks broken.
 
 import { buildOwnedIndex, isPlayerOwned, isRosterableNflPlayer, resolvePlayerFromMeta, playerNameKeyNoSuffix } from '../src/utils/playerPool.js';
+import { findSuccessorLeagueId, pickOwnerId } from '../src/utils/leagueSeason.js';
 
 let pass = 0;
 let fail = 0;
@@ -112,6 +113,24 @@ eq('suffix stripper keeps real two-part names',
     playerNameKeyNoSuffix('Justin', 'Jefferson'), 'justin jefferson');
 eq('suffix stripper removes Jr',
     playerNameKeyNoSuffix('Michael', 'Pittman Jr.'), 'michael pittman');
+
+// --- Sleeper mints a new league id each season; follow it forward ---
+eq('finds the next season\'s league',
+    findSuccessorLeagueId([{ league_id: '2026A', previous_league_id: '2025A' }, { league_id: '2026B' }], '2025A'), '2026A');
+eq('already on the current season -> nothing to change',
+    findSuccessorLeagueId([{ league_id: '2025A', previous_league_id: '2024A' }], '2025A'), null);
+eq('walks forward past an intermediate season',
+    findSuccessorLeagueId([
+        { league_id: '2026A', previous_league_id: '2025A' },
+        { league_id: '2025A', previous_league_id: '2024A' },
+    ], '2024A'), '2026A');
+eq('unrelated leagues -> null',
+    findSuccessorLeagueId([{ league_id: 'X', previous_league_id: 'Y' }], '2025A'), null);
+eq('malformed input -> null', findSuccessorLeagueId(null, '2025A'), null);
+eq('a cycle terminates instead of hanging',
+    findSuccessorLeagueId([{ league_id: 'A', previous_league_id: 'B' }, { league_id: 'B', previous_league_id: 'A' }], 'ZZZ'), null);
+eq('takes an owner id off the rosters', pickOwnerId({ 1: { owner_id: 'u1' } }), 'u1');
+eq('no owner id -> null', pickOwnerId({ 1: {} }), null);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

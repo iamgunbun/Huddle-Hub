@@ -26,12 +26,16 @@ export const getLeagueTeamManagers = async (queryLeagueID) => {
         const teamManagersMap = {};
         const finalUsers = {};
         let currentSeason = null;
+        const visited = new Set();
 
-        while (currentLeagueID && currentLeagueID !== 0 && currentLeagueID !== "0") {
+        while (currentLeagueID && currentLeagueID !== 0 && currentLeagueID !== "0" && !visited.has(currentLeagueID)) {
+            visited.add(currentLeagueID);
             try {
                 const [leagueData, rostersData] = await Promise.all([
                     getLeagueData(currentLeagueID),
-                    getLeagueRosters(currentLeagueID),
+                    // Only team names, avatars and managers are needed here, so
+                    // skip the per-team player fetch for every past season.
+                    getLeagueRosters(currentLeagueID, { teamsOnly: true }),
                 ]);
                 if (!leagueData || !rostersData) break;
 
@@ -40,20 +44,27 @@ export const getLeagueTeamManagers = async (queryLeagueID) => {
                 teamManagersMap[year] = {};
 
                 Object.values(rostersData.rosters || {}).forEach(roster => {
+                    // owner_id is the manager's Yahoo guid (stable across
+                    // seasons), not the season-scoped team key -- that's what
+                    // lets all-time records, rivalries and the trophy room
+                    // recognise the same person from one year to the next.
+                    const managers = getManagers(roster);
                     teamManagersMap[year][roster.roster_id] = {
                         team: {
                             name: roster.team_name || `Team ${roster.roster_id}`,
                             avatar: roster.avatar || '/brand.png'
                         },
-                        managers: [roster.owner_id]
+                        managers
                     };
-                    if (!finalUsers[roster.owner_id]) {
-                        finalUsers[roster.owner_id] = {
-                            display_name: roster.manager_name || roster.team_name,
-                            avatar: roster.avatar || '/brand.png',
-                            user_id: roster.owner_id
-                        };
-                    }
+                    managers.forEach(managerID => {
+                        if (!finalUsers[managerID]) {
+                            finalUsers[managerID] = {
+                                display_name: roster.manager_name || roster.team_name,
+                                avatar: roster.avatar || '/brand.png',
+                                user_id: managerID
+                            };
+                        }
+                    });
                 });
 
                 currentLeagueID = leagueData.previous_league_id || 0;

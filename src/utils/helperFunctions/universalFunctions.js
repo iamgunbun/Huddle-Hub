@@ -77,11 +77,21 @@ export const getAuthor = (leagueTeamManagers, author) => {
     return author;
 };
 
+// Sleeper identifies an avatar by a bare id that has to be hung off its CDN;
+// Yahoo returns a fully-formed URL. Prefixing a URL breaks the image, so the
+// two cases have to be told apart before building a src.
+export const resolveAvatarUrl = (avatar, fallback = QUESTION) => {
+    if (!avatar) return fallback;
+    const value = String(avatar);
+    if (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('/')) return value;
+    return `https://sleepercdn.com/avatars/thumbs/${value}`;
+};
+
 export const getAvatar = (leagueTeamManagers, author) => {
     if (!leagueTeamManagers?.users) return QUESTION;
     for(const uID in leagueTeamManagers.users) {
         if(leagueTeamManagers.users[uID]?.user_name?.toLowerCase() == author?.toLowerCase()) {
-            return `https://sleepercdn.com/avatars/thumbs/${leagueTeamManagers.users[uID].avatar}`;
+            return resolveAvatarUrl(leagueTeamManagers.users[uID].avatar);
         }
     }
     return QUESTION;

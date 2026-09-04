@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "verify:scoring": "node scripts/verify-yahoo-scoring.mjs",
     "verify:pool": "node scripts/verify-player-pool.mjs",
-    "verify": "npm run verify:scoring && npm run verify:pool"
+    "verify:history": "node scripts/verify-yahoo-history.mjs",
+    "verify": "npm run verify:scoring && npm run verify:pool && npm run verify:history"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",
