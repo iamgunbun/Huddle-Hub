@@ -1,45 +1,88 @@
 import { getLeagueData } from './leagueData';
 import { getLeagueRosters } from './leagueRosters';
 import { waitForAll } from './multiPromise';
+import { fetchYahooStandings } from '../yahooService';
+import { buildPodiumFromStandings } from '../yahooHistory';
+
+const isYahooLeague = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
 
 let awardsCache = [];
+let awardsCacheLeagueID = null;
 
 export const getAwards = async (refresh = false, queryLeagueID = null) => {
-    // If Yahoo league ID is passed, return empty array immediately
-    if (queryLeagueID && (String(queryLeagueID).includes('.') || !/^\d+$/.test(String(queryLeagueID)))) {
-        return [];
-    }
-
     if (queryLeagueID) refresh = true;
 
-    if (!refresh && awardsCache.length) {
+    if (!refresh && awardsCache.length && awardsCacheLeagueID === queryLeagueID) {
         return awardsCache;
     }
 
+    // Keyed per league: a single shared "awards" key meant one league's trophy
+    // room could be served to another (and a Yahoo podium to a Sleeper league).
+    const cacheKey = `awards_${queryLeagueID || 'default'}`;
+
+    // The old shared key is dead weight now, and localStorage is tight enough
+    // here that a stale multi-megabyte-adjacent leftover matters.
+    if (typeof window !== 'undefined') {
+        try { localStorage.removeItem("awards"); } catch { /* nothing to clean up */ }
+    }
+
     if (!refresh && typeof window !== 'undefined') {
-        let localAwards = await JSON.parse(localStorage.getItem("awards"));
+        let localAwards = await JSON.parse(localStorage.getItem(cacheKey));
         if (localAwards && localAwards.length > 0) {
             awardsCache = localAwards;
+            awardsCacheLeagueID = queryLeagueID;
             return localAwards;
         }
     }
-    
+
     const leagueData = await getLeagueData(queryLeagueID).catch((err) => { console.error(err); });
-    if (!leagueData || leagueData.platform === 'yahoo' || (leagueData.id && String(leagueData.id).includes('.'))) {
-        return [];
-    }
-    
-    let previousSeasonID = leagueData.status === "complete" ? leagueData.league_id : leagueData.previous_league_id;
-    
-    const podiums = await getPodiums(previousSeasonID);
+    if (!leagueData) return [];
+
+    const startingSeasonID = leagueData.status === "complete"
+        ? (leagueData.league_id || queryLeagueID)
+        : leagueData.previous_league_id;
+
+    const podiums = isYahooLeague(leagueData.league_id || queryLeagueID)
+        ? await getYahooPodiums(startingSeasonID)
+        : await getPodiums(startingSeasonID);
+
     awardsCache = podiums;
+    awardsCacheLeagueID = queryLeagueID;
     if (typeof window !== 'undefined') {
         try {
-            localStorage.setItem("awards", JSON.stringify(podiums));
+            localStorage.setItem(cacheKey, JSON.stringify(podiums));
         } catch (e) {
             console.warn("Awards cache skipped:", e);
         }
     }
+    return podiums;
+};
+
+// Yahoo has no winners/losers bracket endpoint, so a season's podium comes from
+// its FINAL standings instead: once Yahoo reports the season finished, rank 1 is
+// the champion, 2 the runner-up, 3 third place. Unfinished seasons are skipped
+// -- their ranks are just the current standings and would crown a champion in
+// October.
+const getYahooPodiums = async (startingSeasonID) => {
+    const podiums = [];
+    let seasonID = startingSeasonID;
+    const visited = new Set();
+
+    while (seasonID && seasonID !== 0 && seasonID !== "0" && !visited.has(seasonID)) {
+        visited.add(seasonID);
+
+        const seasonData = await getLeagueData(seasonID).catch((err) => { console.error(err); return null; });
+        if (!seasonData) break;
+
+        if (seasonData.status === 'complete') {
+            const standings = await fetchYahooStandings(seasonID).catch((err) => { console.error(err); return []; });
+            const podium = buildPodiumFromStandings(standings, parseInt(seasonData.season));
+            if (podium) podiums.push(podium);
+        }
+
+        seasonID = seasonData.previous_league_id || 0;
+    }
+
     return podiums;
 };
 

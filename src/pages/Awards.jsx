@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLeague } from '../context/LeagueContext';
 import { getAwards, getLeagueTeamManagers, getLeagueRecords } from '../utils/helper';
+import { resolveAvatarUrl } from '../utils/helperFunctions/universalFunctions';
 import styles from './Awards.module.css';
+
+const DEFAULT_AVATAR = 'https://sleepercdn.com/images/v2/icons/player_default.webp';
 
 export default function Awards() {
     const { activeLeague } = useLeague();
@@ -58,9 +61,13 @@ export default function Awards() {
     const getUserInfo = (managerId) => {
         if (!teamManagers || !teamManagers.users || !managerId) return { name: 'Unknown Manager', avatar: 'https://sleepercdn.com/images/v2/icons/player_default.webp' };
         const user = teamManagers.users[managerId];
+        if (!user) return { name: 'Unknown Manager', avatar: DEFAULT_AVATAR };
         return {
             name: user.display_name || user.metadata?.team_name || 'Unknown',
-            avatar: user.avatar ? `https://sleepercdn.com/avatars/thumbs/${user.avatar}` : 'https://sleepercdn.com/images/v2/icons/player_default.webp'
+            // Sleeper stores a bare avatar id that needs its CDN prefix; Yahoo
+            // hands back a full URL already, and prefixing that produces a
+            // broken image.
+            avatar: resolveAvatarUrl(user.avatar, DEFAULT_AVATAR)
         };
     };
 

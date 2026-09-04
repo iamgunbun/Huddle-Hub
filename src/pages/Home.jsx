@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
-import { getLeagueTeamManagers, getLeagueData, loadPlayers } from '../utils/helper';
+import { getLeagueTeamManagers, getLeagueData, loadPlayers, getAwards } from '../utils/helper';
 import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
 import styles from './Home.module.css';
 import ProjectionsPanel from '../components/Projections/ProjectionsPanel';
@@ -263,26 +263,25 @@ export default function Home() {
                     // --- YAHOO PLATFORM ROUTING ---
                     let currentRole = activeLeague.is_commissioner || ulData?.is_commissioner ? 'Commissioner' : 'Member';
                     setLeagueRole(currentRole);
-                    setLeagueTenure("Yahoo League");
-                    setMyTxnCount(0); 
+                    setMyTxnCount(0);
 
-                    // Fetch Yahoo rosters via proxy to avoid CORS/404 crashes
-                    try {
-                        const proxyRes = await fetch('/api/yahoo-proxy', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                userId: userId,
-                                endpoint: `league/${targetId}/teams`
-                            })
-                        });
+                    // Yahoo leagues walk their own season chain now, so the hub
+                    // can show real tenure and a real reigning champion instead
+                    // of a placeholder.
+                    const [managersData, podiums] = await Promise.all([
+                        getLeagueTeamManagers(targetId),
+                        getAwards(true, targetId),
+                    ]);
+                    setTeamManagers(managersData);
 
-                        if (proxyRes.ok) {
-                            const data = await proxyRes.json();
-                            // Future: Map Yahoo team configurations to setTeamManagers state here
-                        }
-                    } catch (err) {
-                        console.warn("Yahoo proxy fetch failed:", err);
+                    const yahooYears = Object.keys(managersData?.teamManagersMap || {})
+                        .map(Number)
+                        .filter(Number.isFinite);
+                    if (yahooYears.length > 0) {
+                        const startYear = Math.min(...yahooYears);
+                        setLeagueTenure(`${startYear} - Present (${yahooYears.length} Year${yahooYears.length > 1 ? 's' : ''})`);
+                    } else {
+                        setLeagueTenure("Yahoo League");
                     }
 
                     // Handle generic dues fallback for Yahoo
@@ -297,8 +296,11 @@ export default function Home() {
                     } else {
                         setMyBalanceOwed(0);
                     }
-                    
-                    setRecentChamp(null);
+
+                    const latestPodium = [...(podiums || [])].sort((a, b) => b.year - a.year)[0];
+                    setRecentChamp(latestPodium?.champion !== undefined
+                        ? { year: latestPodium.year, champion: latestPodium.champion }
+                        : null);
                 }
             } catch (e) {
                 console.error("Dashboard data load failed:", e);

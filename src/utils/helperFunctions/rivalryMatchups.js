@@ -5,17 +5,15 @@ import { getRosterIDFromManagerIDAndYear } from '$lib/utils/helperFunctions/univ
 import { get } from 'svelte/store';
 import { activeLeague } from '$lib/stores/leagueContext.js';
 import { leagueID as defaultLeagueID } from '$lib/utils/leagueInfo.js';
+import { fetchYahooScoreboardWeeks } from '../yahooService';
+
+const isYahooLeague = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
 
 export const getRivalryMatchups = async (userOneID, userTwoID) => {
     if(!userOneID || !userTwoID) return null;
          
     const activeStore = get(activeLeague);
     let curLeagueID = activeStore?.sleeper_league_id || defaultLeagueID;
-
-    // SHIELD: Do not run Sleeper rivalry loops on Yahoo leagues
-    if (curLeagueID && (String(curLeagueID).includes('.') || !/^\d+$/.test(String(curLeagueID)))) {
-        return { points: { one: 0, two: 0 }, wins: { one: 0, two: 0 }, ties: 0, matchups: [] };
-    }
 
     try {
         const [nflState, teamManagers] = await Promise.all([
@@ -39,12 +37,10 @@ export const getRivalryMatchups = async (userOneID, userTwoID) => {
                 week = 18;
                 continue;
             }
-            const matchupsPromises = [];
-            for(let i = 1; i < (leagueData.settings?.playoff_week_start || 15); i++) {
-                matchupsPromises.push(fetch(`https://api.sleeper.app/v1/league/${curLeagueID}/matchups/${i}`, {compress: true}));
-            }
-            const matchupsRes = await Promise.all(matchupsPromises);
-            const matchupsData = await Promise.all(matchupsRes.map(r => r.json()));
+            const lastRegularWeek = (leagueData.settings?.playoff_week_start || 15) - 1;
+            const matchupsData = isYahooLeague(curLeagueID)
+                ? await fetchYahooRivalryWeeks(curLeagueID, lastRegularWeek)
+                : await fetchSleeperRivalryWeeks(curLeagueID, lastRegularWeek);
             for(let i = 1; i < matchupsData.length + 1; i++) {
                 const processed = processRivalryMatchups(matchupsData[i - 1], i, rosterIDOne, rosterIDTwo);
                 if(processed) {
@@ -72,6 +68,44 @@ export const getRivalryMatchups = async (userOneID, userTwoID) => {
         console.error("Rivalry fetch broke", e);
         return null;
     }
+};
+
+const fetchSleeperRivalryWeeks = async (leagueID, lastRegularWeek) => {
+    const matchupsPromises = [];
+    for(let i = 1; i <= lastRegularWeek; i++) {
+        matchupsPromises.push(fetch(`https://api.sleeper.app/v1/league/${leagueID}/matchups/${i}`, {compress: true}));
+    }
+    const matchupsRes = await Promise.all(matchupsPromises);
+    return await Promise.all(matchupsRes.map(r => r.json()));
+};
+
+// Yahoo's scoreboard gives a team total rather than per-starter points, so the
+// points array carries the single total -- the caller only ever sums it.
+// Weeks are returned in the same 1..N positional order the Sleeper path uses,
+// with unplayed weeks left empty so the week numbering stays aligned.
+const fetchYahooRivalryWeeks = async (leagueID, lastRegularWeek) => {
+    const weeks = [];
+    for(let i = 1; i <= lastRegularWeek; i++) weeks.push(i);
+
+    const scoreboard = await fetchYahooScoreboardWeeks(leagueID, weeks)
+        .catch((err) => { console.error(err); return []; });
+
+    // Both sides of one matchup must share a matchup_id, so it's assigned per
+    // matchup rather than per team.
+    const out = [];
+    for(let i = 1; i <= lastRegularWeek; i++) out.push([]);
+    scoreboard.forEach((m, idx) => {
+        if(!m.played || !Number.isFinite(m.week) || m.week > lastRegularWeek) return;
+        m.teams.forEach(team => {
+            out[m.week - 1].push({
+                roster_id: team.roster_id,
+                matchup_id: `m${idx}`,
+                starters: [],
+                starters_points: [team.points],
+            });
+        });
+    });
+    return out;
 };
 
 const processRivalryMatchups = (inputMatchups, week, rosterIDOne, rosterIDTwo) => {

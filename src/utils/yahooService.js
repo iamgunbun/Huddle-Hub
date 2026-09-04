@@ -1,5 +1,6 @@
 import { supabase } from '../supabaseClient';
 import { buildYahooScoringSettings } from './yahooScoring';
+import { parseYahooStandings, parseYahooScoreboard, yahooCollection } from './yahooHistory';
 
 export const cleanYahooKey = (rawId) => {
     if (!rawId) return null;
@@ -104,6 +105,11 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
         const season = leagueData.season || new Date().getFullYear().toString();
         const totalRosters = parseInt(leagueData.num_teams) || 10;
         const playoffWeekStart = settingsData?.playoff_start_week ? parseInt(settingsData.playoff_start_week) : 15;
+        // Yahoo states where the season actually ends, which varies by league
+        // (17 vs 18) and by era. The playoff walk needs it to know how many
+        // weeks of postseason to ask for instead of guessing three rounds.
+        const startWeek = parseInt(leagueData.start_week) || 1;
+        const endWeek = parseInt(leagueData.end_week) || (playoffWeekStart + 2);
 
         // Yahoo tracks cross-season lineage via "renew" (points at the prior
         // season's league in "<game_key>_<league_id>" form). Mirroring Sleeper's
@@ -141,6 +147,8 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
             scoring_settings: scoringSettings,
             settings: {
                 playoff_week_start: playoffWeekStart,
+                start_week: startWeek,
+                end_week: endWeek,
                 divisions: 0,
                 playoff_teams: 6,
                 type: 0,
@@ -153,6 +161,66 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
         console.error("Yahoo League Adapter Error:", error);
         return null;
     }
+};
+
+// A standings row, in the roster shape the rest of the app consumes.
+//
+// A manager's identity has to be the Yahoo guid, not the team key. A team key
+// carries the season's game key ("461.l.123.t.5"), so keying managers by it
+// makes every season look like a different set of people -- all-time records,
+// rivalries and the trophy room then never accumulate past a single year. Guids
+// are stable across seasons; the team key stays available separately for the
+// roster and matchup endpoints that genuinely need it.
+const standingsRowToRoster = (row, overrides = {}) => {
+    const sMap = row || {};
+    const fpts = sMap.pointsFor || 0;
+    const fptsAgainst = sMap.pointsAgainst || 0;
+    const rosterId = overrides.rosterId ?? sMap.rosterId;
+    const teamKey = overrides.teamKey ?? sMap.teamKey;
+    const managerGuids = (sMap.managerGuids?.length ? sMap.managerGuids : overrides.managerGuids) || [];
+
+    return {
+        roster_id: rosterId,
+        owner_id: managerGuids[0] || teamKey,
+        co_owners: managerGuids.slice(1),
+        team_key: teamKey || null,
+        team_name: overrides.teamName ?? sMap.teamName ?? `Team ${rosterId}`,
+        avatar: overrides.teamLogo ?? sMap.logoUrl ?? '/brand.png',
+        manager_name: overrides.managerName ?? sMap.managerName ?? overrides.teamName ?? sMap.teamName,
+        players: [],
+        starters: [],
+        reserve: [],
+        is_owned_by_current_login: overrides.isOwnedByCurrentLogin ?? sMap.isOwnedByCurrentLogin ?? false,
+        rank: sMap.rank ?? null,
+        playoff_seed: sMap.playoffSeed ?? null,
+        settings: {
+            wins: sMap.wins || 0,
+            losses: sMap.losses || 0,
+            ties: sMap.ties || 0,
+            fpts: Math.floor(fpts),
+            fpts_decimal: Math.round((fpts % 1) * 100),
+            fpts_against: Math.floor(fptsAgainst),
+            fpts_against_decimal: Math.round((fptsAgainst % 1) * 100),
+            division: 1
+        },
+        metadata: { streak: sMap.streak || 0 }
+    };
+};
+
+// Teams, records and managers for one season -- WITHOUT each team's player list.
+//
+// Walking a league's history needs this for every past season, and the full
+// roster fetch costs one proxy call per team per season (a six-season, ten-team
+// league would be ~66 calls just to draw the records page). Standings alone
+// answers everything the history pages ask for in a single call.
+export const fetchYahooSeasonTeams = async (leagueId, passedUserId = null) => {
+    const rows = await fetchYahooStandings(leagueId, passedUserId);
+    const rosters = {};
+    rows.forEach(row => {
+        if (row.rosterId === null || row.rosterId === undefined) return;
+        rosters[row.rosterId] = standingsRowToRoster(row);
+    });
+    return { rosters, startersAndReserve: [], yahooPlayersMeta: {} };
 };
 
 // 2. ROSTERS & STANDINGS (Parallel Fetch)
@@ -171,47 +239,14 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
             'league standings'
         ) || {};
 
+        const standingsRows = parseYahooStandings(sData);
         const standingsMap = {};
         const teamKeys = [];
-        
-        const stLeagueObj = sData?.fantasy_content?.league;
-        if (Array.isArray(stLeagueObj)) {
-            const stWrapper = stLeagueObj.find(x => x && x.standings);
-            const stTeams = stWrapper?.standings?.[0]?.teams;
-            if (stTeams) {
-                Object.keys(stTeams).forEach(k => {
-                    if (k === 'count') return;
-                    const tm = stTeams[k]?.team;
-                    if (!Array.isArray(tm)) return;
-                    
-                    const tmInfo = tm[0];
-                    const tmStats = tm[1]?.team_standings;
-                    
-                    let tKey = '';
-                    let tId = null;
 
-                    if (Array.isArray(tmInfo)) {
-                        tKey = tmInfo.find(x => x.team_key)?.team_key;
-                        tId = parseInt(tmInfo.find(x => x.team_id)?.team_id);
-                    }
-
-                    if (tKey) teamKeys.push(tKey);
-                    
-                    if (tId && tmStats) {
-                        const totals = tmStats.outcome_totals || {};
-                        standingsMap[tId] = {
-                            roster_id: tId,
-                            wins: parseInt(totals.wins) || 0,
-                            losses: parseInt(totals.losses) || 0,
-                            ties: parseInt(totals.ties) || 0,
-                            fpts: parseFloat(tmStats.points_for) || 0,
-                            fpts_against: parseFloat(tmStats.points_against) || 0,
-                            streak: tmStats.streak?.value || 0
-                        };
-                    }
-                });
-            }
-        }
+        standingsRows.forEach(row => {
+            if (row.teamKey) teamKeys.push(row.teamKey);
+            if (row.rosterId !== null) standingsMap[row.rosterId] = row;
+        });
 
         // Step 2: Fetch every team's roster explicitly in parallel
         // (team keys come straight from the standings response above, so they
@@ -329,31 +364,22 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
                 }
             }
 
-            const sMap = standingsMap[teamId] || {};
-            const fpts = sMap.fpts || 0;
-            const fptsAgainst = sMap.fpts_against || 0;
+            const rosterManagerGuids = yahooCollection(teamInfoArray.find(x => x.managers)?.managers)
+                .map(m => m?.manager?.guid)
+                .filter(Boolean);
 
             rosterMap[teamId] = {
-                roster_id: teamId,
-                owner_id: teamKey,
-                team_name: teamName,
-                avatar: teamLogo,
-                manager_name: primaryManager,
+                ...standingsRowToRoster(standingsMap[teamId], {
+                    rosterId: teamId,
+                    teamKey,
+                    teamName,
+                    teamLogo,
+                    managerName: primaryManager,
+                    isOwnedByCurrentLogin,
+                    managerGuids: rosterManagerGuids,
+                }),
                 players: playersArr,
                 starters: startersArr,
-                reserve: [],
-                is_owned_by_current_login: isOwnedByCurrentLogin,
-                settings: {
-                    wins: sMap.wins || 0,
-                    losses: sMap.losses || 0,
-                    ties: sMap.ties || 0,
-                    fpts: Math.floor(fpts),
-                    fpts_decimal: Math.round((fpts % 1) * 100),
-                    fpts_against: Math.floor(fptsAgainst),
-                    fpts_against_decimal: Math.round((fptsAgainst % 1) * 100),
-                    division: 1
-                },
-                metadata: { streak: sMap.streak || 0 }
             };
         });
 
@@ -364,11 +390,92 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
     }
 };
 
-// 3. MATCHUPS & SCOREBOARD
-export const fetchAndNormalizeYahooMatchups = async (leagueId, week = 1, passedUserId = null) => {
+// 3. STANDINGS (one season's finish order -- the basis of the trophy room)
+//
+// Yahoo publishes no bracket endpoint, so a finished season's standings rank
+// IS the playoff result: rank 1 is that year's champion. Exposed on its own
+// because the history walk needs ranks for seasons other than the current one.
+export const fetchYahooStandings = async (leagueId, passedUserId = null) => {
     const cleanKey = cleanYahooKey(leagueId);
     const userId = await getUserId(passedUserId);
+    if (!cleanKey || !userId) return [];
+
+    try {
+        const data = await yahooProxyRequest(
+            userId,
+            (key) => `league/${key}/standings`,
+            cleanKey,
+            getNflAliasKey(cleanKey),
+            'league standings'
+        );
+        if (!data) return [];
+        return parseYahooStandings(data);
+    } catch (err) {
+        console.error("Yahoo Standings Adapter Error:", err);
+        return [];
+    }
+};
+
+// 4. MATCHUPS & SCOREBOARD
+
+// Yahoo accepts a comma-separated week list on the scoreboard endpoint, and
+// walking a league's history needs a LOT of weeks: one request per week per
+// season is dozens of proxy calls, and bursts of those are exactly what
+// produced the intermittent 400s seen earlier. Weeks are requested in chunks,
+// chunks run one after another, and a chunk that comes back empty falls back to
+// single-week requests so a league Yahoo won't serve the multi-week form for
+// still gets its history.
+const WEEK_CHUNK = 6;
+
+const chunk = (arr, size) => {
+    const out = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+};
+
+export const fetchYahooScoreboardWeeks = async (leagueId, weeks, passedUserId = null) => {
+    const cleanKey = cleanYahooKey(leagueId);
+    const userId = await getUserId(passedUserId);
+    const wanted = (weeks || []).map(w => parseInt(w)).filter(w => Number.isFinite(w) && w > 0);
+    if (!cleanKey || !userId || !wanted.length) return [];
+
+    const collected = [];
+
+    for (const group of chunk(wanted, WEEK_CHUNK)) {
+        const data = await yahooProxyRequest(
+            userId,
+            (key) => `league/${key}/scoreboard;week=${group.join(',')}`,
+            cleanKey,
+            getNflAliasKey(cleanKey),
+            `scoreboard weeks ${group[0]}-${group[group.length - 1]}`
+        );
+
+        const parsed = data ? parseYahooScoreboard(data) : [];
+        if (parsed.length) {
+            collected.push(...parsed);
+            continue;
+        }
+
+        for (const week of group) {
+            const single = await yahooProxyRequest(
+                userId,
+                (key) => `league/${key}/scoreboard;week=${week}`,
+                cleanKey,
+                getNflAliasKey(cleanKey),
+                `scoreboard week ${week}`
+            );
+            if (single) collected.push(...parseYahooScoreboard(single, week));
+        }
+    }
+
+    return collected;
+};
+
+// Single-week view, in the shape the matchup pages already consume.
+export const fetchAndNormalizeYahooMatchups = async (leagueId, week = 1, passedUserId = null) => {
     const safeWeek = parseInt(week) || 1;
+    const cleanKey = cleanYahooKey(leagueId);
+    const userId = await getUserId(passedUserId);
     if (!cleanKey || !userId) return { matchups: {}, week: safeWeek };
 
     try {
@@ -381,40 +488,14 @@ export const fetchAndNormalizeYahooMatchups = async (leagueId, week = 1, passedU
         );
         if (!data) return { matchups: {}, week: safeWeek };
 
-        const matchupsData = data?.fantasy_content?.league?.[1]?.scoreboard?.[0]?.matchups;
-        if (!matchupsData) return { matchups: {}, week: safeWeek };
-
         const matchups = {};
-
-        Object.keys(matchupsData).forEach((mKey, idx) => {
-            if (mKey === 'count') return;
-            const matchupItem = matchupsData[mKey]?.matchup;
-            if (!matchupItem) return;
-
-            const matchupId = idx + 1;
-            matchups[matchupId] = [];
-
-            const teams = matchupItem[0]?.teams;
-            if (teams) {
-                Object.keys(teams).forEach((tKey) => {
-                    if (tKey === 'count') return;
-                    const teamObj = teams[tKey]?.team;
-                    if (!teamObj) return;
-
-                    const teamInfo = teamObj[0];
-                    const teamPoints = teamObj[1]?.team_points;
-
-                    const teamId = parseInt(teamInfo?.find(x => x.team_id)?.team_id) || (parseInt(tKey) + 1);
-                    const points = parseFloat(teamPoints?.total) || 0;
-
-                    matchups[matchupId].push({
-                        roster_id: teamId,
-                        starters: [],
-                        points: points,
-                        starters_points: []
-                    });
-                });
-            }
+        parseYahooScoreboard(data, safeWeek).forEach((m, idx) => {
+            matchups[idx + 1] = m.teams.map(t => ({
+                roster_id: t.roster_id,
+                starters: [],
+                points: t.points,
+                starters_points: []
+            }));
         });
 
         return { matchups, week: safeWeek };
@@ -424,7 +505,7 @@ export const fetchAndNormalizeYahooMatchups = async (leagueId, week = 1, passedU
     }
 };
 
-// 4. AVAILABLE PLAYERS (league free agents + waivers)
+// 5. AVAILABLE PLAYERS (league free agents + waivers)
 //
 // Yahoo tracks its own pool, so ask it rather than inferring availability by
 // subtracting rosters from a league-agnostic player database. status=A is

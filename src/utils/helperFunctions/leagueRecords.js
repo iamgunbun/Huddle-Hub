@@ -6,19 +6,30 @@ import { waitForAll } from './multiPromise';
 import { getManagers, round, sortHighAndLow } from './universalFunctions';
 import { Records } from '../dataClasses';
 import { getBrackets } from './leagueBrackets';
-import { fetchAndNormalizeYahooMatchups } from '../yahooService';
+import { fetchYahooScoreboardWeeks } from '../yahooService';
+import { groupPlayoffRounds } from '../yahooHistory';
+
+const isYahooLeague = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
 
 let recordsCache = {}; 
+let recordsCacheLeagueID = null;
 
 export const getLeagueRecords = async (refresh = false, queryLeagueID = null) => {
     if (queryLeagueID) refresh = true; 
 
-    if (recordsCache.leagueWeekHighs && !refresh) {
+    if (recordsCache.leagueWeekHighs && !refresh && recordsCacheLeagueID === queryLeagueID) {
         return recordsCache;
     }
 
+    // Keyed per league. A single shared "records" key meant the fallback read
+    // below could hand one league's entire history to a different league.
+    const cacheKey = `records_${queryLeagueID || 'default'}`;
+    if (typeof window !== 'undefined') {
+        try { localStorage.removeItem("records"); } catch { /* nothing to clean up */ }
+    }
+
     if (!refresh && typeof window !== 'undefined') {
-        let localRecords = await JSON.parse(localStorage.getItem("records"));
+        let localRecords = await JSON.parse(localStorage.getItem(cacheKey));
         if (localRecords && localRecords.playoffData) {
             localRecords.stale = true;
             return localRecords;
@@ -43,9 +54,16 @@ export const getLeagueRecords = async (refresh = false, queryLeagueID = null) =>
     let allRegDiffs = [];
     let allPlayoffDiffs = [];
 
-    while (curSeason && curSeason !== 0 && curSeason !== "0") {
+    const visitedSeasons = new Set();
+
+    while (curSeason && curSeason !== 0 && curSeason !== "0" && !visitedSeasons.has(curSeason)) {
+        visitedSeasons.add(curSeason);
+
+        // teamsOnly: the records engine reads each team's W/L, points and
+        // manager -- never its player list. On Yahoo that turns a per-team
+        // roster fetch for every past season into a single standings call.
         const res = await waitForAll(
-            getLeagueRosters(curSeason),
+            getLeagueRosters(curSeason, { teamsOnly: true }),
             getLeagueData(curSeason)
         ).catch((err) => { console.error(err); return [null, null]; });
 
@@ -64,7 +82,7 @@ export const getLeagueRecords = async (refresh = false, queryLeagueID = null) =>
             allRegDiffs.push(...regData.matchupDifferentials);
         }
         
-        const pS = await processPlayoffs({ year: regData.year, curSeason, week, playoffRecords, rosters });
+        const pS = await processPlayoffs({ year: regData.year, curSeason, week, playoffRecords, rosters, leagueData });
         if (pS) {
             playoffRecords = pS.playoffRecords;
             allPlayoffDiffs.push(...pS.matchupDifferentials);
@@ -94,11 +112,12 @@ export const getLeagueRecords = async (refresh = false, queryLeagueID = null) =>
         // A failed cache write (quota) must never break the page -- keep the
         // in-memory cache either way.
         try {
-            localStorage.setItem("records", JSON.stringify(recordsData));
+            localStorage.setItem(cacheKey, JSON.stringify(recordsData));
         } catch (e) {
             console.warn("Records cache skipped:", e);
         }
         recordsCache = recordsData;
+        recordsCacheLeagueID = queryLeagueID;
     }
 
     return recordsData;
@@ -116,28 +135,44 @@ const processRegularSeason = async ({rosters, leagueData, curSeason, week, regul
 
     let startWeek = parseInt(week);
     
-    // GUARANTEED YAHOO DETECTOR
-    const isYahoo = String(curSeason).includes('.') || !/^\d+$/.test(String(curSeason));
+    const isYahoo = isYahooLeague(curSeason);
     let matchupsData = [];
 
     if (isYahoo) {
-        const yPromises = [];
-        let w = startWeek;
-        while (w > 0) {
-            yPromises.push(fetchAndNormalizeYahooMatchups(curSeason, w));
-            w--;
-        }
-        const yWeeks = await Promise.all(yPromises);
-        
-        matchupsData = yWeeks.map(yw => {
+        const weeks = [];
+        for (let w = 1; w <= startWeek; w++) weeks.push(w);
+
+        // One batched request set for the whole regular season rather than a
+        // burst of one-per-week proxy calls, which Yahoo rate-limits into 400s
+        // once a multi-season history walk gets going.
+        const scoreboard = await fetchYahooScoreboardWeeks(curSeason, weeks)
+            .catch((err) => { console.error(err); return []; });
+
+        const byWeek = new Map();
+        scoreboard.forEach(m => {
+            // An unplayed week still answers with a 0-0 matchup; recording it
+            // would invent a real result and sink every "lowest score" record.
+            if (!m.played || !Number.isFinite(m.week)) return;
+            if (!byWeek.has(m.week)) byWeek.set(m.week, []);
+            byWeek.get(m.week).push(m);
+        });
+
+        // Descending weeks, one entry per week including the empty ones:
+        // processMatchups decrements its week counter on every call, so a gap
+        // would shift every earlier week's records by one.
+        for (let w = startWeek; w > 0; w--) {
             const arr = [];
-            Object.entries(yw.matchups || {}).forEach(([mId, matchupPair]) => {
-                matchupPair.forEach(team => {
-                    arr.push({ ...team, matchup_id: mId });
+            (byWeek.get(w) || []).forEach((m, idx) => {
+                m.teams.forEach(team => {
+                    arr.push({
+                        roster_id: team.roster_id,
+                        points: team.points,
+                        matchup_id: `${w}-${idx + 1}`,
+                    });
                 });
             });
-            return arr;
-        });
+            matchupsData.push(arr);
+        }
     } else {
         const matchupsPromises = [];
         let w = startWeek;
@@ -267,7 +302,13 @@ const processMatchups = ({matchupWeek, seasonPointsRecord, record, startWeek, ma
     return { sPR: seasonPointsRecord, mD: matchupDifferentials, sW: startWeek, pSD }
 }
 
-const processPlayoffs = async ({curSeason, playoffRecords, year, week, rosters}) => {
+const processPlayoffs = async ({curSeason, playoffRecords, year, week, rosters, leagueData}) => {
+    // Yahoo publishes no winners/losers bracket endpoint, so its postseason is
+    // reconstructed from the scoreboard's own is_playoffs flag instead.
+    if (isYahooLeague(curSeason)) {
+        return processYahooPlayoffs({curSeason, playoffRecords, year, rosters, leagueData});
+    }
+
     const bracketData = await getBrackets(curSeason).catch(() => null);
     
     if (!bracketData) return null;
@@ -291,6 +332,12 @@ const processPlayoffs = async ({curSeason, playoffRecords, year, week, rosters})
     playoffRecords = consolationBracket.playoffRecords;
     matchupDifferentials = consolationBracket.matchupDifferentials;
 
+    return finalizePlayoffRecords({postSeasonData, seasonPointsRecord, matchupDifferentials, playoffRecords, rosters, year});
+}
+
+// Shared by both platforms: turn a season's accumulated postseason matchups into
+// manager records and season-week records.
+const finalizePlayoffRecords = ({postSeasonData, seasonPointsRecord, matchupDifferentials, playoffRecords, rosters, year}) => {
     for(const rosterID in postSeasonData) {
         const pSD = postSeasonData[rosterID];
         const fptsPerGame = round(pSD.fptsFor / (pSD.wins + pSD.losses + pSD.ties));
@@ -300,7 +347,7 @@ const processPlayoffs = async ({curSeason, playoffRecords, year, week, rosters})
 
         playoffRecords.addSeasonLongPoints({ fpts: pSD.fptsFor, fptsPerGame, year, rosterID: rosterID });
 
-        const managers = getManagers(rosters[rosterID]);
+        const managers = getManagers(rosters[rosterID] || {});
         playoffRecords.updateManagerRecord(managers, pSD);
     }
 
@@ -312,6 +359,66 @@ const processPlayoffs = async ({curSeason, playoffRecords, year, week, rosters})
     }
     
     return { playoffRecords, matchupDifferentials };
+}
+
+// Yahoo's postseason, rebuilt from the scoreboard.
+//
+// Every scoreboard matchup states whether it is a playoff game and whether it
+// is a consolation game, so the rounds can be reassembled by week without a
+// bracket. Only games Yahoo reports as final are counted, which keeps an
+// in-progress postseason from being recorded as a pile of 0-0 results.
+const processYahooPlayoffs = async ({curSeason, playoffRecords, year, rosters, leagueData}) => {
+    if (!year) return null;
+
+    const playoffsStart = parseInt(leagueData?.settings?.playoff_week_start) || 15;
+    const endWeek = parseInt(leagueData?.settings?.end_week) || (playoffsStart + 2);
+
+    const weeks = [];
+    for (let w = playoffsStart; w <= Math.min(endWeek, 18); w++) weeks.push(w);
+    if (!weeks.length) return null;
+
+    const scoreboard = await fetchYahooScoreboardWeeks(curSeason, weeks)
+        .catch((err) => { console.error(err); return []; });
+
+    const rounds = groupPlayoffRounds(scoreboard);
+    if (!rounds.length) return null;
+
+    let seasonPointsRecord = [];
+    let matchupDifferentials = [];
+    let postSeasonData = {};
+    let matchupCounter = 0;
+
+    for (const round of rounds) {
+        // processMatchups treats an entry WITHOUT a matchup_id as a postseason
+        // game and keys it off `m`, which is what accumulates playoff wins and
+        // losses -- so playoff entries deliberately carry `m` and no matchup_id.
+        const matchupWeek = [];
+        round.matchups.forEach(matchup => {
+            matchupCounter++;
+            matchup.teams.forEach(team => {
+                matchupWeek.push({ roster_id: team.roster_id, points: team.points, m: matchupCounter });
+            });
+        });
+
+        const label = round.consolation
+            ? `(C) Week ${round.week}`
+            : getStartWeek(round.roundIndex, round.totalRounds, false, playoffsStart);
+
+        const {sPR, mD, pSD} = processMatchups({
+            matchupWeek,
+            seasonPointsRecord,
+            record: playoffRecords,
+            startWeek: label,
+            matchupDifferentials,
+            year,
+        });
+
+        postSeasonData = meshPostSeasonData(postSeasonData, pSD);
+        seasonPointsRecord = sPR;
+        matchupDifferentials = mD;
+    }
+
+    return finalizePlayoffRecords({postSeasonData, seasonPointsRecord, matchupDifferentials, playoffRecords, rosters, year});
 }
 
 const digestBracket = ({bracket, playoffRecords, playoffRounds, matchupDifferentials, postSeasonData, consolation, seasonPointsRecord, playoffsStart, year}) => {
