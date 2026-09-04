@@ -1,4 +1,6 @@
 import { leagueID as defaultLeagueID } from '../leagueInfo';
+import { getLeagueData } from './leagueData';
+import { scoreStatLine } from '../yahooScoring';
 
 // Normalized "first last" key, used to reconcile a player across platforms when
 // an ID crosswalk isn't available -- Yahoo rosters routinely include players
@@ -88,13 +90,30 @@ export const loadPlayers = async (activeLeagueId) => {
         const rawPlayers = await sleeperRes.json();
         const nflState = await stateRes.json();
         const leagueData = leagueRes ? await leagueRes.json() : null;
-        
-        const scoringSettings = leagueData?.scoring_settings || {
+
+        // For a Yahoo league there's no Sleeper league to read scoring from, so
+        // pull the league's real rules rather than pre-computing these cached
+        // points under generic defaults -- this cache is the fallback the UI
+        // uses when a live projection is unavailable, and a number scored under
+        // the wrong rules is worse than an obviously missing one.
+        let yahooScoring = null;
+        if (isYahoo) {
+            try {
+                const yLeague = await getLeagueData(currentId);
+                if (yLeague?.scoring_settings && Object.keys(yLeague.scoring_settings).length) {
+                    yahooScoring = yLeague.scoring_settings;
+                }
+            } catch (e) {
+                console.warn("Could not read Yahoo league scoring for player cache:", e);
+            }
+        }
+
+        const scoringSettings = leagueData?.scoring_settings || yahooScoring || {
             pass_yd: 0.04, pass_td: 4, pass_int: -1,
             rush_yd: 0.1, rush_td: 6, rec_yd: 0.1, rec_td: 6, rec: 0.5,
             fum_lost: -2, fum: -1
         };
-        
+
         const week = nflState.display_week > 0 ? nflState.display_week : 1;
         const year = nflState.season || new Date().getFullYear();
         const projRes = await fetch(`https://api.sleeper.com/projections/nfl/${year}/${week}?season_type=regular`);
@@ -103,14 +122,10 @@ export const loadPlayers = async (activeLeagueId) => {
         const projMap = {};
         if (projections && projections.length) {
             for (const proj of projections) {
-                let customPoints = 0;
-                if (proj.stats) {
-                    for (const [statKey, statValue] of Object.entries(proj.stats)) {
-                        if (scoringSettings[statKey]) {
-                            customPoints += statValue * scoringSettings[statKey];
-                        }
-                    }
-                }
+                // Same tested scorer the live path uses, so defense points-allowed
+                // tiers and kicker field-goal distances are handled here too.
+                const projPos = proj.player?.position || proj.position;
+                const customPoints = scoreStatLine(proj.stats, scoringSettings, projPos) ?? 0;
                 // Projections natively map to the standard Sleeper ID
                 projMap[proj.player_id] = {
                     p: customPoints,
