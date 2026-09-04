@@ -40,13 +40,14 @@ export const loadPlayers = async (activeLeagueId) => {
     // essentially the same data and pushed localStorage past its ~5MB quota.
     // Scoping the cache to the ID scheme caps it at two copies instead of N.
     const cacheScope = isYahoo ? 'yahoo' : 'sleeper';
-    const cacheKey = `playersInfo_v10_${cacheScope}`;
-    const expirationKey = `expiration_v10_${cacheScope}`;
+    const cacheKey = `playersInfo_v11_${cacheScope}`;
+    const expirationKey = `expiration_v11_${cacheScope}`;
 
-    // Clear out the per-league v9 entries that are still occupying quota.
+    // Drop superseded caches: v9 was per-league (quota bloat) and v10 predates
+    // the `active` flag the availability filter needs.
     try {
         Object.keys(localStorage)
-            .filter(k => k.startsWith('playersInfo_v9_') || k.startsWith('expiration_v9_'))
+            .filter(k => /^(playersInfo|expiration)_v(9|10)_/.test(k))
             .forEach(k => localStorage.removeItem(k));
     } catch (e) {
         console.warn("Failed to prune legacy player caches:", e);
@@ -165,6 +166,10 @@ export const loadPlayers = async (activeLeagueId) => {
                 exp: p.years_exp || 0,
                 college: p.college || '-',
                 wi: {},
+                // Carried through so the availability filter can actually work:
+                // it used to test p.active, which was never copied here and so
+                // was always undefined -- letting long-retired players through.
+                active: p.active !== false,
                 status: p.status || 'Active',
                 injStatus: p.injury_status || null,
                 injNotes: p.injury_notes || null,
