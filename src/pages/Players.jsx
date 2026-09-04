@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLeague } from '../context/LeagueContext';
 import { loadPlayers, getLeagueData, getLeagueRosters } from '../utils/helper';
+import { playerNameKey } from '../utils/helperFunctions/players';
 import PlayerModal from '../components/PlayerModal';
 import { scoreStatLine } from '../utils/yahooScoring';
 import styles from './Players.module.css';
@@ -11,6 +12,7 @@ export default function Players() {
     const [playersInfo, setPlayersInfo] = useState({});
     const [leagueData, setLeagueData] = useState(null);
     const [rosters, setRosters] = useState({});
+    const [yahooPlayersMeta, setYahooPlayersMeta] = useState({});
     
     // Live Data
     const [activeWeek, setActiveWeek] = useState(1);
@@ -55,6 +57,7 @@ export default function Players() {
                 setPlayersInfo(pData.players || pData || {});
                 setLeagueData(lData);
                 setRosters(rData.rosters || {});
+                setYahooPlayersMeta(rData.yahooPlayersMeta || {});
                 if (lData?.display_week) setActiveWeek(lData.display_week);
                 
             } catch (e) {
@@ -185,19 +188,37 @@ export default function Players() {
         return isAway ? `@ ${cleanOpp}` : `VS ${cleanOpp}`;
     };
 
-    const getAvatar = (pId, pos) => pos === 'DEF' 
-        ? `https://sleepercdn.com/images/team_logos/nfl/${String(pId).toLowerCase()}.png` 
-        : `https://sleepercdn.com/content/nfl/players/thumb/${pId}.jpg`;
+    // sleepercdn keys its images by Sleeper's own player ids. In a Yahoo league
+    // these ids are Yahoo's, so the URL 404s to the placeholder -- prefer a
+    // Yahoo headshot when we have one, then the crosswalked sleeper_id.
+    const getAvatar = (pId, pos, pObj) => {
+        if (pObj?.headshot) return pObj.headshot;
+        const key = pObj?.sleeper_id || pId;
+        return pos === 'DEF'
+            ? `https://sleepercdn.com/images/team_logos/nfl/${String(key).toLowerCase()}.png`
+            : `https://sleepercdn.com/content/nfl/players/thumb/${key}.jpg`;
+    };
 
     const availablePlayers = useMemo(() => {
         if (!playersInfo || Object.keys(playersInfo).length === 0) return [];
         
+        // Roster ids are the platform's own (Yahoo ids for a Yahoo league), but
+        // the candidate list is keyed by yahoo_id || player_id -- so any player
+        // Sleeper's crosswalk doesn't map falls back to a Sleeper id and would
+        // never match, leaking a rostered player into "available". Match on name
+        // as well, using the names Yahoo returned with the rosters themselves.
         const ownedSet = new Set();
+        const ownedNames = new Set();
         if (rosters && typeof rosters === 'object') {
             Object.values(rosters).forEach(r => {
-                if (r && Array.isArray(r.players)) {
-                    r.players.forEach(pId => ownedSet.add(String(pId)));
-                }
+                if (!r || !Array.isArray(r.players)) return;
+                r.players.forEach(pId => {
+                    const key = String(pId);
+                    ownedSet.add(key);
+                    const meta = yahooPlayersMeta[key] || playersInfo[key];
+                    const nameKey = meta ? playerNameKey(meta.fn, meta.ln) : '';
+                    if (nameKey) ownedNames.add(nameKey);
+                });
             });
         }
         
@@ -219,7 +240,8 @@ export default function Players() {
                 projVal: parseFloat(getProjPts(pId)) || 0
             };
         }).filter(p => {
-            const isOwned = ownedSet.has(String(p.player_id));
+            const isOwned = ownedSet.has(String(p.player_id))
+                || ownedNames.has(playerNameKey(p.fn, p.ln));
             const isValidPos = validPositions.has(p.pos);
             const isActive = p.active !== false && p.status !== 'Inactive';
             return !isOwned && isValidPos && isActive;
@@ -240,7 +262,7 @@ export default function Players() {
         }
         
         return list.sort((a, b) => b.projVal - a.projVal).slice(0, 100);
-    }, [playersInfo, rosters, posFilter, searchQuery, weeklyProjections, weeklyStats, nflScheduleMap]);
+    }, [playersInfo, rosters, yahooPlayersMeta, posFilter, searchQuery, weeklyProjections, weeklyStats, nflScheduleMap]);
 
     const renderPlayerRow = (pId, pObj = null, trendCount = null) => {
         const player = pObj || playersInfo[pId] || playersInfo[String(pId)];
@@ -253,7 +275,7 @@ export default function Players() {
         return (
             <div key={playerId} className={styles.playerRow} onClick={() => setSelectedPlayer(player)}>
                 <div className={styles.playerInfoGroup}>
-                    <div className={styles.playerImg} style={{ backgroundImage: `url(${getAvatar(playerId, player.pos)}), url(https://sleepercdn.com/images/v2/icons/player_default.webp)` }}></div>
+                    <div className={styles.playerImg} style={{ backgroundImage: `url(${getAvatar(playerId, player.pos, player)}), url(https://sleepercdn.com/images/v2/icons/player_default.webp)` }}></div>
                     <div className={styles.playerMetaColLeft}>
                         <div className={styles.pNameText}>{player.fn || player.first_name} {player.ln || player.last_name}</div>
                         <div className={styles.posText}>{player.pos} • {player.t || player.team || 'FA'}</div>
