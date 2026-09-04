@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLeague } from '../context/LeagueContext';
 import { loadPlayers, getLeagueData } from '../utils/helper';
+import { scoreStatLine } from '../utils/yahooScoring';
 import styles from './StartSit.module.css';
 
 const NFL_TEAMS = new Set([
@@ -218,26 +219,19 @@ export default function StartSit() {
     const getPlayerProjPts = (pId) => {
         if (!pId || pId === "0") return '0.00';
         const playerObj = playersInfo[pId];
-        const proj = weeklyProjections[pId] || weeklyStats[pId];
+        // Sleeper's feeds are keyed by Sleeper ids; a Yahoo league's roster ids
+        // are Yahoo's, so fall back to the crosswalked sleeper_id.
+        const sleeperKey = playerObj?.sleeper_id;
+        const proj = weeklyProjections[pId] || weeklyStats[pId]
+            || (sleeperKey ? (weeklyProjections[sleeperKey] || weeklyStats[sleeperKey]) : null);
         const scoringSettings = leagueData?.scoring_settings || {};
 
         if (proj) {
             const stats = proj.stats || proj || {};
-            let customPts = 0;
-            let hasValidStats = false;
-
-            for (const [statKey, statMultiplier] of Object.entries(scoringSettings)) {
-                if (stats[statKey] !== undefined && typeof stats[statKey] === 'number') {
-                    customPts += (stats[statKey] * statMultiplier);
-                    hasValidStats = true;
-                }
-            }
-
-            if (playerObj?.pos === 'TE' && scoringSettings.bonus_rec_te && stats.rec) {
-                customPts += (stats.rec * scoringSettings.bonus_rec_te);
-            }
-
-            if (hasValidStats && customPts > 0) return customPts.toFixed(2);
+            // Shared, tested scorer -- applies this league's rules including
+            // defense points-allowed tiers and kicker field-goal distances.
+            const scored = scoreStatLine(stats, scoringSettings, playerObj?.pos);
+            if (scored !== null) return scored.toFixed(2);
 
             const rec = scoringSettings.rec || 0;
             let key = 'pts_std';

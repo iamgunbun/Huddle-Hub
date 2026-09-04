@@ -168,11 +168,18 @@ const BUCKET_KEYS = new Set([...PTS_ALLOW_BUCKETS.map(b => b.key)]);
 export const scoreStatLine = (stats, scoringSettings, playerPos) => {
     if (!stats || !scoringSettings) return null;
 
+    // A stat line can express defensive points-allowed two ways: as explicit
+    // per-tier flags (Sleeper's feed does this) or as a single continuous
+    // figure. Score the flags directly when they're there, and only derive the
+    // tier when they aren't -- doing it the other way round would zero out
+    // defenses on any feed that reports the flags.
+    const hasExplicitPtsAllowFlags = PTS_ALLOW_BUCKETS.some(b => typeof stats[b.key] === 'number');
+
     let points = 0;
     let matched = false;
 
     for (const [key, multiplier] of Object.entries(scoringSettings)) {
-        if (BUCKET_KEYS.has(key)) continue;
+        if (BUCKET_KEYS.has(key) && !hasExplicitPtsAllowFlags) continue;
         const value = stats[key];
         if (typeof value === 'number' && !Number.isNaN(value)) {
             points += value * multiplier;
@@ -180,9 +187,9 @@ export const scoreStatLine = (stats, scoringSettings, playerPos) => {
         }
     }
 
-    // Defense: place projected points-allowed into its scoring tier.
+    // Defense: place a continuous points-allowed figure into its scoring tier.
     const hasPtsAllowTiers = PTS_ALLOW_BUCKETS.some(b => scoringSettings[b.key] !== undefined);
-    if (hasPtsAllowTiers) {
+    if (hasPtsAllowTiers && !hasExplicitPtsAllowFlags) {
         const allowed = typeof stats.pts_allow === 'number' ? stats.pts_allow : null;
         if (allowed !== null) {
             const bucket = PTS_ALLOW_BUCKETS.find(b => allowed <= b.max);
