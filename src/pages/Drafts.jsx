@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLeague } from '../context/LeagueContext';
 import { getLeagueTeamManagers, loadPlayers, getLeagueData } from '../utils/helper';
 import { fetchYahooDraft } from '../utils/yahooService';
+import { fetchESPNDraft } from '../utils/espnService';
 import { isSameLeagueChain } from '../utils/yahooHistory';
 import { resolvePlayerFromMeta } from '../utils/playerPool';
 import styles from './Drafts.module.css';
@@ -118,11 +119,19 @@ export default function Drafts() {
                 }
 
                 if (isEspnLeagueId(curId)) {
-                    // ESPN draft history isn't built yet -- checked explicitly
-                    // rather than falling through, which would otherwise send
-                    // an ESPN league's numeric id to Sleeper's API and could
-                    // come back with an unrelated real Sleeper league's drafts.
-                    setDraftsList([]);
+                    // ESPN keeps one league id across every season (unlike
+                    // Sleeper/Yahoo, which mint a new one each year) -- there's
+                    // no previous_league_id chain to walk, so only the current
+                    // season's board is available here.
+                    const leagueData = await getLeagueData(curId);
+                    const board = await fetchESPNDraft(curId, { season: leagueData?.season });
+                    if (board) {
+                        setYahooPlayerMeta(board.playerMeta || {});
+                        setDraftsDataMap({ [board.draft_id]: board.picks });
+                        setDraftsList([board]);
+                    } else {
+                        setDraftsList([]);
+                    }
                     return;
                 }
 

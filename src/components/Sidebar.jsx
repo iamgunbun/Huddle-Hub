@@ -27,7 +27,7 @@ export default function Sidebar({ isOpen, onClose }) {
         navigate('/login');
     };
 
-    const handleDeleteLeague = async (e, leagueId) => {
+    const handleDeleteLeague = async (e, leagueId, platform) => {
         e.stopPropagation();
         const confirmDelete = window.confirm("Are you sure you want to disconnect this league?");
         if (!confirmDelete) return;
@@ -41,6 +41,23 @@ export default function Sidebar({ isOpen, onClose }) {
                 .eq('league_id', leagueId);
 
             if (!error) {
+                // Yahoo's OAuth token and ESPN's session cookies live in
+                // user_integrations, one row per (user, provider) -- shared
+                // across every league on that platform, not per-league. Only
+                // safe to delete once this was the last league still using it;
+                // otherwise disconnecting one Yahoo league would silently log
+                // every other connected Yahoo league out too.
+                if (platform === 'yahoo' || platform === 'espn') {
+                    const stillConnected = userLeagues.some(l => l.id !== leagueId && l.platform === platform);
+                    if (!stillConnected) {
+                        await supabase
+                            .from('user_integrations')
+                            .delete()
+                            .eq('user_id', session.user.id)
+                            .eq('provider', platform);
+                    }
+                }
+
                 await loadLeagueContext(session.user.id);
                 if (activeLeague?.id === leagueId) navigate('/');
             }
@@ -151,7 +168,7 @@ export default function Sidebar({ isOpen, onClose }) {
                                     
                                     {hoveredLeague === l.id && (
                                         <div 
-                                            onClick={(e) => handleDeleteLeague(e, l.id)}
+                                            onClick={(e) => handleDeleteLeague(e, l.id, l.platform)}
                                             style={{
                                                 position: 'absolute',
                                                 right: '10px',

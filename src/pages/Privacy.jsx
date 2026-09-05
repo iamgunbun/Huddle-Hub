@@ -14,6 +14,7 @@ export default function Privacy() {
             <ul>
                 <li><strong>Sleeper:</strong> League, roster, matchup, transaction, and draft data, read from Sleeper's public API using the league ID or username you provide.</li>
                 <li><strong>Yahoo:</strong> When you connect a Yahoo league, we receive and store a Yahoo-issued OAuth access token and refresh token authorizing us to read your Yahoo Fantasy league, team, roster, transaction, and draft data on your behalf. We never receive or store your Yahoo password.</li>
+                <li><strong>ESPN:</strong> When you connect an ESPN league, we store the <code>espn_s2</code> and <code>SWID</code> browser session values you provide, which authorize us to read your ESPN Fantasy league, team, roster, transaction, and draft data on your behalf. These are stored the same way as a Yahoo token -- we never receive or store your actual ESPN account password.</li>
             </ul>
 
             <h2>2. How We Use Your Information</h2>
@@ -21,7 +22,7 @@ export default function Privacy() {
             <ul>
                 <li>Authenticate your login securely via Supabase.</li>
                 <li>Process payments for Premium tools via Stripe or RevenueCat.</li>
-                <li>Display your fantasy rosters, matchups, transactions, drafts, and league history for both Sleeper and Yahoo leagues.</li>
+                <li>Display your fantasy rosters, matchups, transactions, drafts, and league history for Sleeper, Yahoo, and ESPN leagues.</li>
                 <li>Generate the App's AI-powered features (Start/Sit, Trade Grader, Draft Grader, Manager Evaluations) by sending the relevant roster, player, and league data to our AI provider to produce written analysis.</li>
             </ul>
 
@@ -31,15 +32,17 @@ export default function Privacy() {
                 <li><strong>Supabase:</strong> For secure database hosting and user authentication.</li>
                 <li><strong>Stripe / RevenueCat:</strong> For secure payment processing. We do not store your credit card information on our servers.</li>
                 <li><strong>Yahoo Fantasy Sports API:</strong> To read your Yahoo league data once you authorize the connection through Yahoo's own login. This access is entirely under your control -- see Section 4.</li>
+                <li><strong>ESPN Fantasy Sports API:</strong> To read your ESPN league data using the session values you provide when connecting a private league. This access is entirely under your control -- see Section 4.</li>
                 <li><strong>Google Gemini (Google AI):</strong> To generate the App's AI analysis features. Relevant roster, player, and league data is sent to Google's API to produce that written content; it is used to generate your requested output and is not used by us to identify you to Google beyond that request.</li>
                 <li><strong>Public NFL schedule data (e.g. ESPN's public scoreboard):</strong> Read-only, to display game schedules and matchup context. No personal or account data is sent to this source.</li>
             </ul>
 
-            <h2>4. Your Yahoo Account Data</h2>
+            <h2>4. Your Yahoo and ESPN Account Data</h2>
             <p>You can revoke Huddle's access to your Yahoo account at any time, either by disconnecting the league inside the App or directly through Yahoo's own account security settings (Yahoo &gt; Account Info &gt; Connected Apps). Revoking access stops the App from making further requests on your behalf; we delete the associated stored token when you disconnect the league inside the App.</p>
+            <p>For ESPN, disconnecting the league inside the App deletes the stored <code>espn_s2</code>/<code>SWID</code> values immediately. Because ESPN offers no revocation screen equivalent to Yahoo's, signing out of ESPN in your browser (which invalidates those session values) is an additional way to end access.</p>
 
             <h2>5. Data Retention and Deletion</h2>
-            <p>You have the right to request the deletion of your account and personal data at any time. If you wish to delete your account, you can disconnect your leagues (which also removes any stored Yahoo tokens) and log out, or contact us for full database removal.</p>
+            <p>You have the right to request the deletion of your account and personal data at any time. If you wish to delete your account, you can disconnect your leagues (which also removes any stored Yahoo tokens and ESPN session values) and log out, or contact us for full database removal.</p>
 
             <h2>6. Changes to This Policy</h2>
             <p>We may update this Privacy Policy from time to time. We will notify you of any major changes by updating the "Last Updated" date at the top of this document.</p>

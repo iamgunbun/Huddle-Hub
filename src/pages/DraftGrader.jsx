@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLeague } from '../context/LeagueContext';
 import { getLeagueTeamManagers, getLeagueData, loadPlayers, getNflState } from '../utils/helper';
 import { fetchYahooDraft } from '../utils/yahooService';
+import { fetchESPNDraft } from '../utils/espnService';
 import { isSameLeagueChain } from '../utils/yahooHistory';
 import { resolvePlayerFromMeta } from '../utils/playerPool';
 import { describeExperienceAtDraft } from '../utils/draftContext';
@@ -144,11 +145,21 @@ export default function DraftGrader() {
                 }
 
                 if (isEspnLeagueId(curId)) {
-                    // ESPN draft history isn't built yet -- checked explicitly
-                    // rather than falling through, which would otherwise send
-                    // an ESPN league's numeric id to Sleeper's API and could
-                    // come back with an unrelated real Sleeper league's drafts.
-                    setDraftsList([]);
+                    // ESPN keeps one league id across every season (unlike
+                    // Sleeper/Yahoo, which mint a new one each year) -- there's
+                    // no previous_league_id chain to walk, so only the current
+                    // season's board is available here.
+                    const leagueData = await getLeagueData(curId);
+                    const board = await fetchESPNDraft(curId, { season: leagueData?.season });
+                    if (board) {
+                        setYahooPlayerMeta(board.playerMeta || {});
+                        setYahooDraftsMap({ [board.draft_id]: board.picks });
+                        setDraftsList([board]);
+                        setSelectedDraftId(board.draft_id);
+                        setDraftPicks(board.picks || []);
+                    } else {
+                        setDraftsList([]);
+                    }
                     return;
                 }
 
@@ -181,18 +192,11 @@ export default function DraftGrader() {
     useEffect(() => {
         if (!selectedDraftId) return;
 
-        // A Yahoo draft's picks are already sitting in yahooDraftsMap -- built
-        // from draftresults when the season chain was walked above -- so there
-        // is no picks endpoint to call for it.
-        if (isYahooLeagueId(activeLeague?.sleeper_league_id)) {
+        // A Yahoo or ESPN draft's picks are already sitting in yahooDraftsMap --
+        // built from the season/draft-detail fetch above -- so there is no
+        // separate picks endpoint to call for either.
+        if (isYahooLeagueId(activeLeague?.sleeper_league_id) || isEspnLeagueId(activeLeague?.sleeper_league_id)) {
             setDraftPicks((yahooDraftsMap[selectedDraftId] || []).slice().sort((a, b) => a.round - b.round || a.pick_no - b.pick_no));
-            setGradeResult(null);
-            setUiErrorMessage(null);
-            return;
-        }
-
-        if (isEspnLeagueId(activeLeague?.sleeper_league_id)) {
-            setDraftPicks([]);
             setGradeResult(null);
             setUiErrorMessage(null);
             return;

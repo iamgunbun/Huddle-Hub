@@ -10,13 +10,28 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { leagueId, year, espnS2, swid, userId } = req.body;
+        const { leagueId, year, espnS2, swid, userId, views, scoringPeriodId } = req.body;
 
-        if (!leagueId || !year) {
-            return res.status(400).json({ error: 'Missing leagueId or year' });
+        // Both go straight into the request URL below, so they're validated as
+        // plain numbers rather than trusted as-is.
+        if (!/^\d+$/.test(String(leagueId || '')) || !/^\d{4}$/.test(String(year || ''))) {
+            return res.status(400).json({ error: 'Missing or invalid leagueId/year' });
         }
 
-        const url = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${year}/segments/0/leagues/${leagueId}?view=mSettings&view=mTeam&view=mRoster`;
+        // Every caller asks for its own combination of views (settings/teams for
+        // the league card, rosters for a team's players, matchups for the
+        // schedule, transactions, or the draft board) in one request -- ESPN
+        // accepts as many `view=` params as are asked for on the same URL, so
+        // there's no need for a separate endpoint per resource the way Yahoo's
+        // proxy has. Restricted to a known set since these also go straight
+        // into the request URL.
+        const ALLOWED_VIEWS = new Set(['mSettings', 'mTeam', 'mRoster', 'mMatchup', 'mMatchupScore', 'mTransactions2', 'mDraftDetail']);
+        const requestedViews = (Array.isArray(views) ? views.filter(v => ALLOWED_VIEWS.has(v)) : []);
+        const safeViews = requestedViews.length ? requestedViews : ['mSettings', 'mTeam', 'mRoster'];
+        const viewParams = safeViews.map(v => `view=${v}`).join('&');
+        const safeScoringPeriod = Number.isInteger(scoringPeriodId) && scoringPeriodId > 0 && scoringPeriodId < 100 ? scoringPeriodId : null;
+        const scoringPeriodParam = safeScoringPeriod ? `&scoringPeriodId=${safeScoringPeriod}` : '';
+        const url = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${year}/segments/0/leagues/${leagueId}?${viewParams}${scoringPeriodParam}`;
 
         // Cookies passed directly (the initial "try connecting" preview, before
         // there's anything saved yet) take priority. Otherwise, every OTHER

@@ -5,6 +5,7 @@ import { matchupsStore } from '$lib/stores';
 import { activeLeague } from '$lib/stores/leagueContext.js';
 import { leagueID as defaultLeagueID } from '$lib/utils/leagueInfo.js';
 import { fetchAndNormalizeYahooMatchups } from '../yahooService';
+import { fetchESPNSchedule } from '../espnService';
 import { isYahooLeagueId as isYahooLeague, isEspnLeagueId } from '../platformIds';
 
 export const getLeagueMatchups = async (queryLeagueID) => {
@@ -66,12 +67,29 @@ export const getLeagueMatchups = async (queryLeagueID) => {
         }
 
         // --- ESPN PLATFORM ROUTING ---
-        // Not built yet -- checked explicitly (rather than falling through)
-        // so an ESPN league's numeric id, indistinguishable in shape from a
-        // Sleeper id, can't be sent to Sleeper's API and come back with an
-        // unrelated real Sleeper league's matchups.
+        // ESPN's `mMatchup` view returns the whole season's schedule in one
+        // call, unlike Yahoo which needs one proxy call per week -- so the
+        // per-week rows are sliced out of a single already-fetched payload.
         if (isEspnLeagueId(id)) {
-            return null;
+            const byWeek = await fetchESPNSchedule(id);
+            const eWeeks = [];
+            for (let i = 1; i <= week; i++) {
+                const pairs = byWeek[i];
+                if (!pairs || !pairs.length) continue;
+                const matchups = {};
+                pairs.forEach((teams, idx) => { matchups[idx + 1] = teams; });
+                eWeeks.push({ matchups, week: i });
+            }
+
+            const matchupsResponse = {
+                matchupWeeks: eWeeks,
+                year,
+                week,
+                regularSeasonLength,
+                league_id: id
+            };
+            matchupsStore.update(() => matchupsResponse);
+            return matchupsResponse;
         }
 
         // --- SLEEPER PLATFORM ROUTING ---

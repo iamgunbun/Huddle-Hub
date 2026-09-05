@@ -288,13 +288,15 @@ export default function Players() {
     // position filter, so typing a search doesn't re-derive ownership either.
     const unownedPlayers = useMemo(() => {
         // Name matching only where ids genuinely can't be trusted to line up.
-        // A Yahoo league's rosters carry Yahoo ids while the dictionary falls back
-        // to Sleeper ids for uncrosswalked players, so names bridge that gap. On
-        // Sleeper both sides are Sleeper ids already, and adding names there can
-        // only hide a real free agent who shares a name with a rostered player.
+        // A Yahoo or ESPN league's rosters carry that platform's own ids while
+        // the dictionary falls back to a Sleeper id for uncrosswalked players,
+        // so names bridge that gap. On Sleeper both sides are Sleeper ids
+        // already, and adding names there can only hide a real free agent who
+        // shares a name with a rostered player.
         const isYahooLeague = isYahooLeagueId(activeLeague?.sleeper_league_id);
+        const isEspnLeague = isEspnLeagueId(activeLeague?.sleeper_league_id);
         const ownedIndex = buildOwnedIndex(rosters, {
-            matchNames: isYahooLeague,
+            matchNames: isYahooLeague || isEspnLeague,
             nameSources: [yahooPlayersMeta, playersInfo],
         });
 
@@ -327,7 +329,7 @@ export default function Players() {
         // pool can be diagnosed from the console instead of guessed at.
         console.info('[Players] availability', {
             league: activeLeague?.sleeper_league_id,
-            platform: isYahooLeague ? 'yahoo' : 'sleeper',
+            platform: isYahooLeague ? 'yahoo' : (isEspnLeague ? 'espn' : 'sleeper'),
             source: yahooAvailableIds ? 'yahoo status=A pool' : 'roster subtraction',
             teamsLoaded: Object.keys(rosters || {}).length,
             teamsExpected: leagueData?.total_rosters ?? null,

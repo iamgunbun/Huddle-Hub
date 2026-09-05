@@ -3,6 +3,7 @@ import { useLeague } from '../../context/LeagueContext';
 import { getLeagueStandings, getLeagueRosters, getLeagueTeamManagers, getLeagueData, loadPlayers, getNflState, predictScores } from '../../utils/helper';
 import { getTeamFromTeamManagers } from '../../utils/helperFunctions/universalFunctions';
 import { fetchYahooScoreboardWeeks } from '../../utils/yahooService';
+import { fetchESPNSchedule } from '../../utils/espnService';
 import {
     simulateSeason,
     blendedScoringMean,
@@ -56,11 +57,16 @@ const fetchRemainingSchedule = async (leagueId, firstWeek, lastWeek) => {
                 .filter(g => g.home !== undefined && g.away !== undefined);
         }
 
-        // ESPN's remaining schedule isn't built yet -- checked explicitly
-        // rather than falling through, which would otherwise send an ESPN
-        // league's numeric id to Sleeper's API and could come back with an
-        // unrelated real Sleeper league's matchups.
-        if (isEspnLeagueId(leagueId)) return [];
+        if (isEspnLeagueId(leagueId)) {
+            const byWeek = await fetchESPNSchedule(leagueId);
+            const games = [];
+            weeks.forEach(w => {
+                (byWeek[w] || []).forEach(pair => {
+                    if (pair.length === 2) games.push({ week: w, home: pair[0].roster_id, away: pair[1].roster_id });
+                });
+            });
+            return games;
+        }
 
         const weekly = await Promise.all(weeks.map(async (w) => {
             const res = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/matchups/${w}`);

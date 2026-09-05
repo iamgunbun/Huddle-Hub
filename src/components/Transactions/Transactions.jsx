@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLeague } from '../../context/LeagueContext';
 import { loadPlayers, getLeagueTeamManagers } from '../../utils/helper';
 import { fetchYahooTransactions } from '../../utils/yahooService';
+import { fetchESPNTransactions } from '../../utils/espnService';
 import { withResolvedPlayerMeta } from '../../utils/playerPool';
 import { useNavigate } from 'react-router-dom';
 import styles from './Transactions.module.css';
@@ -58,11 +59,9 @@ export default function Transactions({ preview = false }) {
                     // -- the rest read as a bare id without this.
                     players = withResolvedPlayerMeta(players, pData?.playersByName || {}, playerMeta);
                 } else if (isEspnLeagueId(leagueId)) {
-                    // ESPN transactions aren't built yet -- checked explicitly
-                    // rather than falling through, which would otherwise send
-                    // an ESPN league's numeric id to Sleeper's API and could
-                    // come back with an unrelated real Sleeper league's data.
-                    allTxns = [];
+                    const { transactions, playerMeta } = await fetchESPNTransactions(leagueId);
+                    allTxns = transactions;
+                    players = withResolvedPlayerMeta(players, pData?.playersByName || {}, playerMeta);
                 } else {
                     for (let i = 1; i <= 18; i++) {
                         const res = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/transactions/${i}`);
