@@ -3,6 +3,7 @@ import { useLeague } from '../context/LeagueContext';
 import { getLeagueTeamManagers, loadPlayers, getLeagueData } from '../utils/helper';
 import { fetchYahooDraft } from '../utils/yahooService';
 import { isSameLeagueChain } from '../utils/yahooHistory';
+import { resolvePlayerFromMeta } from '../utils/playerPool';
 import styles from './Drafts.module.css';
 
 const isYahooLeagueId = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
@@ -17,6 +18,11 @@ export default function Drafts() {
     const [draftsDataMap, setDraftsDataMap] = useState({}); 
     const [teamManagers, setTeamManagers] = useState(null);
     const [playersMap, setPlayersMap] = useState({});
+    // Yahoo's own details for drafted players, keyed by Yahoo player id. The
+    // shared dictionary only covers players Sleeper's yahoo_id crosswalk knows,
+    // and the gaps are what rendered most of the board as "Unknown".
+    const [yahooPlayerMeta, setYahooPlayerMeta] = useState({});
+    const [playersByName, setPlayersByName] = useState({});
 
     const getPosColor = (pos) => {
         const map = { QB: '#3b82f6', RB: '#ef4444', WR: '#22c55e', TE: '#f59e0b', K: '#eab308', DEF: '#a855f7' };
@@ -27,11 +33,32 @@ export default function Drafts() {
     // In a Yahoo league the pick id is a YAHOO player id, which means nothing to
     // Sleeper's image CDN -- the dictionary entry carries the crosswalked
     // sleeper_id, and for a defense the team abbreviation is what names the logo.
+    // Who was actually picked.
+    //
+    // In a Sleeper league the dictionary is keyed by the same ids the picks use,
+    // so a direct hit is the whole story. In a Yahoo league the picks carry
+    // YAHOO ids, and the dictionary only knows the ones Sleeper's crosswalk
+    // covers -- so Yahoo's own details fill the gaps, and the dictionary is then
+    // re-consulted by name to recover a sleeper_id for the headshot.
+    const resolvePick = (playerId) => {
+        const direct = playersMap[playerId];
+        if (direct) return direct;
+
+        const meta = yahooPlayerMeta[playerId];
+        if (!meta) return null;
+
+        const matched = resolvePlayerFromMeta(meta, playersMap, playersByName);
+        return matched ? { ...meta, ...matched } : meta;
+    };
+
     const getAvatar = (playerId, playerMeta) => {
         if (!playerMeta) return `url(${DEFAULT_PLAYER_IMG})`;
         if (playerMeta.pos === 'DEF') {
             const team = String(playerMeta.t || playerMeta.sleeper_id || playerId || '').toLowerCase();
             return `url(https://sleepercdn.com/images/team_logos/nfl/${team}.png), url(${DEFAULT_PLAYER_IMG})`;
+        }
+        if (!playerMeta.sleeper_id && playerMeta.headshot) {
+            return `url(${playerMeta.headshot}), url(${DEFAULT_PLAYER_IMG})`;
         }
         const imageId = playerMeta.sleeper_id || playerId;
         return `url(https://sleepercdn.com/content/nfl/players/thumb/${imageId}.jpg), url(${DEFAULT_PLAYER_IMG})`;
@@ -48,6 +75,7 @@ export default function Drafts() {
                 ]);
                 setTeamManagers(tmData);
                 setPlayersMap(pData?.players || {});
+                setPlayersByName(pData?.playersByName || {});
 
                 let curId = activeLeague.sleeper_league_id;
                 let allDrafts = [];
@@ -57,6 +85,7 @@ export default function Drafts() {
                     // key holds exactly one draft, so the season chain IS the list.
                     const visited = new Set();
                     const picksByDraft = {};
+                    const collectedMeta = {};
                     let successor = null;
 
                     while (curId && curId !== "0" && curId !== 0 && !visited.has(curId)) {
@@ -75,12 +104,14 @@ export default function Drafts() {
                         });
                         if (board) {
                             picksByDraft[board.draft_id] = board.picks;
+                            Object.assign(collectedMeta, board.playerMeta || {});
                             allDrafts.push(board);
                         }
 
                         curId = leagueData.previous_league_id;
                     }
 
+                    setYahooPlayerMeta(collectedMeta);
                     setDraftsDataMap(picksByDraft);
                     setDraftsList(allDrafts.sort((a, b) => b.season - a.season));
                     return;
@@ -189,7 +220,7 @@ export default function Drafts() {
                                 const pick = groups[round].find(p => p.draft_slot === slot);
                                 if (!pick) return <div key={`empty-${round}-${slot}`} className={styles.emptyPick}></div>;
                                 
-                                const player = playersMap[pick.player_id];
+                                const player = resolvePick(pick.player_id);
                                 const slotOwner = headerOwners[slot - 1];
                                 
                                 const isTraded = pick.roster_id && slotOwner.roster_id !== 0 && parseInt(pick.roster_id) !== slotOwner.roster_id;

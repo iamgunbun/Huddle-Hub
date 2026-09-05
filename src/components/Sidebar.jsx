@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useLeague } from '../context/LeagueContext';
 import { supabase } from '../supabaseClient';
 import SettingsModal from './SettingsModal.jsx';
+import { getPlatformLink } from '../utils/platformLinks';
 import styles from './Sidebar.module.css';
 
 export default function Sidebar({ isOpen, onClose }) {
     const navigate = useNavigate();
     
     const { activeLeague, userLeagues = [], switchActiveLeague, loadLeagueContext } = useLeague() || {};
+    const platformLink = getPlatformLink(activeLeague);
     
     const [infoOpen, setInfoOpen] = useState(false);
     const [hoveredLeague, setHoveredLeague] = useState(null);
@@ -99,10 +101,10 @@ export default function Sidebar({ isOpen, onClose }) {
                                 <div onClick={() => {navigate('/scoring'); if(onClose) onClose();}}><i className="material-icons">format_list_numbered</i> Scoring Format</div>
                                 <div onClick={() => {navigate('/constitution'); if(onClose) onClose();}}><i className="material-icons">history_edu</i> Constitution</div>
                                 <div onClick={() => {
-                                    window.open(`https://sleeper.app/leagues/${activeLeague?.sleeper_league_id || ''}`, '_blank');
+                                    window.open(platformLink.url, '_blank');
                                     if (onClose) onClose();
                                 }}>
-                                    <i className="material-icons">sports_football</i> Go to Sleeper
+                                    <i className="material-icons">sports_football</i> {platformLink.label}
                                 </div>
                             </div>
                         </div>

@@ -29,7 +29,9 @@ export const tabs = [
             { icon: 'military_tech', label: 'Records', dest: '/records' },
             { icon: 'format_list_numbered', label: 'Scoring Format', dest: '/scoring' },
             { icon: 'history_edu', label: 'Constitution', dest: '/constitution' },
-            { icon: 'sports_football', label: 'Go to Sleeper', dest: `https://sleeper.app/leagues/` }
+            // Label and destination depend on the connected platform -- see
+            // getPlatformLink in utils/platformLinks.
+            { icon: 'sports_football', label: 'Go to Sleeper', dest: `https://sleeper.app/leagues/`, platformLink: true }
         ]
     },
     {

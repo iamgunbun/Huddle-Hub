@@ -20,8 +20,11 @@ import {
     parseYahooUserLeagueKeys,
     isKeyInUserLeagues,
     assignManagerIdentities,
+    parseYahooOwnTeams,
+    parseYahooPlayers,
     yahooText,
 } from '../src/utils/yahooHistory.js';
+import { getPlatformLink } from '../src/utils/platformLinks.js';
 
 let pass = 0;
 let fail = 0;
@@ -403,6 +406,113 @@ eq('auction board is typed as auction',
     buildYahooDraftBoard(auctionPicks, { leagueKey: 'x', season: '2024', isAuction: true }).type, 'auction');
 eq('no picks -> no board', buildYahooDraftBoard([], { leagueKey: 'x' }), null);
 eq('missing draft results -> nothing', parseYahooDraftResults({}).length, 0);
+
+// --- The account's own team, and whether it runs the league ----------------
+// Yahoo describes every team in a league identically; the only place it says
+// "this one is yours" -- and whether you're the commissioner -- is the teams
+// collection for the logged-in user.
+const ownTeamsPayload = {
+    fantasy_content: {
+        users: {
+            0: {
+                user: [
+                    { guid: 'MY-GUID' },
+                    {
+                        games: {
+                            0: {
+                                game: [{ game_key: '470' }, {
+                                    teams: {
+                                        0: { team: [[
+                                            { team_key: '470.l.604026.t.6' },
+                                            { name: 'Straw Hat Pirates' },
+                                            { managers: { 0: { manager: { nickname: 'Me', guid: 'MY-GUID', is_commissioner: '1' } }, count: 1 } },
+                                        ]] },
+                                        1: { team: [[
+                                            { team_key: '470.l.111111.t.2' },
+                                            { name: 'Other Team' },
+                                            { managers: { 0: { manager: { nickname: 'Me', guid: 'MY-GUID' } }, count: 1 } },
+                                        ]] },
+                                        count: 2,
+                                    },
+                                }],
+                            },
+                            count: 1,
+                        },
+                    },
+                ],
+            },
+            count: 1,
+        },
+    },
+};
+
+const ownTeams = parseYahooOwnTeams(ownTeamsPayload);
+eq('own team found per league', Object.keys(ownTeams).length, 2);
+eq('keyed by league, not team', !!ownTeams['470.l.604026'], true);
+eq('own team name captured', ownTeams['470.l.604026'].teamName, 'Straw Hat Pirates');
+// The whole reason for this parse: commissioner tools were hidden from every
+// Yahoo connection because nothing ever read this flag.
+eq('commissioner flag read from the manager', ownTeams['470.l.604026'].isCommissioner, true);
+eq('a non-commissioner is not promoted', ownTeams['470.l.111111'].isCommissioner, false);
+eq('junk yields no teams', Object.keys(parseYahooOwnTeams({})).length, 0);
+
+// --- Player details --------------------------------------------------------
+// Draft picks name players only by key, and Sleeper's yahoo_id crosswalk misses
+// plenty of them -- which is what rendered most of a Yahoo draft board as
+// "Unknown". These come straight from Yahoo.
+const playersPayload = {
+    fantasy_content: {
+        league: [{ league_key: '470.l.604026' }, {
+            players: {
+                0: { player: [[
+                    { player_key: '470.p.31883' },
+                    { player_id: '31883' },
+                    { name: { full: 'CeeDee Lamb', first: 'CeeDee', last: 'Lamb' } },
+                    { editorial_team_abbr: 'dal' },
+                    { display_position: 'WR' },
+                    { headshot: { url: 'https://s.yimg.com/lamb.png' } },
+                ]] },
+                1: { player: [[
+                    { player_key: '470.p.100022' },
+                    { player_id: '100022' },
+                    { name: { full: 'San Francisco', first: 'San Francisco', last: '' } },
+                    { editorial_team_abbr: 'sf' },
+                    { display_position: 'DEF' },
+                ]] },
+                count: 2,
+            },
+        }],
+    },
+};
+
+const yahooPlayers = parseYahooPlayers(playersPayload);
+eq('players parsed', yahooPlayers.length, 2);
+eq('keyed by the id picks refer to', yahooPlayers[0].id, '31883');
+eq('first name kept', yahooPlayers[0].fn, 'CeeDee');
+eq('last name kept', yahooPlayers[0].ln, 'Lamb');
+eq('team normalised to upper case', yahooPlayers[0].t, 'DAL');
+eq('position kept', yahooPlayers[0].pos, 'WR');
+eq('headshot kept for players the crosswalk misses', yahooPlayers[0].headshot, 'https://s.yimg.com/lamb.png');
+eq('a defense still parses', yahooPlayers[1].pos, 'DEF');
+eq('no headshot -> null, not an empty object', yahooPlayers[1].headshot, null);
+eq('draft picks keep their full player key',
+    parseYahooDraftResults(snakePayload)[0].playerKey, '461.p.100');
+
+// --- Platform links --------------------------------------------------------
+eq('a yahoo league links to Yahoo',
+    getPlatformLink({ platform: 'yahoo', sleeper_league_id: '470.l.604026' }).url,
+    'https://football.fantasysports.yahoo.com/f1/604026');
+eq('and is labelled for Yahoo',
+    getPlatformLink({ platform: 'yahoo', sleeper_league_id: '470.l.604026' }).label, 'Go to Yahoo');
+eq('the nfl alias resolves to the same league id',
+    getPlatformLink({ sleeper_league_id: 'nfl.l.604026' }).url,
+    'https://football.fantasysports.yahoo.com/f1/604026');
+eq('a sleeper league still links to Sleeper',
+    getPlatformLink({ platform: 'sleeper', sleeper_league_id: '1312102318602207232' }).url,
+    'https://sleeper.app/leagues/1312102318602207232');
+eq('a numeric id is read as Sleeper',
+    getPlatformLink({ sleeper_league_id: '1312102318602207232' }).platform, 'sleeper');
+eq('no league -> no crash', getPlatformLink(null).label, 'Go to Sleeper');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

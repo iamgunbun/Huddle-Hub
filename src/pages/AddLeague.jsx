@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
 import { fetchAndNormalizeESPNLeague } from '../utils/espnService';
+import { parseYahooOwnTeams } from '../utils/yahooHistory';
 import styles from './AddLeague.module.css';
 
 export default function AddLeague() {
@@ -149,31 +150,12 @@ export default function AddLeague() {
             const data = await leaguesRes.json();
             setIsYahooLinked(true);
 
-            // Map league_key -> the account's own team name in that league
-            // (a team_key is "<league_key>.t.<team_id>", so trim the ".t.N" suffix)
-            const teamNameByLeagueKey = {};
-            if (teamsRes?.ok) {
-                const teamsData = await teamsRes.json();
-                const teamGames = teamsData?.fantasy_content?.users?.[0]?.user?.[1]?.games;
-                if (teamGames) {
-                    const gameCount = teamGames.count || 0;
-                    for (let i = 0; i < gameCount; i++) {
-                        const teamsObj = teamGames[i]?.game?.[1]?.teams;
-                        if (!teamsObj) continue;
-                        const teamCount = teamsObj.count || 0;
-                        for (let j = 0; j < teamCount; j++) {
-                            const teamInfo = teamsObj[j]?.team?.[0];
-                            if (!Array.isArray(teamInfo)) continue;
-                            const teamKey = teamInfo.find(x => x.team_key)?.team_key;
-                            const teamName = teamInfo.find(x => x.name)?.name;
-                            if (teamKey && teamName) {
-                                const leagueKey = teamKey.replace(/\.t\.\d+$/, '');
-                                teamNameByLeagueKey[leagueKey] = teamName;
-                            }
-                        }
-                    }
-                }
-            }
+            // The account's own team in each league: its name, and whether the
+            // account runs the league. Yahoo flags the commissioner on the
+            // manager record, so this is the only place that answer exists.
+            const ownTeamByLeagueKey = teamsRes?.ok
+                ? parseYahooOwnTeams(await teamsRes.json())
+                : {};
 
             const leaguesArray = [];
             const games = data?.fantasy_content?.users?.[0]?.user?.[1]?.games;
@@ -187,12 +169,14 @@ export default function AddLeague() {
                         for (let j = 0; j < leagueCount; j++) {
                             const leagueData = leaguesObj[j]?.league?.[0];
                             if (leagueData) {
+                                const ownTeam = ownTeamByLeagueKey[String(leagueData.league_key)];
                                 leaguesArray.push({
                                     id: String(leagueData.league_key),
                                     name: leagueData.name,
                                     avatar: leagueData.logo_url || '/brand.png',
                                     platform: 'yahoo',
-                                    managerName: teamNameByLeagueKey[String(leagueData.league_key)] || null
+                                    managerName: ownTeam?.teamName || null,
+                                    isCommissioner: !!ownTeam?.isCommissioner
                                 });
                             }
                         }
@@ -290,7 +274,12 @@ export default function AddLeague() {
                 user_id: userId,
                 league_id: dbLeagueId,
                 platform: league.platform,
-                team_name: league.managerName || sleeperUsername.trim() || league.name // Safely inputs actual username
+                team_name: league.managerName || sleeperUsername.trim() || league.name, // Safely inputs actual username
+                // Recorded at connect time so commissioner tools are available
+                // straight away. Yahoo states this on the account's own team;
+                // it was never being captured, so no Yahoo connection has ever
+                // had it set.
+                is_commissioner: !!league.isCommissioner
             });
 
             if (insertErr) throw insertErr;

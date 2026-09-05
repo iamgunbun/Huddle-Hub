@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import { fetchAndNormalizeESPNLeague } from '../utils/espnService';
-import { fetchAndNormalizeYahooLeague } from '../utils/yahooService';
+import { fetchAndNormalizeYahooLeague, fetchYahooOwnTeams } from '../utils/yahooService';
 
 const LeagueContext = createContext();
 
@@ -19,6 +19,48 @@ const formatAvatarUrl = (avatar) => {
     }
     
     return `https://sleepercdn.com/avatars/thumbs/${avatar}`;
+};
+
+// Brings stored commissioner status back in line with Yahoo's answer.
+//
+// One request covers every Yahoo league the account is in, and only rows that
+// actually disagree are written, so the common case (already correct) costs a
+// single read and no writes.
+const syncYahooCommissionerFlags = async (userId, leagues, selected, setActiveLeague) => {
+    const yahooLeagues = (leagues || []).filter(l => l?.platform === 'yahoo' && l.sleeper_league_id);
+    if (!userId || !yahooLeagues.length) return;
+
+    try {
+        const ownTeams = await fetchYahooOwnTeams(userId);
+        if (!Object.keys(ownTeams).length) return;
+
+        for (const league of yahooLeagues) {
+            const ownTeam = ownTeams[String(league.sleeper_league_id)];
+            // No entry means Yahoo didn't report a team for this account in that
+            // league this season -- not evidence either way, so leave it alone.
+            if (!ownTeam) continue;
+
+            const shouldBeCommissioner = !!ownTeam.isCommissioner;
+            if (!!league.is_commissioner === shouldBeCommissioner) continue;
+
+            const { error } = await supabase
+                .from('user_leagues')
+                .update({ is_commissioner: shouldBeCommissioner })
+                .eq('user_id', userId)
+                .eq('league_id', league.id);
+
+            if (error) {
+                console.warn("Couldn't update commissioner status for", league.name, error);
+                continue;
+            }
+
+            if (selected && league.id === selected.id) {
+                setActiveLeague(prev => (prev ? { ...prev, is_commissioner: shouldBeCommissioner } : prev));
+            }
+        }
+    } catch (err) {
+        console.warn("Couldn't reconcile Yahoo commissioner status:", err);
+    }
 };
 
 export function LeagueProvider({ children }) {
@@ -168,6 +210,12 @@ export function LeagueProvider({ children }) {
                     };
                     setActiveLeague(selected);
                     localStorage.setItem('huddle_active_league_id', selected.id);
+
+                    // Yahoo connections made before commissioner status was
+                    // captured have it stored as false regardless of the truth,
+                    // which silently hides the commissioner tools. Yahoo knows,
+                    // so ask it and correct the record.
+                    syncYahooCommissionerFlags(userId, flattenedLeagues, selected, setActiveLeague);
                 }
             } else {
                 setUserLeagues([]);
