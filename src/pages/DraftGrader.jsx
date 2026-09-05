@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useLeague } from '../context/LeagueContext';
-import { getLeagueTeamManagers, getLeagueData, loadPlayers } from '../utils/helper';
+import { getLeagueTeamManagers, getLeagueData, loadPlayers, getNflState } from '../utils/helper';
 import { fetchYahooDraft } from '../utils/yahooService';
 import { isSameLeagueChain } from '../utils/yahooHistory';
 import { resolvePlayerFromMeta } from '../utils/playerPool';
+import { describeExperienceAtDraft } from '../utils/draftContext';
 import styles from './DraftGrader.module.css';
 
 const isYahooLeagueId = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
@@ -42,6 +43,10 @@ export default function DraftGrader() {
     // A Yahoo board arrives with its picks already attached (built straight
     // from draftresults), so there's nothing further to fetch per-draft.
     const [yahooDraftsMap, setYahooDraftsMap] = useState({});
+    // The real current NFL season -- used to tell the AI how many seasons
+    // have actually elapsed since a given draft, so it doesn't describe a
+    // now-established player as still being a rookie or a late-round unknown.
+    const [currentSeason, setCurrentSeason] = useState(null);
 
     const [isEvaluating, setIsEvaluating] = useState(false);
     const [gradeResult, setGradeResult] = useState(null);
@@ -52,24 +57,31 @@ export default function DraftGrader() {
     // way the Draft Room page does: the shared dictionary first, then Yahoo's
     // own details bridged in by name for anything the crosswalk missed.
     const resolvePick = (pick) => {
+        // The dictionary's `exp` is the player's real experience right now,
+        // regardless of which resolution path names them -- looked up here so
+        // every path can report it, not just the direct-dictionary one.
+        const dictEntry = playersMap[pick.player_id];
+        const exp = typeof dictEntry?.exp === 'number' ? dictEntry.exp
+            : (typeof dictEntry?.years_exp === 'number' ? dictEntry.years_exp : null);
+
         if (pick.metadata) {
             return {
                 fn: pick.metadata.first_name,
                 ln: pick.metadata.last_name,
                 pos: pick.metadata.position,
                 t: pick.metadata.team || 'FA',
+                exp,
             };
         }
-        const direct = playersMap[pick.player_id];
-        if (direct) return { fn: direct.fn, ln: direct.ln, pos: direct.pos, t: direct.t || 'FA' };
+        if (dictEntry) return { fn: dictEntry.fn, ln: dictEntry.ln, pos: dictEntry.pos, t: dictEntry.t || 'FA', exp };
 
         const meta = yahooPlayerMeta[pick.player_id];
-        if (!meta) return { fn: 'Unknown', ln: '', pos: 'BN', t: 'FA' };
+        if (!meta) return { fn: 'Unknown', ln: '', pos: 'BN', t: 'FA', exp: null };
 
         const matched = resolvePlayerFromMeta(meta, playersMap, playersByName);
         return matched
-            ? { fn: matched.fn, ln: matched.ln, pos: matched.pos, t: matched.t || meta.t || 'FA' }
-            : { fn: meta.fn, ln: meta.ln, pos: meta.pos, t: meta.t || 'FA' };
+            ? { fn: matched.fn, ln: matched.ln, pos: matched.pos, t: matched.t || meta.t || 'FA', exp: typeof matched.exp === 'number' ? matched.exp : null }
+            : { fn: meta.fn, ln: meta.ln, pos: meta.pos, t: meta.t || 'FA', exp: null };
     };
 
     useEffect(() => {
@@ -77,10 +89,12 @@ export default function DraftGrader() {
             if (!activeLeague?.sleeper_league_id) return;
             setLoading(true);
             try {
-                const [tmData, pData] = await Promise.all([
+                const [tmData, pData, nflState] = await Promise.all([
                     getLeagueTeamManagers(activeLeague.sleeper_league_id),
                     loadPlayers(activeLeague.sleeper_league_id),
+                    getNflState().catch(() => null),
                 ]);
+                setCurrentSeason(parseInt(nflState?.season) || null);
                 setTeamManagers(tmData);
                 setPlayersMap(pData?.players || {});
                 setPlayersByName(pData?.playersByName || {});
@@ -208,20 +222,38 @@ export default function DraftGrader() {
         setUiErrorMessage(null);
 
         const teamName = teamsArray.find(t => t.id === selectedRosterId)?.name || 'Unknown Team';
+        const draftYear = parseInt(activeDraft?.season) || currentSeason;
+        const yearsSinceDraft = (currentSeason && draftYear) ? Math.max(0, currentSeason - draftYear) : 0;
+
         const formattedPicks = teamPicks.map(p => {
             const player = resolvePick(p);
-            return `- Round ${p.round}, Pick ${p.draft_slot}: ${player.fn} ${player.ln} (${player.pos} - ${player.t})`;
+            const experienceNote = describeExperienceAtDraft(player.exp, yearsSinceDraft);
+            const suffix = experienceNote ? ` [${experienceNote}]` : '';
+            return `- Round ${p.round}, Pick ${p.draft_slot}: ${player.fn} ${player.ln} (${player.pos} - ${player.t})${suffix}`;
         }).join('\n');
 
+        // Whether a player was a rookie, and whether their draft-day price still
+        // reflects their real market value, are exactly the facts that go stale
+        // between the model's training data and now -- a since-broken-out
+        // "late-round value" doesn't get relabeled on its own, and a rookie from
+        // a past draft doesn't stay described as a current rookie without being
+        // told otherwise. The bracketed note on each pick above is the actual
+        // answer computed from this app's own data; the rule below says to use it.
+        const timelineNote = yearsSinceDraft > 0
+            ? `This draft happened in the ${draftYear} season -- ${yearsSinceDraft} full NFL season${yearsSinceDraft === 1 ? ' has' : 's have'} passed since, and it is now the ${currentSeason} season.`
+            : `This draft happened in the ${draftYear} season, which is the current season -- these are this year's picks.`;
+
         const pipelinePrompt = `
-            You are an expert NFL fantasy football analyst. Evaluate this franchise's draft class for the ${activeDraft?.season} season.
-            
+            You are an expert NFL fantasy football analyst. Evaluate this franchise's draft class for the ${draftYear} season.
+
+            CRITICAL TIMELINE RULE: ${timelineNote} Do not rely on your own training data to guess whether a player was a rookie or where their real-world market value has moved since -- both are exactly the kind of fact that changes after a season passes. Use ONLY the "[...]" experience note given after each pick below; if a pick shows no note, its experience level is genuinely unknown and should not be guessed either.
+
             FRANCHISE: ${teamName}
             DRAFT PICKS:
             ${formattedPicks}
 
             YOUR TASK:
-            1. Evaluate the overall haul based on value, upside, and tactical awareness.
+            1. Evaluate the overall haul based on value, upside, and tactical awareness, consistent with each pick's actual experience level as stated above.
             2. Assign an overall letter grade (A+, A, A-, B+, etc.).
             3. Provide a short 3-5 word summary headline.
 

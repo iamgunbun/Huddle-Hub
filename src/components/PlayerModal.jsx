@@ -75,7 +75,12 @@ export default function PlayerModal({ player, week = 1, onClose }) {
 
             const exp = parseInt(player?.years_exp ?? player?.exp) || 0;
             const yearsToFetch = [];
-            for (let i = 0; i <= exp && i < 6; i++) {
+            // Bounded at 25 as a sanity ceiling (longer than any real NFL
+            // career), not at some small fixed number -- a hardcoded cap here
+            // silently truncated a long-tenured veteran's history at whatever
+            // that number of seasons was, showing recent years only and
+            // making it look like their career started years later than it did.
+            for (let i = 0; i <= exp && i < 25; i++) {
                 yearsToFetch.push(parseInt(season) - i);
             }
             setYearsPlayed(yearsToFetch);
