@@ -2,6 +2,7 @@ import { getLeagueData } from './leagueData';
 import { getLeagueRosters } from './leagueRosters';
 import { waitForAll } from './multiPromise';
 import { fetchYahooStandings } from '../yahooService';
+import { fetchESPNStandings } from '../espnService';
 import { buildPodiumFromStandings, isSameLeagueChain } from '../yahooHistory';
 import { isYahooLeagueId as isYahooLeague, isEspnLeagueId } from '../platformIds';
 
@@ -41,12 +42,12 @@ export const getAwards = async (refresh = false, queryLeagueID = null) => {
         ? (leagueData.league_id || queryLeagueID)
         : leagueData.previous_league_id;
 
-    // ESPN's trophy-room walk isn't built yet -- checked explicitly rather
-    // than falling through to the Sleeper walk, which would otherwise treat
-    // an ESPN league's numeric id as a real Sleeper league id to query.
+    // Checked explicitly rather than falling through to the Sleeper walk,
+    // which would otherwise treat an ESPN league's numeric id as a real
+    // Sleeper league id to query.
     const leagueIdForRouting = leagueData.league_id || queryLeagueID;
     const podiums = isEspnLeagueId(leagueIdForRouting)
-        ? []
+        ? await getEspnPodiums(startingSeasonID)
         : isYahooLeague(leagueIdForRouting)
             ? await getYahooPodiums(startingSeasonID)
             : await getPodiums(startingSeasonID);
@@ -89,6 +90,41 @@ const getYahooPodiums = async (startingSeasonID) => {
 
         if (seasonData.status === 'complete') {
             const standings = await fetchYahooStandings(seasonID).catch((err) => { console.error(err); return []; });
+            const podium = buildPodiumFromStandings(standings, parseInt(seasonData.season));
+            if (podium) podiums.push(podium);
+        }
+
+        seasonID = seasonData.previous_league_id || 0;
+    }
+
+    return podiums;
+};
+
+// ESPN has no winners/losers bracket endpoint either, so a season's podium
+// comes from its final standings, exactly like Yahoo's -- see getYahooPodiums
+// above. The walk itself is identical (follow previous_league_id, stop on a
+// season this one's chain doesn't recognise); only the per-season standings
+// fetch differs.
+const getEspnPodiums = async (startingSeasonID) => {
+    const podiums = [];
+    let seasonID = startingSeasonID;
+    const visited = new Set();
+    let successor = null;
+
+    while (seasonID && seasonID !== 0 && seasonID !== "0" && !visited.has(seasonID)) {
+        visited.add(seasonID);
+
+        const seasonData = await getLeagueData(seasonID).catch((err) => { console.error(err); return null; });
+        if (!seasonData) break;
+
+        if (successor && !isSameLeagueChain(seasonData, successor)) {
+            console.warn(`Stopping the trophy-room walk at "${seasonID}": it isn't "${successor.league_id}"'s previous season.`);
+            break;
+        }
+        successor = seasonData;
+
+        if (seasonData.status === 'complete') {
+            const standings = await fetchESPNStandings(seasonID).catch((err) => { console.error(err); return []; });
             const podium = buildPodiumFromStandings(standings, parseInt(seasonData.season));
             if (podium) podiums.push(podium);
         }

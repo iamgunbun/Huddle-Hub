@@ -1,11 +1,13 @@
 // src/utils/espnService.js
 import { supabase } from '../supabaseClient';
-import { fromEspnLeagueId } from './platformIds';
+import { fromEspnLeagueId, parseEspnLeagueId, toEspnSeasonLeagueId } from './platformIds';
 import {
     parseEspnLeagueRosters,
     parseEspnSchedule,
     parseEspnTransactions,
     parseEspnDraftDetail,
+    findPriorEspnSeason,
+    isEspnSeasonComplete,
 } from './espnParsers';
 
 // Most callers (every page's own `getLeagueData(id)`, with no explicit user)
@@ -24,8 +26,14 @@ const getUserId = async (explicitUserId) => {
 // week's box score, `scoringPeriodId`) are asked for and this account's
 // stored cookies attached server-side. `explicitCookies` is only used by the
 // "try connecting" preview on the Add League page, before anything is saved.
+//
+// The season queried is whichever of these is present, in order: an explicit
+// `year` option, the season encoded in a season-qualified id
+// ("espn:123:2024" -- see platformIds.js), or the current year. A caller
+// walking a league's history never has to pass `year` itself -- it's carried
+// by the id its own previous_league_id chain produces.
 const espnProxyRequest = async (leagueId, { views, scoringPeriodId, year } = {}, userId = null, explicitCookies = {}) => {
-    const cleanId = fromEspnLeagueId(leagueId).trim();
+    const { leagueId: cleanId, year: idYear } = parseEspnLeagueId(leagueId);
     if (!cleanId) return null;
     const resolvedUserId = await getUserId(userId);
 
@@ -34,7 +42,7 @@ const espnProxyRequest = async (leagueId, { views, scoringPeriodId, year } = {},
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             leagueId: cleanId,
-            year: year || new Date().getFullYear(),
+            year: year || idYear || new Date().getFullYear(),
             views,
             scoringPeriodId,
             espnS2: explicitCookies?.espn_s2,
@@ -69,7 +77,7 @@ export const fetchAndNormalizeESPNLeague = async (leagueId, cookies = {}, userId
 
     try {
         const data = await espnProxyRequest(
-            cleanId,
+            leagueId,
             { views: ['mSettings', 'mTeam'] },
             userId,
             cookies
@@ -96,13 +104,18 @@ export const fetchAndNormalizeESPNLeague = async (leagueId, cookies = {}, userId
             ? false
             : String(data.settings.draftSettings?.type || '').toUpperCase() === 'AUCTION';
 
+        const seasonId = parseInt(data.seasonId) || new Date().getFullYear();
+
+        const priorYear = findPriorEspnSeason(data.status?.previousSeasons, seasonId);
+        const previousLeagueId = priorYear !== null ? toEspnSeasonLeagueId(cleanId, priorYear) : null;
+
+        const seasonComplete = isEspnSeasonComplete({
+            seasonId,
+            currentMatchupPeriod: data.status?.currentMatchupPeriod,
+            matchupPeriodCount: data.settings.scheduleSettings?.matchupPeriodCount,
+        });
+
         return {
-            // ESPN keeps ONE league id across every season (unlike Sleeper/Yahoo,
-            // which mint a new one every year) -- so there is no
-            // previous_league_id chain to walk here. Multi-season history
-            // (Records, Team Managers, Rivalry, past drafts) isn't built for
-            // ESPN yet; every one of those walks stops after this one season.
-            //
             // `id`/`sleeper_league_id` are deliberately the BARE id, not the
             // espn:-prefixed one -- LeagueContext overwrites sleeper_league_id
             // with the prefixed form once this flows into a connected league
@@ -113,9 +126,10 @@ export const fetchAndNormalizeESPNLeague = async (leagueId, cookies = {}, userId
             // instead of this bare one.
             id: String(cleanId),
             sleeper_league_id: String(cleanId),
-            previous_league_id: null,
+            previous_league_id: previousLeagueId,
             name: leagueName,
-            season: String(data.seasonId || new Date().getFullYear()),
+            season: String(seasonId),
+            status: seasonComplete ? 'complete' : 'in_season',
             platform: 'espn',
             total_rosters: totalRosters,
             settings: {
@@ -150,13 +164,17 @@ const fetchResolvedSwid = async (userId) => {
 
 // Rosters + standings, in the shape the rest of the app already consumes for
 // Sleeper/Yahoo. `week`, when given, also resolves each starter's actual and
-// projected points for that scoring period.
-export const fetchAndNormalizeESPNRosters = async (leagueId, { week = null, passedUserId = null } = {}) => {
+// projected points for that scoring period. `teamsOnly` skips the `mRoster`
+// view entirely -- the history pages (records, trophy room, managers) only
+// need each team's record, name and manager, and walking many past seasons
+// at full roster detail costs one proxy call's worth of every player's stats
+// per season for nothing any of those pages read.
+export const fetchAndNormalizeESPNRosters = async (leagueId, { week = null, passedUserId = null, teamsOnly = false } = {}) => {
     const userId = await getUserId(passedUserId);
     if (!userId) return { rosters: {}, startersAndReserve: [], yahooPlayersMeta: {} };
 
     try {
-        const views = ['mTeam', 'mRoster'];
+        const views = teamsOnly ? ['mTeam'] : ['mTeam', 'mRoster'];
         const data = await espnProxyRequest(leagueId, { views, scoringPeriodId: week }, userId);
         if (!data) return { rosters: {}, startersAndReserve: [], yahooPlayersMeta: {} };
 
@@ -228,9 +246,9 @@ export const fetchESPNTransactions = async (leagueId, passedUserId = null) => {
     }
 };
 
-// ESPN's draft board for the CURRENT season only -- see the note in
-// parseEspnDraftDetail about there being no previous_league_id chain to walk
-// for past seasons yet.
+// ESPN's draft board for whichever season `leagueId` names (the live season
+// by default, or a specific past one via its season-qualified form -- see
+// platformIds.js).
 export const fetchESPNDraft = async (leagueId, { season = null, passedUserId = null } = {}) => {
     const userId = await getUserId(passedUserId);
     if (!userId) return null;
@@ -251,5 +269,33 @@ export const fetchESPNDraft = async (leagueId, { season = null, passedUserId = n
     } catch (err) {
         console.error("ESPN Draft Adapter Error:", err);
         return null;
+    }
+};
+
+// One season's finish order, in the shape buildPodiumFromStandings (shared
+// with Yahoo's own trophy-room walk) already consumes: a rosterId, its final
+// rank, and its division. ESPN reports the final rank a completed season's
+// teams actually finished in as `rankCalculatedFinal` -- the regular-season
+// standings position (`playoffSeed`) is what the playoff bracket started
+// from, not who actually won it, so that's only a fallback for a season
+// ESPN hasn't calculated a final rank for yet.
+export const fetchESPNStandings = async (leagueId, passedUserId = null) => {
+    const userId = await getUserId(passedUserId);
+    if (!userId) return [];
+
+    try {
+        const data = await espnProxyRequest(leagueId, { views: ['mTeam'] }, userId);
+        const teams = Array.isArray(data?.teams) ? data.teams : [];
+
+        return teams.map(t => ({
+            rosterId: t.id,
+            rank: Number.isFinite(t.rankCalculatedFinal) && t.rankCalculatedFinal > 0
+                ? t.rankCalculatedFinal
+                : (t.playoffSeed || null),
+            divisionId: Number.isFinite(t.divisionId) ? t.divisionId : null,
+        }));
+    } catch (err) {
+        console.error("ESPN Standings Adapter Error:", err);
+        return [];
     }
 };

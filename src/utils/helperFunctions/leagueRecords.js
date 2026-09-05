@@ -7,6 +7,7 @@ import { getManagers, round, sortHighAndLow } from './universalFunctions';
 import { Records } from '../dataClasses';
 import { getBrackets } from './leagueBrackets';
 import { fetchYahooScoreboardWeeks } from '../yahooService';
+import { fetchESPNSchedule } from '../espnService';
 import { groupPlayoffRounds, isSameLeagueChain } from '../yahooHistory';
 import { isYahooLeagueId as isYahooLeague, isEspnLeagueId } from '../platformIds';
 
@@ -165,15 +166,29 @@ const processRegularSeason = async ({rosters, leagueData, curSeason, week, regul
     let startWeek = parseInt(week);
     
     const isYahoo = isYahooLeague(curSeason);
-    // ESPN's records walk isn't built yet -- checked explicitly so an ESPN
-    // league's numeric id, indistinguishable in shape from a Sleeper id,
-    // can't fall into the Sleeper branch below and query an unrelated real
-    // Sleeper league's matchups.
     const isEspn = isEspnLeagueId(curSeason);
     let matchupsData = [];
 
     if (isEspn) {
-        // Nothing to fetch yet -- matchupsData stays empty.
+        // One call for the whole season (ESPN's `mMatchup` view returns every
+        // matchup period at once), then sliced into the same descending-week,
+        // one-array-per-week shape the Yahoo branch below builds.
+        const byWeek = await fetchESPNSchedule(curSeason).catch((err) => { console.error(err); return {}; });
+
+        for (let w = startWeek; w > 0; w--) {
+            const arr = [];
+            (byWeek[w] || []).forEach((pair, idx) => {
+                // A bye week's "pair" has only one side, and a genuinely
+                // unplayed week reads as a 0-0 tie -- recording either would
+                // invent a real result and sink every blowout/closest-game
+                // record built from it.
+                if (pair.length < 2 || pair.every(t => !t.points)) return;
+                pair.forEach(team => {
+                    arr.push({ roster_id: team.roster_id, points: team.points, matchup_id: `${w}-${idx + 1}` });
+                });
+            });
+            matchupsData.push(arr);
+        }
     } else if (isYahoo) {
         const weeks = [];
         for (let w = 1; w <= startWeek; w++) weeks.push(w);

@@ -6,6 +6,7 @@ import { get } from 'svelte/store';
 import { activeLeague } from '$lib/stores/leagueContext.js';
 import { leagueID as defaultLeagueID } from '$lib/utils/leagueInfo.js';
 import { fetchYahooScoreboardWeeks } from '../yahooService';
+import { fetchESPNSchedule } from '../espnService';
 import { isYahooLeagueId as isYahooLeague, isEspnLeagueId } from '../platformIds';
 
 export const getRivalryMatchups = async (userOneID, userTwoID) => {
@@ -37,11 +38,8 @@ export const getRivalryMatchups = async (userOneID, userTwoID) => {
                 continue;
             }
             const lastRegularWeek = (leagueData.settings?.playoff_week_start || 15) - 1;
-            // ESPN's rivalry walk isn't built yet -- checked explicitly so an
-            // ESPN league's numeric id, indistinguishable in shape from a
-            // Sleeper id, can't query Sleeper's API for an unrelated league.
             const matchupsData = isEspnLeagueId(curLeagueID)
-                ? []
+                ? await fetchEspnRivalryWeeks(curLeagueID, lastRegularWeek)
                 : isYahooLeague(curLeagueID)
                     ? await fetchYahooRivalryWeeks(curLeagueID, lastRegularWeek)
                     : await fetchSleeperRivalryWeeks(curLeagueID, lastRegularWeek);
@@ -109,6 +107,32 @@ const fetchYahooRivalryWeeks = async (leagueID, lastRegularWeek) => {
             });
         });
     });
+    return out;
+};
+
+// ESPN's `mMatchup` view returns a team total per matchup, like Yahoo's
+// scoreboard -- the points array carries the single total, and the caller
+// only ever sums it. Weeks are returned in the same 1..N positional order the
+// other two platforms use, with unplayed weeks left empty.
+const fetchEspnRivalryWeeks = async (leagueID, lastRegularWeek) => {
+    const byWeek = await fetchESPNSchedule(leagueID).catch((err) => { console.error(err); return {}; });
+
+    const out = [];
+    for (let w = 1; w <= lastRegularWeek; w++) {
+        const arr = [];
+        (byWeek[w] || []).forEach((pair, idx) => {
+            if (pair.length < 2 || pair.every(t => !t.points)) return;
+            pair.forEach(team => {
+                arr.push({
+                    roster_id: team.roster_id,
+                    matchup_id: `m${idx}`,
+                    starters: [],
+                    starters_points: [team.points],
+                });
+            });
+        });
+        out.push(arr);
+    }
     return out;
 };
 
