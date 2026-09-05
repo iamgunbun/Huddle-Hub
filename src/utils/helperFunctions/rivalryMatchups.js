@@ -6,8 +6,7 @@ import { get } from 'svelte/store';
 import { activeLeague } from '$lib/stores/leagueContext.js';
 import { leagueID as defaultLeagueID } from '$lib/utils/leagueInfo.js';
 import { fetchYahooScoreboardWeeks } from '../yahooService';
-
-const isYahooLeague = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
+import { isYahooLeagueId as isYahooLeague, isEspnLeagueId } from '../platformIds';
 
 export const getRivalryMatchups = async (userOneID, userTwoID) => {
     if(!userOneID || !userTwoID) return null;
@@ -38,9 +37,14 @@ export const getRivalryMatchups = async (userOneID, userTwoID) => {
                 continue;
             }
             const lastRegularWeek = (leagueData.settings?.playoff_week_start || 15) - 1;
-            const matchupsData = isYahooLeague(curLeagueID)
-                ? await fetchYahooRivalryWeeks(curLeagueID, lastRegularWeek)
-                : await fetchSleeperRivalryWeeks(curLeagueID, lastRegularWeek);
+            // ESPN's rivalry walk isn't built yet -- checked explicitly so an
+            // ESPN league's numeric id, indistinguishable in shape from a
+            // Sleeper id, can't query Sleeper's API for an unrelated league.
+            const matchupsData = isEspnLeagueId(curLeagueID)
+                ? []
+                : isYahooLeague(curLeagueID)
+                    ? await fetchYahooRivalryWeeks(curLeagueID, lastRegularWeek)
+                    : await fetchSleeperRivalryWeeks(curLeagueID, lastRegularWeek);
             for(let i = 1; i < matchupsData.length + 1; i++) {
                 const processed = processRivalryMatchups(matchupsData[i - 1], i, rosterIDOne, rosterIDTwo);
                 if(processed) {

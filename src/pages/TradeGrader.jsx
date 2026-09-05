@@ -3,8 +3,7 @@ import { useLeague } from '../context/LeagueContext';
 import { loadPlayers, getLeagueData, getLeagueRosters } from '../utils/helper';
 import { sleeperLeagueFormat, estimateLeagueFormatFromRosterSets, formatLabel } from '../utils/leagueFormat';
 import styles from './TradeGrader.module.css';
-
-const isYahooLeagueId = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
+import { isYahooLeagueId } from '../utils/platformIds';
 
 const parseGraderResponse = (rawText) => {
     try { 

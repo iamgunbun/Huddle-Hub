@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useLeague } from '../../context/LeagueContext';
 import { loadPlayers, getLeagueTeamManagers } from '../../utils/helper';
 import { fetchYahooTransactions } from '../../utils/yahooService';
+import { fetchESPNTransactions } from '../../utils/espnService';
 import { withResolvedPlayerMeta } from '../../utils/playerPool';
 import { useNavigate } from 'react-router-dom';
 import styles from './Transactions.module.css';
-
-const isYahooLeagueId = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
+import { isYahooLeagueId, isEspnLeagueId } from '../../utils/platformIds';
 
 // Sleeper's image CDN is keyed by SLEEPER ids. In a Yahoo league the
 // transaction id is a Yahoo one, so the crosswalked sleeper_id is what makes
@@ -57,6 +57,10 @@ export default function Transactions({ preview = false }) {
                     // Transactions name players by Yahoo id, and the shared
                     // dictionary only knows the ones Sleeper's crosswalk covers
                     // -- the rest read as a bare id without this.
+                    players = withResolvedPlayerMeta(players, pData?.playersByName || {}, playerMeta);
+                } else if (isEspnLeagueId(leagueId)) {
+                    const { transactions, playerMeta } = await fetchESPNTransactions(leagueId);
+                    allTxns = transactions;
                     players = withResolvedPlayerMeta(players, pData?.playersByName || {}, playerMeta);
                 } else {
                     for (let i = 1; i <= 18; i++) {

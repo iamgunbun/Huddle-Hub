@@ -5,8 +5,8 @@ import { matchupsStore } from '$lib/stores';
 import { activeLeague } from '$lib/stores/leagueContext.js';
 import { leagueID as defaultLeagueID } from '$lib/utils/leagueInfo.js';
 import { fetchAndNormalizeYahooMatchups } from '../yahooService';
-
-const isYahooLeague = (id) => id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
+import { fetchESPNSchedule } from '../espnService';
+import { isYahooLeagueId as isYahooLeague, isEspnLeagueId } from '../platformIds';
 
 export const getLeagueMatchups = async (queryLeagueID) => {
     let id = queryLeagueID;
@@ -57,6 +57,32 @@ export const getLeagueMatchups = async (queryLeagueID) => {
 
             const matchupsResponse = {
                 matchupWeeks,
+                year,
+                week,
+                regularSeasonLength,
+                league_id: id
+            };
+            matchupsStore.update(() => matchupsResponse);
+            return matchupsResponse;
+        }
+
+        // --- ESPN PLATFORM ROUTING ---
+        // ESPN's `mMatchup` view returns the whole season's schedule in one
+        // call, unlike Yahoo which needs one proxy call per week -- so the
+        // per-week rows are sliced out of a single already-fetched payload.
+        if (isEspnLeagueId(id)) {
+            const byWeek = await fetchESPNSchedule(id);
+            const eWeeks = [];
+            for (let i = 1; i <= week; i++) {
+                const pairs = byWeek[i];
+                if (!pairs || !pairs.length) continue;
+                const matchups = {};
+                pairs.forEach((teams, idx) => { matchups[idx + 1] = teams; });
+                eWeeks.push({ matchups, week: i });
+            }
+
+            const matchupsResponse = {
+                matchupWeeks: eWeeks,
                 year,
                 week,
                 regularSeasonLength,

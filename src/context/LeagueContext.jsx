@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import { fetchAndNormalizeESPNLeague } from '../utils/espnService';
 import { fetchAndNormalizeYahooLeague, fetchYahooOwnTeams } from '../utils/yahooService';
 import { findSleeperLeagueUser, isSleeperCommissioner } from '../utils/leagueMembership';
+import { toEspnLeagueId } from '../utils/platformIds';
 
 const LeagueContext = createContext();
 
@@ -160,10 +161,20 @@ export function LeagueProvider({ children }) {
                     const dbRecordId = matchedLeague.id || ul.league_id;
                     
                     // External Provider ID (e.g. "470.l.604026" or Sleeper numeric ID)
-                    const externalPlatformId = matchedLeague.sleeper_league_id || (ul.league_id !== dbRecordId ? ul.league_id : null);
-                    
+                    const rawExternalPlatformId = matchedLeague.sleeper_league_id || (ul.league_id !== dbRecordId ? ul.league_id : null);
+
                     const isESPN = ul.platform === 'espn' || matchedLeague.platform === 'espn';
                     const isYahoo = ul.platform === 'yahoo' || matchedLeague.platform === 'yahoo';
+
+                    // ESPN league ids are plain numbers -- exactly the shape a
+                    // Sleeper id has -- so every place downstream that decides
+                    // "Yahoo, or else assume Sleeper" needs its own way to tell
+                    // an ESPN id apart. Prefixed here, once, rather than at every
+                    // one of those call sites; stripped back off again at the one
+                    // place that actually calls ESPN's API with it.
+                    const externalPlatformId = isESPN && rawExternalPlatformId
+                        ? toEspnLeagueId(rawExternalPlatformId)
+                        : rawExternalPlatformId;
 
                     let liveData = {};
 
@@ -184,7 +195,9 @@ export function LeagueProvider({ children }) {
                         }
                     } else if (isESPN) {
                         try {
-                            const espnData = await fetchAndNormalizeESPNLeague(externalPlatformId || dbRecordId);
+                            // No cookies passed explicitly -- the proxy looks up
+                            // this account's stored ESPN cookies itself now.
+                            const espnData = await fetchAndNormalizeESPNLeague(externalPlatformId || dbRecordId, {}, userId);
                             if (espnData) {
                                 liveData = {
                                     avatar: espnData.avatar,

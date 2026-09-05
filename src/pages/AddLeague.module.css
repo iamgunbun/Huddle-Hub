@@ -165,6 +165,59 @@
     color: #94a3b8;
 }
 
+.espnNotice {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: rgba(238, 191, 28, 0.08);
+    border: 1px solid rgba(238, 191, 28, 0.25);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 15px;
+}
+
+.espnNotice i {
+    color: #eebf1c;
+    font-size: 1.4em;
+    flex-shrink: 0;
+}
+
+.espnNoticeTitle {
+    color: #f8fafc;
+    font-weight: 800;
+    font-size: 0.9em;
+    margin: 0 0 4px 0;
+}
+
+.espnNoticeText {
+    color: #94a3b8;
+    font-size: 0.8em;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.shareLinkBtn {
+    width: 100%;
+    background: transparent;
+    color: #eebf1c;
+    border: 1px solid rgba(238, 191, 28, 0.4);
+    padding: 12px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.85em;
+    cursor: pointer;
+    margin-bottom: 20px;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.shareLinkBtn:hover {
+    background: rgba(238, 191, 28, 0.08);
+}
+
 .errorBox {
     margin-top: 20px;
     background: rgba(239, 68, 68, 0.1);

@@ -14,8 +14,11 @@ export const getUpcomingDraft = async () => {
         getLeagueData()
     ).catch((err) => { console.error(err); });
 
-    // YAHOO SHIELD
-    if (!leagueData || leagueData.platform === 'yahoo' || (leagueData.id && String(leagueData.id).includes('.'))) {
+    // YAHOO/ESPN SHIELD -- neither platform's drafts are readable from
+    // Sleeper's draft API, so both are blocked here rather than falling
+    // through to a fetch keyed by an undefined draft_id or, worse, a
+    // coincidentally-valid but unrelated Sleeper one.
+    if (!leagueData || leagueData.platform === 'yahoo' || leagueData.platform === 'espn' || (leagueData.id && String(leagueData.id).includes('.'))) {
         return null;
     }
 

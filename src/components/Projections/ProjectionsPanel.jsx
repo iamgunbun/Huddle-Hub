@@ -3,6 +3,7 @@ import { useLeague } from '../../context/LeagueContext';
 import { getLeagueStandings, getLeagueRosters, getLeagueTeamManagers, getLeagueData, loadPlayers, getNflState, predictScores } from '../../utils/helper';
 import { getTeamFromTeamManagers } from '../../utils/helperFunctions/universalFunctions';
 import { fetchYahooScoreboardWeeks } from '../../utils/yahooService';
+import { fetchESPNSchedule } from '../../utils/espnService';
 import {
     simulateSeason,
     blendedScoringMean,
@@ -15,8 +16,7 @@ import {
 import { movementFromSnapshots, withSnapshot } from '../../utils/rankMovement';
 import { resolveRosterPlayers } from '../../utils/playerPool';
 import styles from './Projections.module.css';
-
-const isYahooLeagueId = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
+import { isYahooLeagueId, isEspnLeagueId } from '../../utils/platformIds';
 const SNAPSHOT_KEY = (leagueId) => `powerRankOrder_${leagueId}`;
 
 const readSnapshots = (leagueId) => {
@@ -55,6 +55,17 @@ const fetchRemainingSchedule = async (leagueId, firstWeek, lastWeek) => {
                 .filter(m => !m.played && Number.isFinite(m.week))
                 .map(m => ({ week: m.week, home: m.teams[0]?.roster_id, away: m.teams[1]?.roster_id }))
                 .filter(g => g.home !== undefined && g.away !== undefined);
+        }
+
+        if (isEspnLeagueId(leagueId)) {
+            const byWeek = await fetchESPNSchedule(leagueId);
+            const games = [];
+            weeks.forEach(w => {
+                (byWeek[w] || []).forEach(pair => {
+                    if (pair.length === 2) games.push({ week: w, home: pair[0].roster_id, away: pair[1].roster_id });
+                });
+            });
+            return games;
         }
 
         const weekly = await Promise.all(weeks.map(async (w) => {

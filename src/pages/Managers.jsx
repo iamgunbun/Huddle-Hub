@@ -7,8 +7,7 @@ import { isSameLeagueChain } from '../utils/yahooHistory';
 import { sleeperLeagueFormat, estimateLeagueFormatFromRosterSets, formatLabel } from '../utils/leagueFormat';
 import { syncActiveLeague } from '../utils/leagueInfo';
 import styles from './Managers.module.css';
-
-const isYahooLeagueId = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
+import { isYahooLeagueId } from '../utils/platformIds';
 
 // The same season-by-season wins/losses walk the AI eval used to do inside
 // the serverless function itself, via raw Sleeper-only fetches -- which is

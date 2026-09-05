@@ -6,11 +6,11 @@ import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunct
 import { resolvePlayerFromMeta } from '../utils/playerPool';
 import { scoreStatLine } from '../utils/yahooScoring';
 import { fetchAndNormalizeYahooMatchups } from '../utils/yahooService';
+import { fetchAndNormalizeESPNMatchups } from '../utils/espnService';
 import { isViewingLiveWeek, LIVE_SCORE_POLL_MS } from '../utils/liveScores';
+import { isYahooLeagueId, isEspnLeagueId } from '../utils/platformIds';
 import PlayerModal from '../components/PlayerModal';
 import styles from './Matchups.module.css';
-
-const isYahooLeagueId = (id) => id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
 
 export default function Matchups() {
     const { activeLeague } = useLeague();
@@ -98,10 +98,12 @@ export default function Matchups() {
                 if (nState?.season_type === 'regular') setActiveWeek(nState.display_week || nState.week || 1);
                 else if (nState?.season_type === 'post') setActiveWeek(18);
 
-                if (isYahooLeagueId(sleeperId)) {
-                    // Yahoo flags the requesting user's own team directly -- this is
-                    // reliable regardless of what (if anything) got stored as the
-                    // connection's team_name, unlike the string-matching path below.
+                if (isYahooLeagueId(sleeperId) || isEspnLeagueId(sleeperId)) {
+                    // Yahoo flags the requesting user's own team directly, and
+                    // ESPN's roster fetch resolves the same flag from the
+                    // connecting account's SWID -- both reliable regardless of
+                    // what (if anything) got stored as the connection's
+                    // team_name, unlike the string-matching path below.
                     const ownedRoster = Object.values(rData.rosters || {}).find(r => r.is_owned_by_current_login);
                     if (ownedRoster) setMyRosterId(ownedRoster.roster_id);
                 } else {
@@ -166,6 +168,16 @@ export default function Matchups() {
                         applyMatchupData(flat);
                     })
                     .catch(err => console.error("Yahoo matchups fetch err:", err));
+            } else if (isEspnLeagueId(activeLeague.sleeper_league_id)) {
+                fetchAndNormalizeESPNMatchups(activeLeague.sleeper_league_id, activeWeek)
+                    .then(({ matchups }) => {
+                        const flat = [];
+                        Object.entries(matchups || {}).forEach(([mId, pair]) => {
+                            pair.forEach(team => flat.push({ ...team, matchup_id: mId }));
+                        });
+                        applyMatchupData(flat);
+                    })
+                    .catch(err => console.error("ESPN matchups fetch err:", err));
             } else {
                 fetch(`https://api.sleeper.app/v1/league/${activeLeague.sleeper_league_id}/matchups/${activeWeek}`)
                     .then(res => res.json())

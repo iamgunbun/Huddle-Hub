@@ -4,10 +4,10 @@ import { getLeagueData, getLeagueTeamManagers, loadPlayers, getNflState } from '
 import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
 import PlayerModal from '../components/PlayerModal';
 import { fetchYahooTransactions } from '../utils/yahooService';
+import { fetchESPNTransactions } from '../utils/espnService';
+import { isYahooLeagueId, isEspnLeagueId } from '../utils/platformIds';
 import { withResolvedPlayerMeta } from '../utils/playerPool';
 import styles from './Transactions.module.css';
-
-const isYahooLeagueId = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
 
 export default function Transactions() {
     const { activeLeague } = useLeague();
@@ -90,6 +90,19 @@ export default function Transactions() {
                     setTransactions(all.filter(t => t.leg === activeWeek));
                 })
                 .catch(err => console.error("Error fetching Yahoo transactions:", err));
+        } else if (isEspnLeagueId(leagueId)) {
+            // ESPN has no per-week transactions endpoint either -- the whole
+            // season arrives in one call, each entry carrying its own
+            // scoring-period week, so fetch once and filter here.
+            fetchESPNTransactions(leagueId)
+                .then(({ transactions: all, playerMeta }) => {
+                    if (!isMounted) return;
+                    if (Object.keys(playerMeta || {}).length) {
+                        setPlayersInfo(prev => withResolvedPlayerMeta(prev, playersByName, playerMeta));
+                    }
+                    setTransactions(all.filter(t => t.leg === activeWeek));
+                })
+                .catch(err => console.error("Error fetching ESPN transactions:", err));
         } else {
             fetch(`https://api.sleeper.app/v1/league/${leagueId}/transactions/${activeWeek}`)
                 .then(res => res.ok ? res.json() : [])

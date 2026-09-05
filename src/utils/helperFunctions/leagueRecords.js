@@ -8,8 +8,7 @@ import { Records } from '../dataClasses';
 import { getBrackets } from './leagueBrackets';
 import { fetchYahooScoreboardWeeks } from '../yahooService';
 import { groupPlayoffRounds, isSameLeagueChain } from '../yahooHistory';
-
-const isYahooLeague = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
+import { isYahooLeagueId as isYahooLeague, isEspnLeagueId } from '../platformIds';
 
 let recordsCache = {}; 
 let recordsCacheLeagueID = null;
@@ -166,9 +165,16 @@ const processRegularSeason = async ({rosters, leagueData, curSeason, week, regul
     let startWeek = parseInt(week);
     
     const isYahoo = isYahooLeague(curSeason);
+    // ESPN's records walk isn't built yet -- checked explicitly so an ESPN
+    // league's numeric id, indistinguishable in shape from a Sleeper id,
+    // can't fall into the Sleeper branch below and query an unrelated real
+    // Sleeper league's matchups.
+    const isEspn = isEspnLeagueId(curSeason);
     let matchupsData = [];
 
-    if (isYahoo) {
+    if (isEspn) {
+        // Nothing to fetch yet -- matchupsData stays empty.
+    } else if (isYahoo) {
         const weeks = [];
         for (let w = 1; w <= startWeek; w++) weeks.push(w);
 

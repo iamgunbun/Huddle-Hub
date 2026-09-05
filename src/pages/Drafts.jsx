@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useLeague } from '../context/LeagueContext';
 import { getLeagueTeamManagers, loadPlayers, getLeagueData } from '../utils/helper';
 import { fetchYahooDraft } from '../utils/yahooService';
+import { fetchESPNDraft } from '../utils/espnService';
 import { isSameLeagueChain } from '../utils/yahooHistory';
 import { resolvePlayerFromMeta } from '../utils/playerPool';
 import styles from './Drafts.module.css';
+import { isYahooLeagueId, isEspnLeagueId } from '../utils/platformIds';
 
-const isYahooLeagueId = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
 const DEFAULT_PLAYER_IMG = 'https://sleepercdn.com/images/v2/icons/player_default.webp';
 
 export default function Drafts() {
@@ -114,6 +115,23 @@ export default function Drafts() {
                     setYahooPlayerMeta(collectedMeta);
                     setDraftsDataMap(picksByDraft);
                     setDraftsList(allDrafts.sort((a, b) => b.season - a.season));
+                    return;
+                }
+
+                if (isEspnLeagueId(curId)) {
+                    // ESPN keeps one league id across every season (unlike
+                    // Sleeper/Yahoo, which mint a new one each year) -- there's
+                    // no previous_league_id chain to walk, so only the current
+                    // season's board is available here.
+                    const leagueData = await getLeagueData(curId);
+                    const board = await fetchESPNDraft(curId, { season: leagueData?.season });
+                    if (board) {
+                        setYahooPlayerMeta(board.playerMeta || {});
+                        setDraftsDataMap({ [board.draft_id]: board.picks });
+                        setDraftsList([board]);
+                    } else {
+                        setDraftsList([]);
+                    }
                     return;
                 }
 
