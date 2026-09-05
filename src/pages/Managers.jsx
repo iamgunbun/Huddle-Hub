@@ -2,9 +2,68 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
-import { getLeagueTeamManagers, getAwards, getLeagueRecords, loadPlayers, getLeagueRosters } from '../utils/helper';
+import { getLeagueTeamManagers, getAwards, getLeagueRecords, loadPlayers, getLeagueRosters, getLeagueData, getNflState } from '../utils/helper';
+import { isSameLeagueChain } from '../utils/yahooHistory';
+import { sleeperLeagueFormat, estimateLeagueFormatFromRosterSets, formatLabel } from '../utils/leagueFormat';
 import { syncActiveLeague } from '../utils/leagueInfo';
 import styles from './Managers.module.css';
+
+const isYahooLeagueId = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
+
+// The same season-by-season wins/losses walk the AI eval used to do inside
+// the serverless function itself, via raw Sleeper-only fetches -- which is
+// why it silently returned nothing for a Yahoo league (the fetch 404s, the
+// loop breaks on the first iteration). Built here instead, with the app's own
+// platform-aware helpers, so a Yahoo manager's real season history reaches
+// the prompt the same way a Sleeper manager's does.
+const buildManagerHistory = async (startLeagueId, managerId) => {
+    const history = [];
+    let currentLeagueId = startLeagueId;
+    let targetRosterId = null;
+    const visited = new Set();
+    let successor = null;
+
+    while (currentLeagueId && currentLeagueId !== "0" && currentLeagueId !== 0 && !visited.has(currentLeagueId)) {
+        visited.add(currentLeagueId);
+        const lData = await getLeagueData(currentLeagueId);
+        if (!lData) break;
+
+        // Same guard the records and trophy-room walks use: a bad renew
+        // pointer would otherwise attribute another league's seasons to this
+        // manager's history.
+        if (successor && !isSameLeagueChain(lData, successor)) break;
+        successor = lData;
+
+        const rData = await getLeagueRosters(currentLeagueId, { teamsOnly: true });
+        const rosters = Object.values(rData?.rosters || {});
+
+        let roster;
+        if (!targetRosterId) {
+            roster = rosters.find(r => r.owner_id === managerId || r.co_owners?.includes(managerId));
+            if (roster) targetRosterId = roster.roster_id;
+        } else {
+            roster = rosters.find(r => String(r.roster_id) === String(targetRosterId));
+        }
+
+        if (roster) {
+            const wins = roster.settings?.wins || 0;
+            const losses = roster.settings?.losses || 0;
+            const wasDifferentOwner = roster.owner_id !== managerId && !(roster.co_owners || []).includes(managerId);
+            if (wins > 0 || losses > 0) {
+                history.push({
+                    year: lData.season,
+                    wins,
+                    losses,
+                    note: wasDifferentOwner ? "Inherited orphan team." : "Managed by current user.",
+                });
+            }
+        }
+
+        currentLeagueId = lData.previous_league_id || 0;
+    }
+
+    return history;
+};
 
 const parseAiResponse = (rawText) => {
     try {
@@ -192,28 +251,66 @@ export default function Managers() {
             }
 
             setEvalLoading(true);
-            
-            const pData = await loadPlayers(activeLeague?.sleeper_league_id);
-            const rData = await getLeagueRosters(activeLeague.sleeper_league_id);
+
+            const leagueId = activeLeague.sleeper_league_id;
+            const [pData, rData, lData] = await Promise.all([
+                loadPlayers(leagueId),
+                getLeagueRosters(leagueId),
+                getLeagueData(leagueId),
+            ]);
             const playersMap = pData?.players || {};
-            
+
             const targetRoster = Object.values(rData?.rosters || {}).find(
                 r => r.owner_id === manager.managerId || r.co_owners?.includes(manager.managerId)
             );
-            
+
             const mappedPlayerStrings = (targetRoster?.players || []).map(pId => {
                 const player = playersMap[pId];
                 return player ? `${player.fn} ${player.ln} (${player.pos} - ${player.t})` : 'Unknown Player';
             });
 
+            // Sleeper says its league format directly. Yahoo's league object has
+            // no such field -- there's nothing real to read -- so it's estimated
+            // from how many players carried over from last season's rosters to
+            // this one (src/utils/leagueFormat.js). Redraft is the fallback: the
+            // common case, not a guess dressed up as Dynasty.
+            let leagueFormat = 'redraft';
+            if (!isYahooLeagueId(leagueId)) {
+                leagueFormat = sleeperLeagueFormat(lData?.settings?.type);
+            } else if (lData?.previous_league_id) {
+                const priorRosters = await getLeagueRosters(lData.previous_league_id);
+                const estimate = estimateLeagueFormatFromRosterSets(
+                    Object.values(rData?.rosters || {}),
+                    Object.values(priorRosters?.rosters || {})
+                );
+                if (estimate.format) leagueFormat = estimate.format;
+            }
+
+            const history = await buildManagerHistory(leagueId, manager.managerId);
+
+            // The prompt used to hardcode "we are in the pre-season" year-round,
+            // which goes wrong the moment games start being played -- the AI would
+            // keep insisting a season with real wins and losses in the history
+            // above hadn't started yet. The real NFL state fixes the timeline
+            // framing to whatever's actually true when the report is generated.
+            const nflState = await getNflState().catch(() => null);
+            const seasonPhase = nflState?.season_type === 'post' ? 'postseason'
+                : nflState?.season_type === 'off' ? 'offseason'
+                : (nflState?.season_type === 'regular' ? 'in-season' : 'preseason');
+
             const response = await fetch('/api/evaluate-manager', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    managerId: manager.managerId, 
-                    leagueId: activeLeague.sleeper_league_id, 
+                body: JSON.stringify({
+                    managerId: manager.managerId,
+                    leagueId,
                     teamName: manager.teamName,
-                    currentRosterPlayers: mappedPlayerStrings
+                    currentRosterPlayers: mappedPlayerStrings,
+                    leagueFormat: formatLabel(leagueFormat),
+                    history,
+                    season: lData?.season || nflState?.season,
+                    seasonPhase,
+                    currentWeek: nflState?.display_week || nflState?.week || null,
                 }),
             });
 

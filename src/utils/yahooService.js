@@ -276,6 +276,12 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
                 is_auction_draft: isAuctionDraft,
                 divisions: 0,
                 playoff_teams: 6,
+                // NOT a real Yahoo field -- Yahoo's league object has nothing
+                // equivalent to Sleeper's settings.type (0 redraft/1 keeper/2
+                // dynasty), so this is a Sleeper-shaped placeholder, always 0.
+                // Reading it to decide Redraft/Keeper/Dynasty for a Yahoo league
+                // silently claims every one of them is Redraft. Use
+                // src/utils/leagueFormat.js's roster-carryover estimate instead.
                 type: 0,
                 roster_positions: rosterPositions
             },

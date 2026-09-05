@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLeague } from '../context/LeagueContext';
-import { loadPlayers, getLeagueData } from '../utils/helper';
+import { loadPlayers, getLeagueData, getLeagueRosters } from '../utils/helper';
+import { sleeperLeagueFormat, estimateLeagueFormatFromRosterSets, formatLabel } from '../utils/leagueFormat';
 import styles from './TradeGrader.module.css';
+
+const isYahooLeagueId = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
 
 const parseGraderResponse = (rawText) => {
     try { 
@@ -25,7 +28,12 @@ export default function TradeGrader() {
     const [playersInfo, setPlayersInfo] = useState({});
     
     // Trade State
-    const [leagueType, setLeagueType] = useState('Dynasty');
+    // Redraft, not Dynasty, is the safer default while detection is still
+    // running -- most leagues are redraft, and Yahoo (see below) has no field
+    // to read at all, so a wrong default should be the common case, not the
+    // rare one.
+    const [leagueType, setLeagueType] = useState('Redraft');
+    const [formatDetection, setFormatDetection] = useState({ source: 'default', sampleSize: 0 });
     const [sideA, setSideA] = useState([]);
     const [sideB, setSideB] = useState([]);
     
@@ -47,21 +55,54 @@ export default function TradeGrader() {
             if (!activeLeague?.sleeper_league_id) return;
             setLoading(true);
             try {
+                const leagueId = activeLeague.sleeper_league_id;
                 const [pData, lData] = await Promise.all([
-                    loadPlayers(activeLeague.sleeper_league_id),
-                    getLeagueData(activeLeague.sleeper_league_id)
+                    loadPlayers(leagueId),
+                    getLeagueData(leagueId)
                 ]);
-                if (isMounted) {
-                    setPlayersInfo(pData?.players || pData || {});
-                    
-                    const detectedType = lData?.settings?.type === 2 ? 'Dynasty' : (lData?.settings?.type === 1 ? 'Keeper' : 'Redraft');
-                    setLeagueType(detectedType);
-                    
-                    setLoading(false);
+                if (!isMounted) return;
+                setPlayersInfo(pData?.players || pData || {});
+                setLoading(false);
+
+                // Sleeper says its own format directly. Yahoo's league object has
+                // no such field at all -- there is nothing correct to read here,
+                // so the format is instead estimated from how many players
+                // carried over from last season's rosters to this one (see
+                // src/utils/leagueFormat.js). That needs an extra fetch, so it
+                // runs after the page is already usable rather than blocking it.
+                if (!isYahooLeagueId(leagueId)) {
+                    setLeagueType(formatLabel(sleeperLeagueFormat(lData?.settings?.type)));
+                    setFormatDetection({ source: 'sleeper-settings', sampleSize: null });
+                    return;
                 }
-            } catch (e) { 
-                console.error("Failed to load grader engine:", e); 
-                if (isMounted) setLoading(false); 
+
+                if (!lData?.previous_league_id) {
+                    // A brand new Yahoo league has no prior season to compare
+                    // against -- Redraft (the default already set) is the honest
+                    // answer, not a guess dressed up as a detection.
+                    setFormatDetection({ source: 'no-prior-season', sampleSize: 0 });
+                    return;
+                }
+
+                const [currentRosters, priorRosters] = await Promise.all([
+                    getLeagueRosters(leagueId),
+                    getLeagueRosters(lData.previous_league_id),
+                ]);
+                if (!isMounted) return;
+
+                const estimate = estimateLeagueFormatFromRosterSets(
+                    Object.values(currentRosters?.rosters || {}),
+                    Object.values(priorRosters?.rosters || {})
+                );
+                if (estimate.format) {
+                    setLeagueType(formatLabel(estimate.format));
+                    setFormatDetection({ source: 'roster-carryover', sampleSize: estimate.sampleSize });
+                } else {
+                    setFormatDetection({ source: 'no-comparable-rosters', sampleSize: 0 });
+                }
+            } catch (e) {
+                console.error("Failed to load grader engine:", e);
+                if (isMounted) setLoading(false);
             }
         };
         load();
@@ -229,6 +270,17 @@ export default function TradeGrader() {
                         <option value="Keeper">Keeper (Picks hold moderate value)</option>
                         <option value="Redraft">Redraft (Picks hold zero value)</option>
                     </select>
+                    {formatDetection.source === 'roster-carryover' && (
+                        <p className={styles.formatHint}>
+                            Detected from {formatDetection.sampleSize} team{formatDetection.sampleSize === 1 ? '' : 's'}' roster carryover from last season. Change it above if that's wrong.
+                        </p>
+                    )}
+                    {formatDetection.source === 'sleeper-settings' && (
+                        <p className={styles.formatHint}>Detected from your league's own Sleeper settings.</p>
+                    )}
+                    {(formatDetection.source === 'no-prior-season' || formatDetection.source === 'no-comparable-rosters') && (
+                        <p className={styles.formatHint}>Couldn't detect this automatically for a Yahoo league yet -- pick the right format above.</p>
+                    )}
                 </div>
             </div>
 

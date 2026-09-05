@@ -7,65 +7,25 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Backend Error: Missing Gemini API Key." });
   }
 
-  const { managerId, leagueId, teamName, currentRosterPlayers } = req.body;
+  const { teamName, currentRosterPlayers, leagueFormat, history: clientHistory, season, seasonPhase, currentWeek } = req.body;
+
+  // Both the league's format (Redraft/Keeper/Dynasty) and this manager's
+  // season-by-season history used to be re-derived here via raw Sleeper-only
+  // fetches -- which silently produced nothing for a Yahoo league (the fetch
+  // 404s on a Yahoo league key, and the loop just stops) and defaulted to
+  // "Dynasty" for every league that fell through that gap. The app's own
+  // client-side helpers already compute both correctly for either platform
+  // (see src/pages/Managers.jsx and src/utils/leagueFormat.js), so they're
+  // trusted here instead of rebuilt from scratch. "Redraft" is the one
+  // fallback kept server-side, since it's the common case rather than a
+  // guess dressed up as a bigger commitment.
+  const leagueTypeStr = leagueFormat || "Redraft";
+  const history = Array.isArray(clientHistory) ? clientHistory : [];
 
   try {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    
-    // --- STEP 1: FETCH SLEEPER HISTORICAL RECORDS ---
-    let currentLeagueId = leagueId;
-    let history = [];
-    let targetRosterId = null;
-    let leagueTypeStr = "Dynasty"; 
-    let isFirstLeagueFetch = true;
 
-    try {
-      while (currentLeagueId && currentLeagueId !== "0" && currentLeagueId !== 0) {
-        const lRes = await fetch(`https://api.sleeper.app/v1/league/${currentLeagueId}`);
-        if (!lRes.ok) break;
-        const lData = await lRes.json();
-        const actualSeasonYear = lData.season;
-
-        if (isFirstLeagueFetch) {
-            const typeCode = lData.settings?.type || 0;
-            leagueTypeStr = typeCode === 2 ? "Dynasty" : (typeCode === 1 ? "Keeper" : "Redraft");
-            isFirstLeagueFetch = false;
-        }
-
-        const rostersRes = await fetch(`https://api.sleeper.app/v1/league/${currentLeagueId}/rosters`);
-        if (!rostersRes.ok) break;
-        const rosters = await rostersRes.json();
-        
-        let roster;
-        if (!targetRosterId) {
-            roster = rosters.find(r => r.owner_id === managerId || (r.co_owners && r.co_owners.includes(managerId)));
-            if (roster) targetRosterId = roster.roster_id; 
-        } else {
-            roster = rosters.find(r => r.roster_id === targetRosterId);
-        }
-        
-        if (roster) {
-          const wins = roster.settings?.wins || 0;
-          const losses = roster.settings?.losses || 0;
-          const wasDifferentOwner = (roster.owner_id !== managerId) && (!roster.co_owners || !roster.co_owners.includes(managerId));
-          
-          if (wins > 0 || losses > 0) {
-            history.push({ 
-                year: actualSeasonYear, 
-                wins, 
-                losses,
-                note: wasDifferentOwner ? "Inherited orphan team." : "Managed by current user."
-            });
-          }
-        }
-        
-        currentLeagueId = lData.previous_league_id;
-      }
-    } catch (sleeperErr) {
-        console.error("Sleeper History Fetch Error:", sleeperErr);
-    }
-
-    // --- STEP 2: GEMINI COMPILATION ENGINE ---
+    // --- GEMINI COMPILATION ENGINE ---
     const safetySettings = [
       { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
       { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
@@ -92,14 +52,30 @@ export default async function handler(req, res) {
         } 
     });
     
-    const currentYear = new Date().getFullYear();
+    const currentYear = season || new Date().getFullYear();
+
+    // This used to hardcode "we are in the pre-season" unconditionally, which
+    // goes wrong the moment the season actually starts: the model would keep
+    // insisting a season with real, in-progress results (visible in the
+    // history block below) hadn't begun yet. The real NFL state -- supplied
+    // by the client -- decides which framing is actually true right now.
+    let timelineRule;
+    if (seasonPhase === 'in-season') {
+        timelineRule = `We are in Week ${currentWeek || '?'} of the ${currentYear} regular season, which is already underway. Speak about it in the present tense -- games have been played and results already exist.`;
+    } else if (seasonPhase === 'postseason') {
+        timelineRule = `The ${currentYear} regular season has concluded and the playoffs are underway or finished. Speak about the ${currentYear} regular season's results in the past tense where appropriate.`;
+    } else if (seasonPhase === 'offseason') {
+        timelineRule = `The ${currentYear} season is over and the league is in its offseason. Speak about the ${currentYear} season in the past tense, and about roster moves as offseason planning for the next season.`;
+    } else {
+        timelineRule = `We are currently in the ${currentYear} preseason. The ${currentYear} season has NOT started yet. Do not speak about the ${currentYear} season in the past tense.`;
+    }
 
     const prompt = `You are an expert ${leagueTypeStr} Fantasy Football Analyst. Evaluate manager: ${teamName}.
-    
+
     CRITICAL LEAGUE TYPE RULE: This is a ${leagueTypeStr} league. Adjust your strategy language accordingly.
-    CRITICAL TIMELINE RULE: We are currently in the ${currentYear} pre-season. The ${currentYear} season has NOT started yet. Do not speak about the ${currentYear} season in the past tense.
-    
-    Completed Past Seasons Historical Performance Records for this Franchise Slot:
+    CRITICAL TIMELINE RULE: ${timelineRule}
+
+    Season-by-season Win/Loss Records for this Franchise Slot (the most recent entry may be the current, still in-progress season -- check the timeline rule above before treating it as final):
     ${JSON.stringify(history)}
     
     ACTUAL CURRENT ROSTER OF PLAYERS FOR THE UPCOMING ${currentYear} SEASON:

@@ -31,6 +31,8 @@
 }
 .dropdown:focus { border-color: #eebf1c; }
 
+.formatHint { color: #64748b; font-size: 0.75em; font-style: italic; text-align: center; margin: 4px 0 0 0; line-height: 1.4; }
+
 .arena { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
 .tradeCard { background: #0b0e14; border: 1px solid #1e2530; border-radius: 12px; padding: 20px; min-height: 250px; position: relative; box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
 .sideTitle { color: #eebf1c; font-size: 1.2em; text-transform: uppercase; text-align: center; margin-top: 0; margin-bottom: 20px; border-bottom: 1px solid #1e2530; padding-bottom: 10px; font-weight: 800; }
