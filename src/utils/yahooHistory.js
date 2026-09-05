@@ -676,3 +676,121 @@ export const parseYahooTeamPlayerPoints = (data) => {
 
     return byTeam;
 };
+
+// --------------------------------------------------------------------------
+// Transactions
+// --------------------------------------------------------------------------
+
+const teamIdFromKey = (teamKey) => {
+    const id = parseInt(String(teamKey || '').split('.t.')[1]);
+    return Number.isFinite(id) ? id : null;
+};
+
+/**
+ * Which league week a timestamp falls in.
+ *
+ * Yahoo stamps a transaction with a time but never a week, while the
+ * transactions page is organised by week. Yahoo does give the league's start
+ * date, and fantasy weeks are seven-day blocks from it, so the week is
+ * derivable. Anything before the season starts belongs to week one -- that's
+ * where pre-season pickups sit.
+ */
+export const weekFromTimestamp = (timestampMs, seasonStartMs, startWeek = 1) => {
+    if (!Number.isFinite(timestampMs) || !Number.isFinite(seasonStartMs)) return null;
+    const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+    const elapsed = timestampMs - seasonStartMs;
+    if (elapsed < 0) return startWeek;
+    return startWeek + Math.floor(elapsed / WEEK_MS);
+};
+
+/**
+ * Yahoo transactions, in the shape the transaction views already consume
+ * (Sleeper's): adds and drops as playerId -> rosterId maps, plus the roster ids
+ * involved.
+ *
+ * Two shape traps. `transaction_data` is sometimes an object and sometimes an
+ * array of them -- an add/drop pair arrives as the latter. And an add names its
+ * DESTINATION team while a drop names its SOURCE, so reading only one of the
+ * two silently loses half of every transaction.
+ */
+export const parseYahooTransactions = (data) => {
+    const league = data?.fantasy_content?.league;
+    const node = findNode(league, 'transactions') || data?.fantasy_content?.transactions;
+    const results = [];
+
+    yahooCollection(node).forEach(entry => {
+        const transaction = entry?.transaction;
+        if (!transaction) return;
+
+        const meta = Array.isArray(transaction) ? transaction[0] : transaction;
+        const status = yahooText(yahooField(meta, 'status'));
+        // Yahoo keeps failed and pending waiver claims in the same feed.
+        if (status && status !== 'successful') return;
+
+        const rawType = (yahooText(yahooField(meta, 'type')) || '').toLowerCase();
+        const timestampSeconds = parseInt(yahooField(meta, 'timestamp'));
+        const faabBid = yahooField(meta, 'faab_bid');
+
+        const playersNode = findNode(transaction, 'players');
+        const adds = {};
+        const drops = {};
+        const rosterIds = new Set();
+        let cameFromWaivers = false;
+
+        yahooCollection(playersNode).forEach(playerEntry => {
+            const player = playerEntry?.player;
+            if (!player) return;
+
+            const info = Array.isArray(player) ? player[0] : player;
+            const playerId = yahooText(yahooField(info, 'player_id'));
+            if (!playerId) return;
+
+            const dataNode = Array.isArray(player)
+                ? player.find(x => x && x.transaction_data)?.transaction_data
+                : player.transaction_data;
+
+            // Object or array of objects, depending on the transaction.
+            const moves = Array.isArray(dataNode) ? dataNode : (dataNode ? [dataNode] : []);
+
+            moves.forEach(move => {
+                const moveType = (yahooText(move?.type) || '').toLowerCase();
+                if (String(move?.source_type || '').toLowerCase() === 'waivers') cameFromWaivers = true;
+
+                if (moveType === 'add') {
+                    const rosterId = teamIdFromKey(move.destination_team_key);
+                    if (rosterId !== null) { adds[playerId] = rosterId; rosterIds.add(rosterId); }
+                } else if (moveType === 'drop') {
+                    const rosterId = teamIdFromKey(move.source_team_key);
+                    if (rosterId !== null) { drops[playerId] = rosterId; rosterIds.add(rosterId); }
+                }
+            });
+        });
+
+        [yahooField(meta, 'trader_team_key'), yahooField(meta, 'tradee_team_key')].forEach(key => {
+            const rosterId = teamIdFromKey(key);
+            if (rosterId !== null) rosterIds.add(rosterId);
+        });
+
+        if (!Object.keys(adds).length && !Object.keys(drops).length && rawType !== 'trade') return;
+
+        const type = rawType === 'trade'
+            ? 'trade'
+            : ((faabBid !== undefined && faabBid !== null) || cameFromWaivers ? 'waiver' : 'free_agent');
+
+        results.push({
+            transaction_id: yahooText(yahooField(meta, 'transaction_id')) || yahooText(yahooField(meta, 'transaction_key')),
+            type,
+            status: 'complete',
+            // Yahoo counts in seconds; the views format milliseconds.
+            status_updated: Number.isFinite(timestampSeconds) ? timestampSeconds * 1000 : null,
+            adds: Object.keys(adds).length ? adds : null,
+            drops: Object.keys(drops).length ? drops : null,
+            roster_ids: [...rosterIds],
+            draft_picks: [],
+            waiver_budget: [],
+            settings: faabBid !== undefined && faabBid !== null ? { waiver_bid: num(faabBid) } : null,
+        });
+    });
+
+    return results.sort((a, b) => (b.status_updated || 0) - (a.status_updated || 0));
+};

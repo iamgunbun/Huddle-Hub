@@ -3,7 +3,10 @@ import { useLeague } from '../context/LeagueContext';
 import { getLeagueData, getLeagueTeamManagers, loadPlayers } from '../utils/helper';
 import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
 import PlayerModal from '../components/PlayerModal';
+import { fetchYahooTransactions } from '../utils/yahooService';
 import styles from './Transactions.module.css';
+
+const isYahooLeagueId = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
 
 export default function Transactions() {
     const { activeLeague } = useLeague();
@@ -58,15 +61,28 @@ export default function Transactions() {
 
     // 2. Fetch Transactions for Selected Week
     useEffect(() => {
-        if (!activeLeague?.sleeper_league_id) return;
+        const leagueId = activeLeague?.sleeper_league_id;
+        if (!leagueId) return;
         let isMounted = true;
 
-        fetch(`https://api.sleeper.app/v1/league/${activeLeague.sleeper_league_id}/transactions/${activeWeek}`)
-            .then(res => res.ok ? res.json() : [])
-            .then(data => {
-                if (isMounted) setTransactions(Array.isArray(data) ? data : []);
-            })
-            .catch(err => console.error("Error fetching transactions:", err));
+        if (isYahooLeagueId(leagueId)) {
+            // Yahoo has no per-week transactions endpoint -- the season arrives
+            // whole, each entry carrying a timestamp that the adapter turns into
+            // a week. So fetch once and filter here.
+            fetchYahooTransactions(leagueId)
+                .then(all => {
+                    if (!isMounted) return;
+                    setTransactions(all.filter(t => t.leg === activeWeek));
+                })
+                .catch(err => console.error("Error fetching Yahoo transactions:", err));
+        } else {
+            fetch(`https://api.sleeper.app/v1/league/${leagueId}/transactions/${activeWeek}`)
+                .then(res => res.ok ? res.json() : [])
+                .then(data => {
+                    if (isMounted) setTransactions(Array.isArray(data) ? data : []);
+                })
+                .catch(err => console.error("Error fetching transactions:", err));
+        }
 
         return () => { isMounted = false; };
     }, [activeLeague, activeWeek]);
