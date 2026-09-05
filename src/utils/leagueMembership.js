@@ -8,6 +8,17 @@
 
 const normalize = (value) => String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
 
+/**
+ * The key a team is claimed under, so one app account can hold it and no other.
+ *
+ * Case and spacing are normalised because "Straw Hat Pirates" and "straw hat
+ * pirates" are the same team to everyone except a string comparison -- and a
+ * claim that can be sidestepped by changing capitalisation isn't a claim. The
+ * database index that actually enforces this uses the same normalisation, so
+ * the app's answer and the constraint's answer never disagree.
+ */
+export const teamClaimKey = (teamName) => normalize(teamName) || null;
+
 /** Sleeper marks the commissioner as the league's owner. */
 export const isSleeperCommissioner = (user) => user?.is_owner === true;
 

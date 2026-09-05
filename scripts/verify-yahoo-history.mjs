@@ -33,7 +33,7 @@ import {
     yahooText,
 } from '../src/utils/yahooHistory.js';
 import { getPlatformLink } from '../src/utils/platformLinks.js';
-import { findSleeperLeagueUser, isSleeperCommissioner } from '../src/utils/leagueMembership.js';
+import { findSleeperLeagueUser, isSleeperCommissioner, teamClaimKey } from '../src/utils/leagueMembership.js';
 import { describeLeagueWrite } from '../src/utils/dbWrite.js';
 
 let pass = 0;
@@ -727,6 +727,21 @@ eq('the bench comes last', slots.indexOf('BN'), 10);
 eq('so the starters are the first ten', slots.slice(0, 10).every(s => s !== 'BN'), true);
 eq('no roster positions -> null, so the caller can fall back',
     parseYahooRosterPositions({}), null);
+
+// --- Claiming a team --------------------------------------------------------
+// One app account holds a team, and no other. A claim that can be sidestepped
+// by changing capitalisation or padding isn't a claim, so the key is normalised
+// -- and the database index that actually enforces this normalises identically,
+// so the app's answer and the constraint's answer never disagree.
+eq('case does not create a second claim',
+    teamClaimKey('Straw Hat Pirates'), teamClaimKey('straw hat pirates'));
+eq('padding does not either', teamClaimKey('  Straw Hat Pirates  '), 'straw hat pirates');
+eq('collapsed spacing does not either', teamClaimKey('Straw   Hat  Pirates'), 'straw hat pirates');
+eq('different teams stay different',
+    teamClaimKey('Straw Hat Pirates') === teamClaimKey('Trumpy Trouts'), false);
+// Nothing to claim is not a claim on nothing -- it must not match another blank.
+eq('an empty name is not a claim', teamClaimKey('   '), null);
+eq('a missing name is not a claim', teamClaimKey(null), null);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

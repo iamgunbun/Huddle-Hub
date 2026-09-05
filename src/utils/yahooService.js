@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { runWithConcurrency } from './concurrency';
 import { buildYahooScoringSettings } from './yahooScoring';
 import {
     parseYahooStandings,
@@ -582,15 +583,23 @@ const chunk = (arr, size) => {
     return out;
 };
 
+// How many proxy calls run at once wherever a fetch loop below is chunked.
+// Fully sequential (one in flight) was safe but slow; a true burst (all at
+// once) is what produced the intermittent 400s that made these loops
+// sequential in the first place. A small bounded pool sits between the two --
+// enough overlap to meaningfully cut wall-clock load time, low enough to stay
+// under whatever burst size Yahoo/the proxy was choking on.
+const PROXY_CONCURRENCY = 3;
+
 export const fetchYahooScoreboardWeeks = async (leagueId, weeks, passedUserId = null) => {
     const cleanKey = cleanYahooKey(leagueId);
     const userId = await getUserId(passedUserId);
     const wanted = (weeks || []).map(w => parseInt(w)).filter(w => Number.isFinite(w) && w > 0);
     if (!cleanKey || !userId || !wanted.length) return [];
 
-    const collected = [];
+    const groups = chunk(wanted, WEEK_CHUNK);
 
-    for (const group of chunk(wanted, WEEK_CHUNK)) {
+    const perGroup = await runWithConcurrency(groups, PROXY_CONCURRENCY, async (group) => {
         const data = await yahooProxyRequest(
             userId,
             (key) => `league/${key}/scoreboard;week=${group.join(',')}`,
@@ -599,23 +608,21 @@ export const fetchYahooScoreboardWeeks = async (leagueId, weeks, passedUserId = 
         );
 
         const parsed = data ? parseYahooScoreboard(data) : [];
-        if (parsed.length) {
-            collected.push(...parsed);
-            continue;
-        }
+        if (parsed.length) return parsed;
 
-        for (const week of group) {
+        const singles = await runWithConcurrency(group, PROXY_CONCURRENCY, async (week) => {
             const single = await yahooProxyRequest(
                 userId,
                 (key) => `league/${key}/scoreboard;week=${week}`,
                 cleanKey,
                 `scoreboard week ${week}`
             );
-            if (single) collected.push(...parseYahooScoreboard(single, week));
-        }
-    }
+            return single ? parseYahooScoreboard(single, week) : [];
+        });
+        return singles.flat();
+    });
 
-    return collected;
+    return perGroup.flat();
 };
 
 // Actual points scored per player for a week.
@@ -644,7 +651,9 @@ export const fetchYahooPlayerPoints = async (leagueId, teamKeys, week, passedUse
     const byTeam = {};
 
     try {
-        for (const group of chunk(keys, TEAM_POINTS_CHUNK)) {
+        const groups = chunk(keys, TEAM_POINTS_CHUNK);
+
+        await runWithConcurrency(groups, PROXY_CONCURRENCY, async (group) => {
             const data = await yahooProxyRequest(
                 userId,
                 () => rosterPath(group),
@@ -655,10 +664,10 @@ export const fetchYahooPlayerPoints = async (leagueId, teamKeys, week, passedUse
             const parsed = data ? parseYahooTeamPlayerPoints(data) : {};
             if (Object.keys(parsed).length) {
                 Object.assign(byTeam, parsed);
-                continue;
+                return;
             }
 
-            for (const teamKey of group) {
+            await runWithConcurrency(group, PROXY_CONCURRENCY, async (teamKey) => {
                 const single = await yahooProxyRequest(
                     userId,
                     () => rosterPath([teamKey]),
@@ -666,8 +675,8 @@ export const fetchYahooPlayerPoints = async (leagueId, teamKeys, week, passedUse
                     `player points week ${safeWeek} for ${teamKey}`
                 );
                 if (single) Object.assign(byTeam, parseYahooTeamPlayerPoints(single));
-            }
-        }
+            });
+        });
     } catch (err) {
         console.error("Yahoo player points fetch failed:", err);
     }
@@ -782,16 +791,17 @@ export const fetchYahooPlayersByKeys = async (leagueId, playerKeys, passedUserId
     const meta = {};
 
     try {
-        for (const group of chunk(keys, PLAYER_KEY_BATCH)) {
+        const groups = chunk(keys, PLAYER_KEY_BATCH);
+        await runWithConcurrency(groups, PROXY_CONCURRENCY, async (group) => {
             const data = await yahooProxyRequest(
                 userId,
                 (key) => `league/${key}/players;player_keys=${group.join(',')}`,
                 cleanKey,
                 `players by key (${group.length})`
             );
-            if (!data) continue;
+            if (!data) return;
             parseYahooPlayers(data).forEach(player => { meta[player.id] = player; });
-        }
+        });
     } catch (err) {
         console.error("Yahoo player lookup failed:", err);
     }
@@ -867,22 +877,31 @@ export const fetchYahooAvailablePlayers = async (leagueId, { maxPlayers = 200, p
     if (!cleanKey || !userId) return null;
 
     const PAGE = 25;
+    const starts = [];
+    for (let start = 0; start < maxPlayers; start += PAGE) starts.push(start);
+
+    const fetchPage = async (start) => {
+        const data = await yahooProxyRequest(
+            userId,
+            (key) => `league/${key}/players;status=A;sort=AR;start=${start};count=${PAGE}`,
+            cleanKey,
+            `available players ${start}-${start + PAGE}`
+        );
+        return data ? parseYahooPlayers(data) : [];
+    };
+
+    // Pages are requested a few at a time instead of one at a time -- a whole
+    // wave running concurrently rather than each page waiting on the last.
+    // Still stops once a wave comes back entirely empty (the pool's end), so a
+    // small league's pool doesn't cost a full run to maxPlayers -- at most one
+    // wasted wave beyond the real end.
     const players = [];
 
     try {
-        for (let start = 0; start < maxPlayers; start += PAGE) {
-            const data = await yahooProxyRequest(
-                userId,
-                (key) => `league/${key}/players;status=A;sort=AR;start=${start};count=${PAGE}`,
-                cleanKey,
-                `available players ${start}-${start + PAGE}`
-            );
-            if (!data) break;
-
-            const page = parseYahooPlayers(data);
-            if (!page.length) break;
-
-            players.push(...page);
+        for (const wave of chunk(starts, PROXY_CONCURRENCY)) {
+            const pages = await Promise.all(wave.map(fetchPage));
+            if (pages.every(page => !page.length)) break;
+            pages.forEach(page => players.push(...page));
         }
     } catch (err) {
         console.error("Yahoo available-players fetch failed:", err);
