@@ -162,9 +162,16 @@ export default function TradeGrader() {
     };
 
     const getAvatar = (p) => {
+        if (p.headshot) return p.headshot;
         const pos = p.pos || p.position;
-        const team = p.team || p.t || p.player_id;
-        const pId = p.player_id || p.id;
+        // In a Yahoo league the shared dictionary is keyed by Yahoo's own player
+        // id (so a Yahoo roster can look a player up directly), so `.id`/
+        // `.player_id` is a YAHOO id for any player the crosswalk knows -- not
+        // something sleepercdn's image URLs understand. `.sleeper_id` is always
+        // the real Sleeper id, set on every dictionary entry regardless of
+        // platform, and is what these URLs actually need.
+        const pId = p.sleeper_id || p.player_id || p.id;
+        const team = p.team || p.t || pId;
 
         if (pos === 'DEF') return `https://sleepercdn.com/images/team_logos/nfl/${String(team).toLowerCase()}.png`;
         return `https://sleepercdn.com/content/nfl/players/thumb/${pId}.jpg`;
@@ -175,7 +182,11 @@ export default function TradeGrader() {
         const name = `${asset.fn || asset.first_name} ${asset.ln || asset.last_name}`;
         const team = asset.t || asset.team || 'FA';
         const position = asset.pos || asset.position || 'Unknown';
-        const status = asset.injury_status || asset.status || 'Active';
+        // The dictionary's real injury designation ("Questionable"/"Out"/"IR")
+        // lives on `injStatus`; `injury_status` was never a field this app
+        // sets, so checking it first always fell straight through to the
+        // generic roster `status` ("Active") and the AI never saw an injury.
+        const status = asset.injStatus || asset.status || 'Active';
         
         // Injects the live current team and status explicitly into the list of assets
         return `- ${name} | Position: ${position} | CURRENT TEAM: ${team} | Status: ${status}`;

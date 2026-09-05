@@ -192,9 +192,16 @@ export default function StartSit() {
 
     const getAvatar = (p) => {
         if (!p) return 'https://sleepercdn.com/images/v2/icons/player_default.webp';
+        if (p.headshot) return p.headshot;
         const pos = p.pos || p.position;
-        const pId = p.player_id || p.id;
-        
+        // In a Yahoo league the shared dictionary is keyed by Yahoo's own player
+        // id (so a Yahoo roster can look a player up directly), which means
+        // `.id`/`.player_id` is a YAHOO id for any player the crosswalk knows --
+        // not something sleepercdn's image URLs understand. `.sleeper_id` is
+        // always the real Sleeper id, set on every dictionary entry regardless
+        // of platform, and is what these URLs actually need.
+        const pId = p.sleeper_id || p.player_id || p.id;
+
         if (pos === 'DEF') {
             const team = p.team || p.t || pId;
             return `https://sleepercdn.com/images/team_logos/nfl/${String(team).toLowerCase()}.png`;
@@ -204,9 +211,13 @@ export default function StartSit() {
 
     const getMatchupOpp = (pId) => {
         const playerObj = getPlayerObj(pId);
-        const proj = weeklyProjections[pId];
-        const stats = weeklyStats[pId];
-        
+        // Same Yahoo/Sleeper id split as getPlayerProjPts below: the bulk
+        // weekly feeds are keyed by Sleeper id, so a Yahoo id has to be
+        // exchanged for its crosswalked sleeper_id before it can hit.
+        const sleeperKey = playerObj?.sleeper_id;
+        const proj = weeklyProjections[pId] || (sleeperKey ? weeklyProjections[sleeperKey] : null);
+        const stats = weeklyStats[pId] || (sleeperKey ? weeklyStats[sleeperKey] : null);
+
         if (!playerObj && !proj && !stats) return '';
 
         const team = normalizeTeam(playerObj?.t || playerObj?.team);
@@ -256,19 +267,32 @@ export default function StartSit() {
     };
 
     const getRawProjStat = (pId, statKey) => {
-        const proj = weeklyProjections[pId] || weeklyStats[pId];
-        if (!proj) return 0;
+        const playerObj = getPlayerObj(pId);
+        // Same Yahoo/Sleeper id split as getPlayerProjPts: without this, every
+        // category read here missed for a Yahoo player the bulk weekly feed
+        // only knows by its real Sleeper id -- which is why the projected
+        // points total could show a real number (getPlayerProjPts already had
+        // this fallback) while every individual stat row read a false zero.
+        const sleeperKey = playerObj?.sleeper_id;
+        const proj = weeklyProjections[pId] || weeklyStats[pId]
+            || (sleeperKey ? (weeklyProjections[sleeperKey] || weeklyStats[sleeperKey]) : null);
+        if (!proj) return null;
         const stats = proj.stats || proj || {};
-        
+
         if (statKey === 'any_td') {
-            return (stats.pass_td || 0) + (stats.rush_td || 0) + (stats.rec_td || 0);
+            const parts = ['pass_td', 'rush_td', 'rec_td'].map(k => stats[k]).filter(v => typeof v === 'number');
+            return parts.length ? parts.reduce((a, b) => a + b, 0) : null;
         }
-        return stats[statKey] || 0;
+        const value = stats[statKey];
+        return typeof value === 'number' ? value : null;
     };
 
+    // `null` means the category genuinely isn't in the projection data (shown
+    // as "-"); a real 0 (e.g. a QB's projected rushing TDs) is still a 0, not
+    // hidden as if it were missing.
     const formatStat = (val) => {
         if (val === undefined || val === null) return '-';
-        if (Number(val) === 0) return '0.0'; 
+        if (Number(val) === 0) return '0.0';
         return Number(val) % 1 === 0 ? val : Number(val).toFixed(1);
     };
 
@@ -289,8 +313,12 @@ export default function StartSit() {
             valB_raw = getRawProjStat(pIdB, statKey);
         }
 
-        const isAWinner = valA_raw > valB_raw && valA_raw > 0;
-        const isBWinner = valB_raw > valA_raw && valB_raw > 0;
+        // A missing category (null) never "wins" against a real value, and two
+        // missing categories never highlight either side.
+        const aIsNum = typeof valA_raw === 'number';
+        const bIsNum = typeof valB_raw === 'number';
+        const isAWinner = aIsNum && valA_raw > 0 && (!bIsNum || valA_raw > valB_raw);
+        const isBWinner = bIsNum && valB_raw > 0 && (!aIsNum || valB_raw > valA_raw);
 
         return (
             <div className={styles.statRow} key={statKey}>

@@ -304,6 +304,49 @@
     margin-top: 2px;
 }
 
+.projStatLine {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.projStatChip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 6px 10px;
+    min-width: 52px;
+}
+
+.projStatVal {
+    color: #f8fafc;
+    font-weight: 800;
+    font-size: 0.95em;
+}
+
+.projStatLabel {
+    color: #64748b;
+    font-size: 0.6em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+}
+
+.noStatsNotice {
+    color: #94a3b8;
+    font-size: 0.85em;
+    text-align: center;
+    padding: 30px 15px;
+    line-height: 1.5;
+}
+
 /* PREMIUM NOTICE */
 .premiumNotice {
     background: rgba(238, 191, 28, 0.1);

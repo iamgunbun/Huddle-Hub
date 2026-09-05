@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLeague } from '../context/LeagueContext';
 import { getLeagueData } from '../utils/helper';
 import { scoreStatLine } from '../utils/yahooScoring';
+import { resolveSleeperStatsId, buildProjectedStatLine } from '../utils/playerStatLine';
 import styles from './PlayerModal.module.css';
 
 export default function PlayerModal({ player, week = 1, onClose }) {
@@ -21,7 +22,22 @@ export default function PlayerModal({ player, week = 1, onClose }) {
     // No early return here: the effects below are hooks, and bailing out above
     // them changed the hook count between renders. These derivations are
     // null-safe instead, and the guard now sits after every hook.
-    const pId = player?.player_id || player?.id;
+    //
+    // In a Yahoo league the shared dictionary is keyed by Yahoo's own player id
+    // (so a Yahoo roster can look a player up directly), so `.id`/`.player_id`
+    // is a YAHOO id for any player the crosswalk knows -- not something these
+    // Sleeper-hosted endpoints understand. `.sleeper_id` is always the real
+    // Sleeper id, set on every dictionary entry regardless of platform, so it's
+    // used here for display purposes (the avatar can still fall back to a bare
+    // Yahoo id and just 404 to the placeholder).
+    const pId = player?.sleeper_id || player?.player_id || player?.id;
+    // The stricter id used for every Sleeper stats/projections fetch below: no
+    // `.id` fallback, because a bare Yahoo id queried against a Sleeper
+    // endpoint doesn't 404 loudly -- it just returns another player's data or
+    // nothing at all, and either reads as "this player has no stats" instead
+    // of "we don't actually know who this player is on Sleeper".
+    const statsId = resolveSleeperStatsId(player);
+    const hasStatsIdentity = !!statsId;
     const pos = (player?.pos || player?.position || 'BN').toUpperCase();
     const firstName = player?.fn || player?.first_name || '';
     const lastName = player?.ln || player?.last_name || '';
@@ -39,53 +55,68 @@ export default function PlayerModal({ player, week = 1, onClose }) {
     // 1. Initial Load of League Data & Season History
     useEffect(() => {
         let isMounted = true;
-        if (!pId || !activeLeague?.sleeper_league_id) return;
+        if (!activeLeague?.sleeper_league_id) return;
 
         getLeagueData(activeLeague.sleeper_league_id).then(lData => {
             if (!isMounted) return;
             setLeagueData(lData);
-            
+
             const season = lData?.season || currentYear;
             setSelectedGameLogYear(season);
 
+            // No real Sleeper identity for this player (a Yahoo roster spot the
+            // crosswalk never matched) -- there is nothing to query Sleeper's
+            // stats endpoints with, so don't pretend otherwise.
+            if (!hasStatsIdentity) {
+                setYearsPlayed([]);
+                setSeasonStats({});
+                return;
+            }
+
             const exp = parseInt(player?.years_exp ?? player?.exp) || 0;
             const yearsToFetch = [];
-            for (let i = 0; i <= exp && i < 6; i++) { 
+            for (let i = 0; i <= exp && i < 6; i++) {
                 yearsToFetch.push(parseInt(season) - i);
             }
             setYearsPlayed(yearsToFetch);
 
-            Promise.all(yearsToFetch.map(y => 
-                fetch(`https://api.sleeper.com/stats/nfl/player/${pId}?season_type=regular&season=${y}&grouping=season`)
+            Promise.all(yearsToFetch.map(y =>
+                fetch(`https://api.sleeper.com/stats/nfl/player/${statsId}?season_type=regular&season=${y}&grouping=season`)
                     .then(res => res.ok ? res.json() : {})
                     .then(data => ({ year: y, data: data || {} }))
                     .catch(() => ({ year: y, data: {} }))
             )).then(results => {
                 if (!isMounted) return;
                 const sStats = {};
-                results.forEach(r => { 
+                results.forEach(r => {
                     const raw = r.data || {};
-                    sStats[r.year] = raw[r.year] || raw; 
+                    sStats[r.year] = raw[r.year] || raw;
                 });
                 setSeasonStats(sStats);
             });
         });
 
         return () => { isMounted = false; };
-    }, [pId, activeLeague, player?.years_exp, player?.exp, currentYear]);
+    }, [statsId, hasStatsIdentity, activeLeague, player?.years_exp, player?.exp, currentYear]);
 
     // 2. Fetch Game Logs & Projections for Selected Year
     useEffect(() => {
         let isMounted = true;
-        if (!pId) return;
+
+        if (!hasStatsIdentity) {
+            setGameLogs({});
+            setGameProjs({});
+            setLoadingLogs(false);
+            return;
+        }
 
         setLoadingLogs(true);
 
-        const logsPromise = fetch(`https://api.sleeper.com/stats/nfl/player/${pId}?season_type=regular&season=${selectedGameLogYear}&grouping=week`)
+        const logsPromise = fetch(`https://api.sleeper.com/stats/nfl/player/${statsId}?season_type=regular&season=${selectedGameLogYear}&grouping=week`)
             .then(res => res.ok ? res.json() : {})
             .catch(() => ({}));
 
-        const projsPromise = fetch(`https://api.sleeper.com/projections/nfl/player/${pId}?season_type=regular&season=${selectedGameLogYear}&grouping=week`)
+        const projsPromise = fetch(`https://api.sleeper.com/projections/nfl/player/${statsId}?season_type=regular&season=${selectedGameLogYear}&grouping=week`)
             .then(res => res.ok ? res.json() : {})
             .catch(() => ({}));
 
@@ -97,11 +128,14 @@ export default function PlayerModal({ player, week = 1, onClose }) {
         });
 
         return () => { isMounted = false; };
-    }, [pId, selectedGameLogYear]);
+    }, [statsId, hasStatsIdentity, selectedGameLogYear]);
 
-    const getAvatar = () => pos === 'DEF'
-        ? `https://sleepercdn.com/images/team_logos/nfl/${String(pId || '').toLowerCase()}.png`
-        : `https://sleepercdn.com/content/nfl/players/thumb/${pId}.jpg`;
+    const getAvatar = () => {
+        if (player?.headshot) return player.headshot;
+        return pos === 'DEF'
+            ? `https://sleepercdn.com/images/team_logos/nfl/${String(pId || '').toLowerCase()}.png`
+            : `https://sleepercdn.com/content/nfl/players/thumb/${pId}.jpg`;
+    };
 
     const formatHeight = (ht) => {
         if (!ht) return "--";
@@ -176,6 +210,13 @@ export default function PlayerModal({ player, week = 1, onClose }) {
     const currentWeekProj = gameProjs[week] || {};
     const projPtsDisplay = calcCustomPts(currentWeekProj);
     const upcomingOppDisplay = getOpponentDisplay(currentWeekProj);
+
+    // The projected stat line behind this week's point total, using the same
+    // position-appropriate categories the Game Log/Stats tabs already show for
+    // played weeks. Only rendered once there's at least one real number --
+    // an empty projection object shouldn't draw a row of bare dashes.
+    const projStats = currentWeekProj.stats || currentWeekProj || {};
+    const projStatLineCols = buildProjectedStatLine(statGroups, projStats);
 
     if (!player) return null;
 
@@ -258,8 +299,29 @@ export default function PlayerModal({ player, week = 1, onClose }) {
                                         <span className={styles.projSubLabel}>proj</span>
                                     </div>
                                 </div>
+
+                                {/* The point total alone doesn't say how it's expected to come
+                                    together -- the same stat groups the Game Log/Stats tabs use,
+                                    applied to this week's projection instead of a played game. */}
+                                {hasStatsIdentity && projStatLineCols.length > 0 && (
+                                    <div className={styles.projStatLine}>
+                                        {projStatLineCols.map(({ key, label, val }) => (
+                                            <div key={key} className={styles.projStatChip}>
+                                                <span className={styles.projStatVal}>{formatStat(val)}</span>
+                                                <span className={styles.projStatLabel}>{label}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
-                            
+
+                            {!hasStatsIdentity && (
+                                <div className={styles.noStatsNotice}>
+                                    Stats aren't available for this player yet -- we don't have a
+                                    confirmed match for them in our player database.
+                                </div>
+                            )}
+
                             {/* PREMIUM NOTICE */}
                             <div className={styles.premiumNotice}>
                                 <i className="material-icons">workspace_premium</i>
@@ -273,7 +335,13 @@ export default function PlayerModal({ player, week = 1, onClose }) {
 
                     {activeTab === 'gamelog' && (
                         <div className={styles.tableWrapper}>
-                            
+
+                            {!hasStatsIdentity ? (
+                                <div className={styles.noStatsNotice}>
+                                    Stats aren't available for this player yet -- we don't have a
+                                    confirmed match for them in our player database.
+                                </div>
+                            ) : <>
                             {/* BLOCKY YEAR FILTER BUTTONS */}
                             {yearsPlayed.length > 0 && (
                                 <div className={styles.yearFilterBar}>
@@ -354,11 +422,18 @@ export default function PlayerModal({ player, week = 1, onClose }) {
                                     </tbody>
                                 </table>
                             )}
+                            </>}
                         </div>
                     )}
 
                     {activeTab === 'stats' && (
                         <div className={styles.tableWrapper}>
+                            {!hasStatsIdentity ? (
+                                <div className={styles.noStatsNotice}>
+                                    Stats aren't available for this player yet -- we don't have a
+                                    confirmed match for them in our player database.
+                                </div>
+                            ) : (
                             <table className={styles.gameLogTable}>
                                 <thead>
                                     <tr>
@@ -405,6 +480,7 @@ export default function PlayerModal({ player, week = 1, onClose }) {
                                     })}
                                 </tbody>
                             </table>
+                            )}
                         </div>
                     )}
 
