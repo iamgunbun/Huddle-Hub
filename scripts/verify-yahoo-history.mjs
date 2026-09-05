@@ -28,6 +28,7 @@ import {
     parseYahooPlayers,
     parseYahooTeamPlayerPoints,
     parseYahooTransactions,
+    parseYahooRosterPositions,
     weekFromTimestamp,
     yahooText,
 } from '../src/utils/yahooHistory.js';
@@ -693,6 +694,39 @@ eq('mid-season lands right', weekFromTimestamp(seasonStart + 35 * 86400000, seas
 eq('a pre-season move is week 1', weekFromTimestamp(seasonStart - 86400000, seasonStart, 1), 1);
 eq('a league starting later is respected', weekFromTimestamp(seasonStart, seasonStart, 2), 2);
 eq('no season start -> no week', weekFromTimestamp(seasonStart, null, 1), null);
+
+// --- Roster positions -------------------------------------------------------
+// Yahoo gives position/count pairs; the lineup logic expects a flat list with a
+// slot repeated per count, and reads everything before the first bench slot as
+// the starters. A wrong shape skews every roster-strength estimate in a league.
+const rosterSettings = {
+    roster_positions: {
+        0: { roster_position: { position: 'QB', count: 1 } },
+        1: { roster_position: { position: 'WR', count: 3 } },
+        2: { roster_position: { position: 'RB', count: 2 } },
+        3: { roster_position: { position: 'TE', count: 1 } },
+        4: { roster_position: { position: 'W/R/T', count: 1 } },
+        5: { roster_position: { position: 'K', count: 1 } },
+        6: { roster_position: { position: 'DEF', count: 1 } },
+        7: { roster_position: { position: 'BN', count: 5 } },
+        8: { roster_position: { position: 'IR', count: 2 } },
+        count: 9,
+    },
+};
+
+const slots = parseYahooRosterPositions(rosterSettings);
+eq('a count of three becomes three slots', slots.filter(s => s === 'WR').length, 3);
+eq('every slot is accounted for', slots.length, 17);
+// Yahoo names its flex slots its own way.
+eq('a flex slot is renamed to what the lineup logic knows', slots.includes('FLEX'), true);
+// IR sits on the bench as far as a starting lineup is concerned.
+eq('bench and IR both count as bench', slots.filter(s => s === 'BN').length, 7);
+// The starters are read as everything before the first bench slot, so bench
+// entries have to come last however Yahoo ordered them.
+eq('the bench comes last', slots.indexOf('BN'), 10);
+eq('so the starters are the first ten', slots.slice(0, 10).every(s => s !== 'BN'), true);
+eq('no roster positions -> null, so the caller can fall back',
+    parseYahooRosterPositions({}), null);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

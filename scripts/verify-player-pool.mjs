@@ -5,7 +5,7 @@
 // incomplete, rostered players are presented as free agents and nothing
 // about the page looks broken.
 
-import { buildOwnedIndex, isPlayerOwned, isRosterableNflPlayer, resolvePlayerFromMeta, playerNameKeyNoSuffix, withResolvedPlayerMeta } from '../src/utils/playerPool.js';
+import { buildOwnedIndex, isPlayerOwned, isRosterableNflPlayer, resolvePlayerFromMeta, playerNameKeyNoSuffix, withResolvedPlayerMeta, resolveRosterPlayers } from '../src/utils/playerPool.js';
 import { findSuccessorLeagueId, pickOwnerId } from '../src/utils/leagueSeason.js';
 
 let pass = 0;
@@ -151,6 +151,38 @@ eq('and has no sleeper id to build an image from', foldedIn['99999'].sleeper_id,
 eq('existing dictionary entries survive', foldedIn.SF.pos, 'DEF');
 eq('no platform meta -> the dictionary unchanged',
     Object.keys(withResolvedPlayerMeta(dictWithDef, byName, {})).length, Object.keys(dictWithDef).length);
+
+// --- Resolving a whole roster ---------------------------------------------
+// A plain lookup drops every player the crosswalk misses, so a power ranking
+// ends up measuring how much of each roster happened to be crosswalked rather
+// than how good it is -- and since that differs per team, it invents a spread.
+const projDict = {
+    '99': { fn: 'Michael', ln: 'Pittman', pos: 'WR', sleeper_id: '99', wi: { 1: { p: 14 } } },
+    '77': { fn: 'Justin', ln: 'Jefferson', pos: 'WR', sleeper_id: '77', wi: { 1: { p: 20 } } },
+};
+const projByName = { 'michael pittman': projDict['99'], 'justin jefferson': projDict['77'] };
+// Roster carries Yahoo ids; only one of them is crosswalked into the dictionary.
+const rosterMeta = {
+    '40877': { fn: 'Michael', ln: 'Pittman Jr.', pos: 'WR', t: 'IND' },
+    '31002': { fn: 'Justin', ln: 'Jefferson', pos: 'WR', t: 'MIN' },
+};
+const bare = resolveRosterPlayers(['40877', '31002'], projDict, projByName, {});
+eq('without platform metadata the roster all but disappears', bare.players.length, 0);
+
+const resolved = resolveRosterPlayers(['40877', '31002'], projDict, projByName, rosterMeta);
+eq('with it, every player is found', resolved.players.length, 2);
+// Dictionary entries, not the metadata -- only those carry the projections a
+// strength estimate is built from.
+eq('and they carry their weekly projection', resolved.players[0].wi[1].p, 14);
+eq('full coverage is reported', resolved.coverage, 1);
+
+const halfKnown = resolveRosterPlayers(['40877', 'unknown-id'], projDict, projByName, rosterMeta);
+eq('an unidentifiable player is counted, not hidden', halfKnown.unresolved, 1);
+eq('and coverage says so', halfKnown.coverage, 0.5);
+// Sleeper ids hit the dictionary directly and need no metadata at all.
+eq('direct ids still resolve', resolveRosterPlayers(['99', '77'], projDict, projByName).players.length, 2);
+eq('empty slots are skipped', resolveRosterPlayers(['0', null, undefined], projDict, projByName).players.length, 0);
+eq('an empty roster reports full coverage', resolveRosterPlayers([], projDict, projByName).coverage, 1);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -12,6 +12,7 @@ import {
     parseYahooPlayers,
     parseYahooTeamPlayerPoints,
     parseYahooTransactions,
+    parseYahooRosterPositions,
     weekFromTimestamp,
     yahooText,
     yahooCollection,
@@ -218,6 +219,9 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
         // An auction draft has costs instead of a pick order, so the draft board
         // has to be laid out differently.
         const isAuctionDraft = Number(settingsData?.is_auction_draft) === 1;
+        // The league's real lineup, rather than a guess at one. Roster strength
+        // is built by filling these slots, so a wrong shape skews every team's.
+        const rosterPositions = parseYahooRosterPositions(settingsData) || DEFAULT_POSITIONS;
         // Yahoo stamps transactions with a time but no week. The league's start
         // date is what turns one into the other.
         const seasonStart = leagueData.start_date ? Date.parse(`${leagueData.start_date}T00:00:00Z`) : null;
@@ -262,7 +266,7 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
             total_rosters: totalRosters,
             avatar: leagueData.logo_url || '/brand.png',
             platform: 'yahoo',
-            roster_positions: DEFAULT_POSITIONS,
+            roster_positions: rosterPositions,
             scoring_settings: scoringSettings,
             settings: {
                 playoff_week_start: playoffWeekStart,
@@ -272,7 +276,7 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
                 divisions: 0,
                 playoff_teams: 6,
                 type: 0,
-                roster_positions: DEFAULT_POSITIONS
+                roster_positions: rosterPositions
             },
             metadata: {},
             raw_yahoo: data

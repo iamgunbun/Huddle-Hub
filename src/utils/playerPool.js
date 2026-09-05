@@ -181,3 +181,41 @@ export const withResolvedPlayerMeta = (playersInfo, playersByName, platformMeta)
 
     return merged;
 };
+
+/**
+ * The dictionary entries for a roster's players.
+ *
+ * The subtle failure this exists to prevent: in a Yahoo league the roster holds
+ * Yahoo ids while the dictionary is keyed by Sleeper's crosswalk, so a plain
+ * lookup silently DROPS every player the crosswalk misses. A power ranking built
+ * that way measures how much of each roster happened to be crosswalked rather
+ * than how good it is -- and since that fraction differs per team, it invents a
+ * huge spread out of nothing.
+ *
+ * The platform's own metadata bridges the gap by name. Dictionary entries are
+ * returned (not the metadata) because only those carry the weekly projections a
+ * strength estimate is built from.
+ *
+ * Also reports coverage, so a caller can tell "this roster is weak" apart from
+ * "most of this roster couldn't be identified".
+ */
+export const resolveRosterPlayers = (playerIds, playersInfo = {}, playersByName = {}, platformMeta = {}) => {
+    const ids = playerIds || [];
+    const players = [];
+    let unresolved = 0;
+
+    ids.forEach(pId => {
+        if (pId === null || pId === undefined || pId === '0') return;
+
+        const direct = playersInfo[pId] || playersInfo[String(pId)];
+        if (direct) { players.push(direct); return; }
+
+        const meta = platformMeta[pId] || platformMeta[String(pId)];
+        const matched = meta ? resolvePlayerFromMeta(meta, playersInfo, playersByName) : null;
+        if (matched) players.push(matched);
+        else unresolved++;
+    });
+
+    const total = players.length + unresolved;
+    return { players, unresolved, coverage: total ? players.length / total : 1 };
+};

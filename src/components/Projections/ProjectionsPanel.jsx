@@ -13,6 +13,7 @@ import {
     DEFAULT_SCORE_VOLATILITY,
 } from '../../utils/seasonSimulation';
 import { movementFromSnapshots, withSnapshot } from '../../utils/rankMovement';
+import { resolveRosterPlayers } from '../../utils/playerPool';
 import styles from './Projections.module.css';
 
 const isYahooLeagueId = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
@@ -98,6 +99,7 @@ export default function ProjectionsPanel() {
     const [powerRankings, setPowerRankings] = useState([]);
     const [preDraftMode, setPreDraftMode] = useState(false);
     const [scheduleKnown, setScheduleKnown] = useState(true);
+    const [rosterCoverage, setRosterCoverage] = useState(1);
 
     useEffect(() => {
         const load = async () => {
@@ -122,6 +124,12 @@ export default function ProjectionsPanel() {
                 const standings = standingsData?.standingsInfo || {};
                 const rosters = rostersData?.rosters || {};
                 const playersInfo = pData?.players || {};
+                const playersByName = pData?.playersByName || {};
+                // In a Yahoo league the roster holds Yahoo ids while the shared
+                // dictionary is keyed by Sleeper's crosswalk, so this is what
+                // lets a player the crosswalk misses still be identified.
+                const platformMeta = rostersData?.yahooPlayersMeta || {};
+                let worstCoverage = 1;
 
                 const week = (nflState?.display_week && nflState.display_week > 0) ? nflState.display_week : 1;
                 const playoffSpots = Number(currentLeagueData?.settings?.playoff_teams) || 6;
@@ -142,7 +150,14 @@ export default function ProjectionsPanel() {
                     let rosterStrength = 0;
                     if (roster?.players?.length) {
                         totalPlayersFound += roster.players.length;
-                        const rosterPlayers = roster.players.map(pId => playersInfo[pId]).filter(Boolean);
+                        // A plain id lookup silently drops every player the
+                        // crosswalk misses, so each team's strength came from a
+                        // different arbitrary subset of its roster -- which is
+                        // what produced a huge, meaningless spread in the odds.
+                        const { players: rosterPlayers, coverage } = resolveRosterPlayers(
+                            roster.players, playersInfo, playersByName, platformMeta
+                        );
+                        worstCoverage = Math.min(worstCoverage, coverage);
                         const raw = predictScores(rosterPlayers, week, currentLeagueData);
                         rosterStrength = Number.isFinite(raw) ? raw : 0;
                     }
@@ -175,6 +190,17 @@ export default function ProjectionsPanel() {
                     setLoading(false);
                     return;
                 }
+
+                // A ranking built from partly-identified rosters compares teams
+                // on how much of each could be looked up, not on how good they
+                // are. Say so rather than presenting it as the same thing.
+                if (worstCoverage < 0.9) {
+                    console.warn(
+                        `Power rankings: only ${Math.round(worstCoverage * 100)}% of the thinnest roster could be identified. ` +
+                        `Strength estimates for that team understate it.`
+                    );
+                }
+                setRosterCoverage(worstCoverage);
 
                 // Nobody has drafted yet: there is nothing to tell the teams
                 // apart, so say so rather than inventing a ranking.
@@ -270,6 +296,11 @@ export default function ProjectionsPanel() {
         <div className={styles.card}>
             <div style={{ padding: '15px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', textAlign: 'center' }}>
                 <h3 style={{ fontSize: '1.3em', fontWeight: '500', color: '#f8fafc', margin: 0 }}>Live Projections</h3>
+                {!preDraftMode && rosterCoverage < 0.9 && (
+                    <span style={{ color: '#94a3b8', fontSize: '0.68em', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', display: 'block', marginTop: '4px' }}>
+                        Some roster players unidentified &mdash; strengths approximate
+                    </span>
+                )}
                 {!preDraftMode && !scheduleKnown && (
                     <span style={{ color: '#94a3b8', fontSize: '0.68em', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', display: 'block', marginTop: '4px' }}>
                         Even run-in assumed &mdash; schedule unavailable
