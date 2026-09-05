@@ -393,6 +393,12 @@ export const parseYahooScoreboard = (data, fallbackWeek = null) => {
             const pointsNode = Array.isArray(team)
                 ? team.find(x => x && x.team_points)?.team_points
                 : team.team_points;
+            // Yahoo's own projected total for the team. It publishes this per
+            // team but not per player, so it's the only place the app can show
+            // a projection that matches what the league itself shows.
+            const projectedNode = Array.isArray(team)
+                ? team.find(x => x && x.team_projected_points)?.team_projected_points
+                : team.team_projected_points;
 
             const rosterId = parseInt(yahooField(info, 'team_id'));
             if (!Number.isFinite(rosterId)) return;
@@ -401,6 +407,7 @@ export const parseYahooScoreboard = (data, fallbackWeek = null) => {
                 roster_id: rosterId,
                 team_key: yahooField(info, 'team_key') || null,
                 points: num(pointsNode?.total),
+                projected_points: projectedNode?.total !== undefined ? num(projectedNode.total, null) : null,
                 starters: [],
                 starters_points: [],
             });

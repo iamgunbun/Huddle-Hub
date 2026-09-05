@@ -237,16 +237,17 @@ eq('an unknown list blocks nothing here', isKeyInUserLeagues('461.l.123', new Se
 eq('no leagues parsed from junk', parseYahooUserLeagueKeys({}).size, 0);
 
 // --- Scoreboard ----------------------------------------------------------
-const sbTeam = (id, points) => ({
+const sbTeam = (id, points, projected) => ({
     team: [
         [{ team_key: `461.l.999.t.${id}` }, { team_id: String(id) }, { name: `Team ${id}` }],
         { team_points: { coverage_type: 'week', week: '1', total: String(points) } },
+        ...(projected === undefined ? [] : [{ team_projected_points: { coverage_type: 'week', week: '1', total: String(projected) } }]),
     ],
 });
 
 const matchup = ({ week, status, playoffs = 0, consolation = 0, a, b }) => ({
     matchup: {
-        0: { teams: { 0: sbTeam(a[0], a[1]), 1: sbTeam(b[0], b[1]), count: 2 } },
+        0: { teams: { 0: sbTeam(a[0], a[1], a[2]), 1: sbTeam(b[0], b[1], b[2]), count: 2 } },
         week: String(week),
         status,
         is_playoffs: String(playoffs),
@@ -263,7 +264,7 @@ const scoreboardPayload = {
                 scoreboard: {
                     0: {
                         matchups: {
-                            0: matchup({ week: 1, status: 'postevent', a: [1, 120.5], b: [2, 99.25] }),
+                            0: matchup({ week: 1, status: 'postevent', a: [1, 120.5, 133.60], b: [2, 99.25, 133.58] }),
                             1: matchup({ week: 2, status: 'postevent', a: [3, 88], b: [4, 101] }),
                             // Not played yet: Yahoo still returns the pairing, at 0-0.
                             2: matchup({ week: 3, status: 'preevent', a: [1, 0], b: [3, 0] }),
@@ -286,6 +287,15 @@ eq('finished matchup is marked played', sb[0].played, true);
 // This is the one that keeps a 0-0 future week out of the "lowest score" records.
 eq('unplayed matchup is not marked played', sb[2].played, false);
 eq('missing scoreboard -> nothing', parseYahooScoreboard({}).length, 0);
+
+// Yahoo publishes a projected total per TEAM (not per player), and it's the
+// number the manager sees in Yahoo -- so the matchup header can match it
+// instead of showing a different model's sum.
+eq('the team projection is read', sb[0].teams[0].projected_points, 133.6);
+eq('both sides get one', sb[0].teams[1].projected_points, 133.58);
+// Absent is null, not 0 -- a real 0.00 projection and "not published" are
+// different things, and the caller falls back to summing starters on null.
+eq('no projection published -> null', sb[1].teams[0].projected_points, null);
 
 // A league with no status field: fall back to whether anyone actually scored.
 const noStatus = parseYahooScoreboard({

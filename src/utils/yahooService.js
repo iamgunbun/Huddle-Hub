@@ -628,6 +628,9 @@ export const fetchAndNormalizeYahooMatchups = async (leagueId, week = 1, passedU
                 roster_id: t.roster_id,
                 starters: [],
                 points: t.points,
+                // Yahoo's own projection for this team, so the matchup can show
+                // the same total the league does.
+                projected_points: t.projected_points,
                 starters_points: []
             }));
         });
