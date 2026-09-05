@@ -1,11 +1,15 @@
-// Dependency-free checks for the Yahoo league-history parsing.
+// Dependency-free checks for reading a league's history and membership.
 // Run with: npm run verify:history
 //
-// Yahoo can't be reached from here, so these fixtures are the only place the
-// response shapes get exercised. They're written to match Yahoo's real quirks:
-// collections arriving as numbered objects with a `count`, entities arriving as
-// arrays of single-key objects, and sub-collections hiding under a "0" key
-// alongside sibling scalars.
+// Mostly Yahoo, which can't be reached from here -- so these fixtures are the
+// only place its response shapes get exercised. They're written to match its
+// real quirks: collections arriving as numbered objects with a `count`,
+// entities arriving as arrays of single-key objects, sub-collections hiding
+// under a "0" key alongside sibling scalars, and empty elements arriving as
+// empty objects rather than null.
+//
+// Also covers the cross-platform bits that decide who someone is and where
+// their league lives, since both platforms are handled side by side.
 
 import {
     yahooCollection,
@@ -20,8 +24,12 @@ import {
     parseYahooUserLeagueKeys,
     isKeyInUserLeagues,
     assignManagerIdentities,
+    parseYahooOwnTeams,
+    parseYahooPlayers,
     yahooText,
 } from '../src/utils/yahooHistory.js';
+import { getPlatformLink } from '../src/utils/platformLinks.js';
+import { findSleeperLeagueUser, isSleeperCommissioner } from '../src/utils/leagueMembership.js';
 
 let pass = 0;
 let fail = 0;
@@ -403,6 +411,146 @@ eq('auction board is typed as auction',
     buildYahooDraftBoard(auctionPicks, { leagueKey: 'x', season: '2024', isAuction: true }).type, 'auction');
 eq('no picks -> no board', buildYahooDraftBoard([], { leagueKey: 'x' }), null);
 eq('missing draft results -> nothing', parseYahooDraftResults({}).length, 0);
+
+// --- The account's own team, and whether it runs the league ----------------
+// Yahoo describes every team in a league identically; the only place it says
+// "this one is yours" -- and whether you're the commissioner -- is the teams
+// collection for the logged-in user.
+const ownTeamsPayload = {
+    fantasy_content: {
+        users: {
+            0: {
+                user: [
+                    { guid: 'MY-GUID' },
+                    {
+                        games: {
+                            0: {
+                                game: [{ game_key: '470' }, {
+                                    teams: {
+                                        0: { team: [[
+                                            { team_key: '470.l.604026.t.6' },
+                                            { name: 'Straw Hat Pirates' },
+                                            { managers: { 0: { manager: { nickname: 'Me', guid: 'MY-GUID', is_commissioner: '1' } }, count: 1 } },
+                                        ]] },
+                                        1: { team: [[
+                                            { team_key: '470.l.111111.t.2' },
+                                            { name: 'Other Team' },
+                                            { managers: { 0: { manager: { nickname: 'Me', guid: 'MY-GUID' } }, count: 1 } },
+                                        ]] },
+                                        count: 2,
+                                    },
+                                }],
+                            },
+                            count: 1,
+                        },
+                    },
+                ],
+            },
+            count: 1,
+        },
+    },
+};
+
+const ownTeams = parseYahooOwnTeams(ownTeamsPayload);
+eq('own team found per league', Object.keys(ownTeams).length, 2);
+eq('keyed by league, not team', !!ownTeams['470.l.604026'], true);
+eq('own team name captured', ownTeams['470.l.604026'].teamName, 'Straw Hat Pirates');
+// The whole reason for this parse: commissioner tools were hidden from every
+// Yahoo connection because nothing ever read this flag.
+eq('commissioner flag read from the manager', ownTeams['470.l.604026'].isCommissioner, true);
+eq('a non-commissioner is not promoted', ownTeams['470.l.111111'].isCommissioner, false);
+eq('junk yields no teams', Object.keys(parseYahooOwnTeams({})).length, 0);
+
+// --- Player details --------------------------------------------------------
+// Draft picks name players only by key, and Sleeper's yahoo_id crosswalk misses
+// plenty of them -- which is what rendered most of a Yahoo draft board as
+// "Unknown". These come straight from Yahoo.
+const playersPayload = {
+    fantasy_content: {
+        league: [{ league_key: '470.l.604026' }, {
+            players: {
+                0: { player: [[
+                    { player_key: '470.p.31883' },
+                    { player_id: '31883' },
+                    { name: { full: 'CeeDee Lamb', first: 'CeeDee', last: 'Lamb' } },
+                    { editorial_team_abbr: 'dal' },
+                    { display_position: 'WR' },
+                    { headshot: { url: 'https://s.yimg.com/lamb.png' } },
+                ]] },
+                1: { player: [[
+                    { player_key: '470.p.100022' },
+                    { player_id: '100022' },
+                    { name: { full: 'San Francisco', first: 'San Francisco', last: '' } },
+                    { editorial_team_abbr: 'sf' },
+                    { display_position: 'DEF' },
+                ]] },
+                count: 2,
+            },
+        }],
+    },
+};
+
+const yahooPlayers = parseYahooPlayers(playersPayload);
+eq('players parsed', yahooPlayers.length, 2);
+eq('keyed by the id picks refer to', yahooPlayers[0].id, '31883');
+eq('first name kept', yahooPlayers[0].fn, 'CeeDee');
+eq('last name kept', yahooPlayers[0].ln, 'Lamb');
+eq('team normalised to upper case', yahooPlayers[0].t, 'DAL');
+eq('position kept', yahooPlayers[0].pos, 'WR');
+eq('headshot kept for players the crosswalk misses', yahooPlayers[0].headshot, 'https://s.yimg.com/lamb.png');
+eq('a defense still parses', yahooPlayers[1].pos, 'DEF');
+eq('no headshot -> null, not an empty object', yahooPlayers[1].headshot, null);
+eq('draft picks keep their full player key',
+    parseYahooDraftResults(snakePayload)[0].playerKey, '461.p.100');
+
+// --- Platform links --------------------------------------------------------
+eq('a yahoo league links to Yahoo',
+    getPlatformLink({ platform: 'yahoo', sleeper_league_id: '470.l.604026' }).url,
+    'https://football.fantasysports.yahoo.com/f1/604026');
+eq('and is labelled for Yahoo',
+    getPlatformLink({ platform: 'yahoo', sleeper_league_id: '470.l.604026' }).label, 'Go to Yahoo');
+eq('the nfl alias resolves to the same league id',
+    getPlatformLink({ sleeper_league_id: 'nfl.l.604026' }).url,
+    'https://football.fantasysports.yahoo.com/f1/604026');
+eq('a sleeper league still links to Sleeper',
+    getPlatformLink({ platform: 'sleeper', sleeper_league_id: '1312102318602207232' }).url,
+    'https://sleeper.app/leagues/1312102318602207232');
+eq('a numeric id is read as Sleeper',
+    getPlatformLink({ sleeper_league_id: '1312102318602207232' }).platform, 'sleeper');
+eq('no league -> no crash', getPlatformLink(null).label, 'Go to Sleeper');
+
+// --- Finding the connected account in a Sleeper league ---------------------
+// Sleeper returns every member of a league identically -- there's no "my team"
+// endpoint the way Yahoo has -- so the account has to be picked out. Getting
+// this wrong hands commissioner tools to the wrong person.
+const sleeperUsers = [
+    { user_id: '111', display_name: 'GunnerA', is_owner: true, metadata: { team_name: 'Straw Hat Pirates' } },
+    { user_id: '222', display_name: 'thomas', metadata: { team_name: 'Trumpy Trouts' } },
+    { user_id: '333', display_name: 'thomas', metadata: { team_name: 'Dakstreet Boys' } },
+];
+
+eq('the user id is an exact match',
+    findSleeperLeagueUser(sleeperUsers, { userId: '222' })?.metadata.team_name, 'Trumpy Trouts');
+eq('a unique display name matches',
+    findSleeperLeagueUser(sleeperUsers, { teamName: 'GunnerA' })?.user_id, '111');
+eq('a team name matches too',
+    findSleeperLeagueUser(sleeperUsers, { teamName: 'Dakstreet Boys' })?.user_id, '333');
+eq('matching ignores case and spacing',
+    findSleeperLeagueUser(sleeperUsers, { teamName: '  straw   hat pirates ' })?.user_id, '111');
+// The one that matters: two members share "thomas", so a name alone can't say
+// which is the account -- guessing could hand over commissioner tools.
+eq('an ambiguous name is not guessed at',
+    findSleeperLeagueUser(sleeperUsers, { teamName: 'thomas' }), null);
+eq('the id wins over an ambiguous name',
+    findSleeperLeagueUser(sleeperUsers, { userId: '333', teamName: 'thomas' })?.user_id, '333');
+eq('an unknown name matches nobody',
+    findSleeperLeagueUser(sleeperUsers, { teamName: 'Nobody' }), null);
+eq('no members -> nobody', findSleeperLeagueUser([], { userId: '111' }), null);
+eq('malformed input -> nobody', findSleeperLeagueUser(null, { userId: '111' }), null);
+
+eq('the league owner is the commissioner', isSleeperCommissioner(sleeperUsers[0]), true);
+eq('a regular member is not', isSleeperCommissioner(sleeperUsers[1]), false);
+eq('nobody is not a commissioner', isSleeperCommissioner(null), false);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

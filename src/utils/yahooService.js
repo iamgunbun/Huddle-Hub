@@ -8,6 +8,8 @@ import {
     parseYahooUserLeagueKeys,
     isKeyInUserLeagues,
     assignManagerIdentities,
+    parseYahooOwnTeams,
+    parseYahooPlayers,
     yahooText,
     yahooCollection,
 } from './yahooHistory';
@@ -127,6 +129,31 @@ const isUsersOwnLeague = async (leagueKey, userId) => {
     } catch (err) {
         console.warn("Couldn't confirm which Yahoo leagues this account is in:", err);
         return true;
+    }
+};
+
+// The account's own team in each of its current-season leagues.
+//
+// This is where "am I the commissioner?" comes from. Yahoo flags the
+// commissioner on the manager record itself, and a league response describes
+// every team the same way -- so the only reliable read is the account's OWN
+// team. One call covers every league at once, so callers should fetch it once
+// and look leagues up in the result.
+export const fetchYahooOwnTeams = async (passedUserId = null) => {
+    const userId = await getUserId(passedUserId);
+    if (!userId) return {};
+
+    try {
+        const data = await yahooProxyRequest(
+            userId,
+            () => 'users;use_login=1/games;game_keys=nfl/teams',
+            'own-teams',
+            'own teams'
+        );
+        return data ? parseYahooOwnTeams(data) : {};
+    } catch (err) {
+        console.error("Yahoo own-teams fetch failed:", err);
+        return {};
     }
 };
 
@@ -634,11 +661,63 @@ export const fetchYahooDraft = async (leagueId, { season = null, isAuction = fal
         const picks = parseYahooDraftResults(data);
         if (!picks.length) return null;
 
-        return buildYahooDraftBoard(picks, { leagueKey: cleanKey, season, isAuction });
+        const board = buildYahooDraftBoard(picks, { leagueKey: cleanKey, season, isAuction });
+        if (!board) return null;
+
+        // Draft results name players only by key, and the crosswalk that keys
+        // the shared player dictionary in a Yahoo league misses plenty of them
+        // -- which is what left most of the board reading "Unknown". Ask Yahoo
+        // about its own players instead.
+        board.playerMeta = await fetchYahooPlayersByKeys(
+            cleanKey,
+            picks.map(p => p.playerKey).filter(Boolean),
+            userId
+        );
+
+        return board;
     } catch (err) {
         console.error("Yahoo Draft Adapter Error:", err);
         return null;
     }
+};
+
+// Player details for a specific set of player keys.
+//
+// Yahoo caps how many it will return at once, so keys go in batches, and the
+// batches run one after another -- bursts of parallel proxy calls are what
+// produced intermittent 400s before. Returns a map keyed by Yahoo player id,
+// which is how rosters and draft picks refer to players.
+const PLAYER_KEY_BATCH = 25;
+
+export const fetchYahooPlayersByKeys = async (leagueId, playerKeys, passedUserId = null) => {
+    const cleanKey = cleanYahooKey(leagueId);
+    const userId = await getUserId(passedUserId);
+    const keys = [...new Set((playerKeys || []).filter(Boolean).map(String))];
+    if (!cleanKey || !userId || !keys.length) return {};
+
+    const meta = {};
+
+    try {
+        for (const group of chunk(keys, PLAYER_KEY_BATCH)) {
+            const data = await yahooProxyRequest(
+                userId,
+                (key) => `league/${key}/players;player_keys=${group.join(',')}`,
+                cleanKey,
+                `players by key (${group.length})`
+            );
+            if (!data) continue;
+            parseYahooPlayers(data).forEach(player => { meta[player.id] = player; });
+        }
+    } catch (err) {
+        console.error("Yahoo player lookup failed:", err);
+    }
+
+    const missing = keys.length - Object.keys(meta).length;
+    if (missing > 0) {
+        console.warn(`Yahoo returned no details for ${missing} of ${keys.length} requested players.`);
+    }
+
+    return meta;
 };
 
 // 6. AVAILABLE PLAYERS (league free agents + waivers)
@@ -665,34 +744,10 @@ export const fetchYahooAvailablePlayers = async (leagueId, { maxPlayers = 200, p
             );
             if (!data) break;
 
-            const leagueNode = data?.fantasy_content?.league;
-            const playersNode = Array.isArray(leagueNode)
-                ? leagueNode.find(x => x && x.players)?.players
-                : null;
-            if (!playersNode) break;
+            const page = parseYahooPlayers(data);
+            if (!page.length) break;
 
-            const before = players.length;
-            Object.keys(playersNode).forEach(k => {
-                if (k === 'count') return;
-                const meta = playersNode[k]?.player?.[0];
-                if (!Array.isArray(meta)) return;
-
-                const pId = meta.find(x => x?.player_id)?.player_id;
-                if (!pId) return;
-
-                const fullName = meta.find(x => x?.name)?.name?.full || '';
-                const [first, ...rest] = fullName.split(' ');
-                players.push({
-                    id: String(pId),
-                    fn: first || fullName,
-                    ln: rest.join(' '),
-                    pos: meta.find(x => x?.display_position)?.display_position || '',
-                    t: meta.find(x => x?.editorial_team_abbr)?.editorial_team_abbr?.toUpperCase() || 'FA',
-                });
-            });
-
-            // No new rows means we've reached the end of the pool.
-            if (players.length === before) break;
+            players.push(...page);
         }
     } catch (err) {
         console.error("Yahoo available-players fetch failed:", err);

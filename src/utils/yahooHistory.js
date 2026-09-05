@@ -291,6 +291,49 @@ export const parseYahooUserLeagueKeys = (data) => {
 };
 
 /**
+ * The logged-in account's OWN team in each league, from
+ * `users;use_login=1/games;game_keys=nfl/teams`.
+ *
+ * Two things only this answers. Which roster is theirs -- a league response
+ * describes every team equally, so without this "connect" has no way to know
+ * which one to call yours. And whether they run the league: Yahoo flags the
+ * commissioner on the manager itself, which is the only reliable source for it.
+ * Returns a map keyed by league key ("470.l.604026"), since a team key is just
+ * that with a ".t.N" suffix.
+ */
+export const parseYahooOwnTeams = (data) => {
+    const teamsByLeague = {};
+
+    yahooCollection(data?.fantasy_content?.users).forEach(userEntry => {
+        const user = userEntry?.user;
+        const gamesNode = findNode(user, 'games');
+
+        yahooCollection(gamesNode).forEach(gameEntry => {
+            const teamsNode = findNode(gameEntry?.game, 'teams');
+
+            yahooCollection(teamsNode).forEach(teamEntry => {
+                const team = teamEntry?.team;
+                const info = Array.isArray(team) ? team[0] : team;
+                const teamKey = yahooText(yahooField(info, 'team_key'));
+                if (!teamKey) return;
+
+                const managers = yahooCollection(yahooField(info, 'managers'))
+                    .map(m => m?.manager)
+                    .filter(Boolean);
+
+                teamsByLeague[teamKey.replace(/\.t\.\d+$/, '')] = {
+                    teamKey,
+                    teamName: yahooText(yahooField(info, 'name')),
+                    isCommissioner: managers.some(m => Number(m.is_commissioner) === 1),
+                };
+            });
+        });
+    });
+
+    return teamsByLeague;
+};
+
+/**
  * Does `leagueKey` name one of the user's own leagues?
  *
  * A stored key may be the "nfl.l.<id>" alias rather than a season-specific one,
@@ -453,6 +496,9 @@ export const parseYahooDraftResults = (data) => {
             teamKey: teamKey || null,
             rosterId: Number.isFinite(rosterId) ? rosterId : null,
             playerId,
+            // The full key is what the players endpoint takes, and it's the only
+            // way to get a drafted player's name out of Yahoo.
+            playerKey: yahooText(result.player_key),
             cost: result.cost !== undefined ? num(result.cost, null) : null,
         });
     });
@@ -522,4 +568,49 @@ export const buildYahooDraftBoard = (picks, { leagueKey, season, isAuction = fal
         slot_to_roster_id: slotToRosterId,
         picks: boardPicks,
     };
+};
+
+// --------------------------------------------------------------------------
+// Players
+// --------------------------------------------------------------------------
+
+/**
+ * Player rows out of any Yahoo response carrying a `players` collection.
+ *
+ * Worth having because Sleeper's `yahoo_id` crosswalk -- how the shared player
+ * dictionary gets keyed in a Yahoo league -- is community-maintained and has
+ * real gaps. Anything the crosswalk misses has no name, position or team at
+ * all, so asking Yahoo about its own players is the only complete answer.
+ */
+export const parseYahooPlayers = (data) => {
+    const league = data?.fantasy_content?.league;
+    const playersNode = findNode(league, 'players') || findNode(data?.fantasy_content, 'players');
+    const players = [];
+
+    yahooCollection(playersNode).forEach(entry => {
+        const player = entry?.player;
+        if (!player) return;
+
+        const info = Array.isArray(player) ? player[0] : player;
+        const id = yahooText(yahooField(info, 'player_id'));
+        if (!id) return;
+
+        const nameNode = yahooField(info, 'name');
+        const full = yahooText(nameNode?.full) || '';
+        const first = yahooText(nameNode?.first);
+        const last = yahooText(nameNode?.last);
+        const [splitFirst, ...splitRest] = full.split(' ');
+
+        players.push({
+            id,
+            playerKey: yahooText(yahooField(info, 'player_key')),
+            fn: first || splitFirst || full,
+            ln: last || splitRest.join(' '),
+            pos: yahooText(yahooField(info, 'display_position')) || yahooText(yahooField(info, 'primary_position')) || '',
+            t: (yahooText(yahooField(info, 'editorial_team_abbr')) || 'FA').toUpperCase(),
+            headshot: yahooText(yahooField(info, 'headshot')?.url) || yahooText(yahooField(info, 'image_url')),
+        });
+    });
+
+    return players;
 };
