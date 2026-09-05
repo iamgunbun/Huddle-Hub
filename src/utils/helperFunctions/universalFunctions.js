@@ -87,6 +87,46 @@ export const resolveAvatarUrl = (avatar, fallback = QUESTION) => {
     return `https://sleepercdn.com/avatars/thumbs/${value}`;
 };
 
+/**
+ * How a manager should be labelled in all-time views: by their TEAM, not their
+ * Yahoo/Sleeper account name.
+ *
+ * All-time records are accumulated per manager, but a manager has a different
+ * team name every season, so "their team" needs a season to resolve against.
+ * The most recent season they appear in is the one people recognise them by,
+ * hence the descending walk. The account handle is kept as a secondary label,
+ * and dropped when it just repeats the team name.
+ */
+export const getManagerIdentity = (teamManagers, managerID) => {
+    if (!teamManagers || !managerID) return { name: 'Unknown Manager', handle: '', avatar: QUESTION };
+
+    const user = teamManagers.users?.[managerID];
+    const handle = user?.display_name || '';
+
+    const years = Object.keys(teamManagers.teamManagersMap || {})
+        .map(Number)
+        .filter(Number.isFinite)
+        .sort((a, b) => b - a);
+
+    for (const year of years) {
+        const rosters = teamManagers.teamManagersMap[year] || {};
+        for (const rosterID in rosters) {
+            if (!rosters[rosterID]?.managers?.includes(managerID)) continue;
+            const team = rosters[rosterID].team || {};
+            const name = team.name || handle || `Team ${rosterID}`;
+            return {
+                name,
+                handle: handle === name ? '' : handle,
+                avatar: resolveAvatarUrl(team.avatar, resolveAvatarUrl(user?.avatar)),
+            };
+        }
+    }
+
+    // A manager with records but no roster in any loaded season -- all that's
+    // left to show is the account handle.
+    return { name: handle || 'Former Manager', handle: '', avatar: resolveAvatarUrl(user?.avatar) };
+};
+
 export const getAvatar = (leagueTeamManagers, author) => {
     if (!leagueTeamManagers?.users) return QUESTION;
     for(const uID in leagueTeamManagers.users) {
