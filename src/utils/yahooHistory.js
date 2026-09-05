@@ -802,3 +802,54 @@ export const parseYahooTransactions = (data) => {
 
     return results.sort((a, b) => (b.status_updated || 0) - (a.status_updated || 0));
 };
+
+/**
+ * A league's starting lineup, flattened the way Sleeper describes one.
+ *
+ * Yahoo gives roster positions as position/count pairs; the lineup logic
+ * everywhere else expects a flat list with a slot repeated per count. Getting
+ * this wrong skews every roster-strength estimate in the league by the same
+ * amount, which is less visible than it sounds -- the ranking still orders
+ * correctly, but the scores it's built from aren't this league's.
+ *
+ * Yahoo's flex slots carry their own names ("W/R/T"), so they're mapped onto the
+ * names the lineup logic already understands.
+ */
+const YAHOO_SLOT_ALIASES = {
+    'W/R': 'WRRB_FLEX',
+    'W/T': 'FLEX',
+    'R/W': 'WRRB_FLEX',
+    'W/R/T': 'FLEX',
+    'Q/W/R/T': 'SUPER_FLEX',
+    'D': 'DEF',
+    'DEF': 'DEF',
+    'D/ST': 'DEF',
+    'BN': 'BN',
+    'IR': 'BN',
+    'IR+': 'BN',
+    'IL': 'BN',
+};
+
+export const parseYahooRosterPositions = (settingsData) => {
+    const slots = [];
+
+    yahooCollection(settingsData?.roster_positions).forEach(entry => {
+        const slot = entry?.roster_position || entry;
+        const position = yahooText(slot?.position);
+        if (!position) return;
+
+        const count = parseInt(slot.count);
+        const repeats = Number.isFinite(count) && count > 0 ? count : 1;
+        const name = YAHOO_SLOT_ALIASES[position.toUpperCase()] || position.toUpperCase();
+
+        for (let i = 0; i < repeats; i++) slots.push(name);
+    });
+
+    if (!slots.length) return null;
+
+    // The lineup logic reads everything before the first bench slot as the
+    // starters, so the bench has to come last however Yahoo ordered it.
+    const starters = slots.filter(s => s !== 'BN');
+    const bench = slots.filter(s => s === 'BN');
+    return [...starters, ...bench];
+};
