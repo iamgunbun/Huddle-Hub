@@ -2,8 +2,7 @@ import { leagueID as defaultLeagueID } from '$lib/utils/leagueInfo';
 import { get } from 'svelte/store';
 import { rostersStore } from '$lib/stores';
 import { fetchAndNormalizeYahooRosters, fetchYahooSeasonTeams } from '../yahooService';
-
-const isYahooLeague = (id) => id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
+import { isYahooLeagueId as isYahooLeague, isEspnLeagueId } from '../platformIds';
 
 // Seasons already resolved by a teams-only (standings) fetch. Kept apart from
 // rostersStore on purpose: these entries have no player lists, so they must
@@ -46,6 +45,15 @@ export const getLeagueRosters = async (queryLeagueID = defaultLeagueID, { teamsO
             return yRosters;
         }
         return yRosters;
+    }
+
+    // --- ESPN PLATFORM ROUTING ---
+    // ESPN roster fetching isn't built yet -- checked explicitly here (rather
+    // than falling through) so an ESPN league's numeric id, which looks
+    // exactly like a Sleeper id, can't be sent to Sleeper's API and come back
+    // with an unrelated real Sleeper league's roster data.
+    if (isEspnLeagueId(queryLeagueID)) {
+        return { rosters: {}, startersAndReserve: [] };
     }
 
     // --- SLEEPER PLATFORM ROUTING ---

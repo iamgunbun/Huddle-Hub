@@ -1,6 +1,7 @@
 import { leagueID as defaultLeagueID } from '../leagueInfo';
 import { getLeagueData } from './leagueData';
 import { scoreStatLine } from '../yahooScoring';
+import { isYahooLeagueId, isEspnLeagueId } from '../platformIds';
 
 // Single definition lives in playerPool.js (dependency-free so it stays
 // testable); re-exported here for the callers that already import it from this
@@ -29,19 +30,24 @@ export const loadPlayers = async (activeLeagueId) => {
     const currentId = activeLeagueId || defaultLeagueID;
     const now = Math.round(new Date().getTime() / 1000);
     
-    // Automatically detect if the active league is Yahoo
-    const isYahoo = currentId && (String(currentId).includes('.') || !/^\d+$/.test(String(currentId)));
-    
+    // Automatically detect if the active league is Yahoo or ESPN.
+    const isYahoo = isYahooLeagueId(currentId);
+    // ESPN ids are shape-identical to Sleeper ids, so they're disambiguated by
+    // an in-app "espn:" prefix (see platformIds.js) rather than by shape.
+    const isEspn = isEspnLeagueId(currentId);
+
     if (!currentId || currentId === 'default_id' || currentId === 'undefined') {
         return { players: {}, playersByName: {}, stale: true };
     }
-    
+
     // The player database is identical for every league -- only the ID scheme it
-    // gets keyed by differs (Yahoo ids vs Sleeper ids). v9 keyed this cache per
-    // league, so each additional league wrote another multi-megabyte copy of
-    // essentially the same data and pushed localStorage past its ~5MB quota.
-    // Scoping the cache to the ID scheme caps it at two copies instead of N.
-    const cacheScope = isYahoo ? 'yahoo' : 'sleeper';
+    // gets keyed by differs (Yahoo ids vs ESPN ids vs Sleeper ids). v9 keyed this
+    // cache per league, so each additional league wrote another multi-megabyte
+    // copy of essentially the same data and pushed localStorage past its ~5MB
+    // quota. Scoping the cache to the ID scheme caps it at three copies instead
+    // of N, and keeps an ESPN league from silently reading back a Yahoo-keyed
+    // cache (or vice versa) when a user switches between them.
+    const cacheScope = isEspn ? 'espn' : (isYahoo ? 'yahoo' : 'sleeper');
     const cacheKey = `playersInfo_v11_${cacheScope}`;
     const expirationKey = `expiration_v11_${cacheScope}`;
 
@@ -75,39 +81,40 @@ export const loadPlayers = async (activeLeagueId) => {
             fetch("https://api.sleeper.app/v1/state/nfl")
         ];
 
-        // ONLY fetch league data from Sleeper if it is NOT a Yahoo ID
-        if (!isYahoo) {
+        // ONLY fetch league data from Sleeper if it's a native Sleeper league id
+        const isExternalPlatform = isYahoo || isEspn;
+        if (!isExternalPlatform) {
             promises.push(fetch(`https://api.sleeper.app/v1/league/${currentId}`));
         }
 
         const responses = await Promise.all(promises);
-        
+
         const sleeperRes = responses[0];
         const stateRes = responses[1];
-        const leagueRes = !isYahoo ? responses[2] : null;
-        
-        if (!isYahoo && (!leagueRes || !leagueRes.ok)) {
+        const leagueRes = !isExternalPlatform ? responses[2] : null;
+
+        if (!isExternalPlatform && (!leagueRes || !leagueRes.ok)) {
             return { players: playersInfo || {}, playersByName: buildNameIndex(playersInfo), stale: true };
         }
-        
+
         const rawPlayers = await sleeperRes.json();
         const nflState = await stateRes.json();
         const leagueData = leagueRes ? await leagueRes.json() : null;
 
-        // For a Yahoo league there's no Sleeper league to read scoring from, so
-        // pull the league's real rules rather than pre-computing these cached
-        // points under generic defaults -- this cache is the fallback the UI
-        // uses when a live projection is unavailable, and a number scored under
-        // the wrong rules is worse than an obviously missing one.
+        // For a Yahoo or ESPN league there's no Sleeper league to read scoring
+        // from, so pull the league's real rules rather than pre-computing these
+        // cached points under generic defaults -- this cache is the fallback the
+        // UI uses when a live projection is unavailable, and a number scored
+        // under the wrong rules is worse than an obviously missing one.
         let yahooScoring = null;
-        if (isYahoo) {
+        if (isExternalPlatform) {
             try {
-                const yLeague = await getLeagueData(currentId);
-                if (yLeague?.scoring_settings && Object.keys(yLeague.scoring_settings).length) {
-                    yahooScoring = yLeague.scoring_settings;
+                const extLeague = await getLeagueData(currentId);
+                if (extLeague?.scoring_settings && Object.keys(extLeague.scoring_settings).length) {
+                    yahooScoring = extLeague.scoring_settings;
                 }
             } catch (e) {
-                console.warn("Could not read Yahoo league scoring for player cache:", e);
+                console.warn("Could not read external league scoring for player cache:", e);
             }
         }
 
@@ -146,12 +153,16 @@ export const loadPlayers = async (activeLeagueId) => {
             if (!p) continue;
             
             // ==========================================
-            // YAHOO ID MAPPING ENGINE 
+            // PLATFORM ID MAPPING ENGINE
             // ==========================================
-            // Force Yahoo IDs into the primary dictionary key if the user is viewing a Yahoo League
+            // Force the platform's own player id into the primary dictionary
+            // key when viewing a league on that platform, so its rosters (which
+            // only know their own ids) can look players up directly.
             let primaryId = p.player_id;
             if (isYahoo) {
                 primaryId = String(p.yahoo_id || p.player_id);
+            } else if (isEspn) {
+                primaryId = String(p.espn_id || p.player_id);
             }
 
             const playerObj = {

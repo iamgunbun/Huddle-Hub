@@ -15,8 +15,7 @@ import {
 import { movementFromSnapshots, withSnapshot } from '../../utils/rankMovement';
 import { resolveRosterPlayers } from '../../utils/playerPool';
 import styles from './Projections.module.css';
-
-const isYahooLeagueId = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
+import { isYahooLeagueId, isEspnLeagueId } from '../../utils/platformIds';
 const SNAPSHOT_KEY = (leagueId) => `powerRankOrder_${leagueId}`;
 
 const readSnapshots = (leagueId) => {
@@ -56,6 +55,12 @@ const fetchRemainingSchedule = async (leagueId, firstWeek, lastWeek) => {
                 .map(m => ({ week: m.week, home: m.teams[0]?.roster_id, away: m.teams[1]?.roster_id }))
                 .filter(g => g.home !== undefined && g.away !== undefined);
         }
+
+        // ESPN's remaining schedule isn't built yet -- checked explicitly
+        // rather than falling through, which would otherwise send an ESPN
+        // league's numeric id to Sleeper's API and could come back with an
+        // unrelated real Sleeper league's matchups.
+        if (isEspnLeagueId(leagueId)) return [];
 
         const weekly = await Promise.all(weeks.map(async (w) => {
             const res = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/matchups/${w}`);

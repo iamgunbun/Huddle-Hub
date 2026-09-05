@@ -5,8 +5,7 @@ import { matchupsStore } from '$lib/stores';
 import { activeLeague } from '$lib/stores/leagueContext.js';
 import { leagueID as defaultLeagueID } from '$lib/utils/leagueInfo.js';
 import { fetchAndNormalizeYahooMatchups } from '../yahooService';
-
-const isYahooLeague = (id) => id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
+import { isYahooLeagueId as isYahooLeague, isEspnLeagueId } from '../platformIds';
 
 export const getLeagueMatchups = async (queryLeagueID) => {
     let id = queryLeagueID;
@@ -64,6 +63,15 @@ export const getLeagueMatchups = async (queryLeagueID) => {
             };
             matchupsStore.update(() => matchupsResponse);
             return matchupsResponse;
+        }
+
+        // --- ESPN PLATFORM ROUTING ---
+        // Not built yet -- checked explicitly (rather than falling through)
+        // so an ESPN league's numeric id, indistinguishable in shape from a
+        // Sleeper id, can't be sent to Sleeper's API and come back with an
+        // unrelated real Sleeper league's matchups.
+        if (isEspnLeagueId(id)) {
+            return null;
         }
 
         // --- SLEEPER PLATFORM ROUTING ---

@@ -22,10 +22,11 @@ export default function AddLeague() {
     
     // ESPN State
     const [espnLeagueId, setEspnLeagueId] = useState('');
-    const [isPrivate, setIsPrivate] = useState(false);
     const [espnS2, setEspnS2] = useState('');
     const [swid, setSwid] = useState('');
-    
+    const [showPrivateFields, setShowPrivateFields] = useState(false);
+    const [espnLinkCopied, setEspnLinkCopied] = useState(false);
+
     // UI States
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState(null);
@@ -40,6 +41,11 @@ export default function AddLeague() {
         } else if (searchParams.get('integration') === 'failed') {
             setActiveTab('yahoo');
             setErrorMsg(searchParams.get('reason') || 'Yahoo integration failed.');
+        } else if (searchParams.get('tab') === 'espn') {
+            // Where the "copy link to finish on a computer" button below sends
+            // someone back to -- lands them straight on this tab instead of
+            // making them re-select it.
+            setActiveTab('espn');
         }
     }, [searchParams]);
 
@@ -100,6 +106,8 @@ export default function AddLeague() {
         return me;
     };
 
+    // Whether a league is private is decided by whether cookies were actually
+    // entered, not a separate toggle -- one fewer thing to get wrong.
     const searchESPN = async (e) => {
         e.preventDefault();
         if (!espnLeagueId.trim()) return;
@@ -108,7 +116,8 @@ export default function AddLeague() {
         setFoundLeagues([]);
 
         try {
-            const cookies = isPrivate ? { espn_s2: espnS2.trim(), swid: swid.trim() } : {};
+            const hasCookies = !!(espnS2.trim() && swid.trim());
+            const cookies = hasCookies ? { espn_s2: espnS2.trim(), swid: swid.trim() } : {};
             const normalized = await fetchAndNormalizeESPNLeague(espnLeagueId, cookies);
 
             if (!normalized) {
@@ -120,12 +129,39 @@ export default function AddLeague() {
                 name: normalized.name,
                 avatar: normalized.avatar,
                 platform: 'espn',
-                cookies: isPrivate ? cookies : null
+                cookies: hasCookies ? cookies : null
             }]);
         } catch (err) {
             setErrorMsg(err.message || "Failed to connect to ESPN league.");
         } finally {
             setLoading(false);
+        }
+    };
+
+    // ESPN's own private-league cookies can only be read from a desktop
+    // browser's developer tools -- there's no mobile equivalent. Rather than
+    // making someone remember to come back on a computer, this hands them a
+    // link straight back to this exact step.
+    const shareEspnStepLink = async () => {
+        const url = `${window.location.origin}/add-league?tab=espn`;
+
+        if (navigator.share) {
+            try {
+                await navigator.share({ title: 'Connect your ESPN league to Huddle', url });
+            } catch {
+                // User closed the share sheet -- not an error worth surfacing.
+            }
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(url);
+            setEspnLinkCopied(true);
+            setTimeout(() => setEspnLinkCopied(false), 2500);
+        } catch {
+            // Clipboard access can be blocked by browser permissions -- fall
+            // back to something that still gets the link in front of them.
+            window.prompt('Copy this link to finish on a computer:', url);
         }
     };
 
@@ -305,7 +341,17 @@ export default function AddLeague() {
             }
 
             let dbLeagueId;
-            const queryColumn = (league.platform === 'sleeper' || league.platform === 'yahoo') ? 'sleeper_league_id' : 'id';
+            // Every platform's external id lives in `sleeper_league_id` --
+            // named for the first platform this app supported, but read back
+            // generically for all three in LeagueContext (`matchedLeague.
+            // sleeper_league_id`). ESPN league ids are plain numbers, not the
+            // table's UUID primary key, so this used to fall through to the
+            // `id` branch below and either fail outright (a numeric string
+            // isn't a valid UUID) or, worse, try to force the primary key to
+            // that value.
+            const queryColumn = (league.platform === 'sleeper' || league.platform === 'yahoo' || league.platform === 'espn')
+                ? 'sleeper_league_id'
+                : 'id';
             
             const { data: existingLeague, error: selectErr } = await supabase
                 .from('leagues')
@@ -377,6 +423,34 @@ export default function AddLeague() {
             });
 
             if (insertErr) throw insertErr;
+
+            // A private league's cookies were only ever used for this one
+            // preview fetch and then discarded -- every other page in the app
+            // asks for this league's data with no cookies at all, which is a
+            // 401 the moment the very first page loads after connecting.
+            // Stored the same way Yahoo's OAuth tokens are (one row per user
+            // per provider), so the same account's stored cookies cover every
+            // private ESPN league it connects, not just this one.
+            if (league.platform === 'espn' && league.cookies?.espn_s2 && league.cookies?.swid) {
+                // ESPN's cookies have no programmatic expiry to read the way an
+                // OAuth token does; a far-future date just satisfies the same
+                // NOT NULL column Yahoo's real expiry fills, since this table
+                // is shared between both providers.
+                const { error: espnCredErr } = await supabase
+                    .from('user_integrations')
+                    .upsert({
+                        user_id: userId,
+                        provider: 'espn',
+                        access_token: league.cookies.espn_s2,
+                        refresh_token: league.cookies.swid,
+                        expires_at: new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString(),
+                        updated_at: new Date().toISOString()
+                    }, { onConflict: 'user_id,provider' });
+
+                if (espnCredErr) {
+                    console.warn("Couldn't save ESPN cookies -- this private league will need them re-entered next time:", espnCredErr);
+                }
+            }
 
             await loadLeagueContext(userId, dbLeagueId);
             navigate('/');
@@ -498,21 +572,75 @@ export default function AddLeague() {
                 )}
 
                 {activeTab === 'espn' && (
-                    <form onSubmit={searchESPN} className={styles.searchForm}>
-                        <label>ESPN League ID</label>
-                        <div className={styles.inputWrapper}>
-                            <input 
-                                type="text" 
-                                placeholder="e.g. 123456789" 
-                                value={espnLeagueId}
-                                onChange={(e) => setEspnLeagueId(e.target.value.replace(/\D/g, ''))}
-                                className={styles.inputField}
-                            />
-                            <button type="submit" className={styles.searchBtn} disabled={loading || !espnLeagueId}>
-                                {loading ? 'Connecting...' : 'Connect'}
-                            </button>
+                    <div>
+                        <div className={styles.espnNotice}>
+                            <i className="material-icons">computer</i>
+                            <div>
+                                <p className={styles.espnNoticeTitle}>Private leagues need a computer</p>
+                                <p className={styles.espnNoticeText}>
+                                    ESPN only lets you read a private league's login from a browser's developer tools, which isn't something a phone can do. If your league is private, finish this step on a laptop or desktop -- if it's public, just enter the League ID below.
+                                </p>
+                            </div>
                         </div>
-                    </form>
+
+                        <button type="button" className={styles.shareLinkBtn} onClick={shareEspnStepLink}>
+                            <i className="material-icons" style={{ fontSize: '1.1em' }}>{espnLinkCopied ? 'check' : 'ios_share'}</i>
+                            {espnLinkCopied ? 'Link Copied' : 'Send This Step to a Computer'}
+                        </button>
+
+                        <form onSubmit={searchESPN} className={styles.searchForm}>
+                            <label>ESPN League ID</label>
+                            <div className={styles.inputWrapper}>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. 123456789"
+                                    value={espnLeagueId}
+                                    onChange={(e) => setEspnLeagueId(e.target.value.replace(/\D/g, ''))}
+                                    className={styles.inputField}
+                                />
+                            </div>
+
+                            <div
+                                className={styles.accordionToggle}
+                                onClick={() => setShowPrivateFields(v => !v)}
+                            >
+                                {showPrivateFields ? 'Hide private league fields' : "My league is private -- I'm on a computer"}
+                            </div>
+
+                            {showPrivateFields && (
+                                <div className={styles.privateBox}>
+                                    <p className={styles.helperText} style={{ marginTop: 0 }}>
+                                        On espn.com, signed in to your account: open Developer Tools (F12, or right-click &gt; Inspect) &rarr; Application (Chrome) or Storage (Firefox) &rarr; Cookies &rarr; espn.com, then copy these two values here.
+                                    </p>
+                                    <div className={styles.cookieInputGroup}>
+                                        <label>SWID</label>
+                                        <input
+                                            type="text"
+                                            placeholder="{81AB2197-...}"
+                                            value={swid}
+                                            onChange={(e) => setSwid(e.target.value)}
+                                            className={styles.inputField}
+                                        />
+                                    </div>
+                                    <div className={styles.cookieInputGroup}>
+                                        <label>espn_s2</label>
+                                        <textarea
+                                            placeholder="Very long -- copy the entire value"
+                                            value={espnS2}
+                                            onChange={(e) => setEspnS2(e.target.value)}
+                                            className={styles.inputField}
+                                            rows={3}
+                                            style={{ resize: 'vertical', fontFamily: 'inherit' }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            <button type="submit" className={styles.searchBtn} disabled={loading || !espnLeagueId} style={{ width: '100%', padding: '12px', marginTop: '15px' }}>
+                                {loading ? 'Connecting...' : 'Connect ESPN'}
+                            </button>
+                        </form>
+                    </div>
                 )}
 
                 {errorMsg && (

@@ -4,10 +4,9 @@ import { getLeagueData, getLeagueTeamManagers, loadPlayers, getNflState } from '
 import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
 import PlayerModal from '../components/PlayerModal';
 import { fetchYahooTransactions } from '../utils/yahooService';
+import { isYahooLeagueId, isEspnLeagueId } from '../utils/platformIds';
 import { withResolvedPlayerMeta } from '../utils/playerPool';
 import styles from './Transactions.module.css';
-
-const isYahooLeagueId = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
 
 export default function Transactions() {
     const { activeLeague } = useLeague();
@@ -90,6 +89,12 @@ export default function Transactions() {
                     setTransactions(all.filter(t => t.leg === activeWeek));
                 })
                 .catch(err => console.error("Error fetching Yahoo transactions:", err));
+        } else if (isEspnLeagueId(leagueId)) {
+            // ESPN transactions aren't built yet -- checked explicitly rather
+            // than falling through, which would otherwise send an ESPN
+            // league's numeric id to Sleeper's API and could come back with
+            // an unrelated real Sleeper league's transactions.
+            setTransactions([]);
         } else {
             fetch(`https://api.sleeper.app/v1/league/${leagueId}/transactions/${activeWeek}`)
                 .then(res => res.ok ? res.json() : [])

@@ -6,8 +6,7 @@ import { isSameLeagueChain } from '../utils/yahooHistory';
 import { resolvePlayerFromMeta } from '../utils/playerPool';
 import { describeExperienceAtDraft } from '../utils/draftContext';
 import styles from './DraftGrader.module.css';
-
-const isYahooLeagueId = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
+import { isYahooLeagueId, isEspnLeagueId } from '../utils/platformIds';
 
 const parseGraderResponse = (rawText) => {
     try { 
@@ -144,6 +143,15 @@ export default function DraftGrader() {
                     return;
                 }
 
+                if (isEspnLeagueId(curId)) {
+                    // ESPN draft history isn't built yet -- checked explicitly
+                    // rather than falling through, which would otherwise send
+                    // an ESPN league's numeric id to Sleeper's API and could
+                    // come back with an unrelated real Sleeper league's drafts.
+                    setDraftsList([]);
+                    return;
+                }
+
                 while (curId && curId !== "0" && curId !== 0) {
                     const res = await fetch(`https://api.sleeper.app/v1/league/${curId}/drafts`);
                     if (res.ok) {
@@ -178,6 +186,13 @@ export default function DraftGrader() {
         // is no picks endpoint to call for it.
         if (isYahooLeagueId(activeLeague?.sleeper_league_id)) {
             setDraftPicks((yahooDraftsMap[selectedDraftId] || []).slice().sort((a, b) => a.round - b.round || a.pick_no - b.pick_no));
+            setGradeResult(null);
+            setUiErrorMessage(null);
+            return;
+        }
+
+        if (isEspnLeagueId(activeLeague?.sleeper_league_id)) {
+            setDraftPicks([]);
             setGradeResult(null);
             setUiErrorMessage(null);
             return;

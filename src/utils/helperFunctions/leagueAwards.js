@@ -3,8 +3,7 @@ import { getLeagueRosters } from './leagueRosters';
 import { waitForAll } from './multiPromise';
 import { fetchYahooStandings } from '../yahooService';
 import { buildPodiumFromStandings, isSameLeagueChain } from '../yahooHistory';
-
-const isYahooLeague = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
+import { isYahooLeagueId as isYahooLeague, isEspnLeagueId } from '../platformIds';
 
 let awardsCache = [];
 let awardsCacheLeagueID = null;
@@ -42,9 +41,15 @@ export const getAwards = async (refresh = false, queryLeagueID = null) => {
         ? (leagueData.league_id || queryLeagueID)
         : leagueData.previous_league_id;
 
-    const podiums = isYahooLeague(leagueData.league_id || queryLeagueID)
-        ? await getYahooPodiums(startingSeasonID)
-        : await getPodiums(startingSeasonID);
+    // ESPN's trophy-room walk isn't built yet -- checked explicitly rather
+    // than falling through to the Sleeper walk, which would otherwise treat
+    // an ESPN league's numeric id as a real Sleeper league id to query.
+    const leagueIdForRouting = leagueData.league_id || queryLeagueID;
+    const podiums = isEspnLeagueId(leagueIdForRouting)
+        ? []
+        : isYahooLeague(leagueIdForRouting)
+            ? await getYahooPodiums(startingSeasonID)
+            : await getPodiums(startingSeasonID);
 
     awardsCache = podiums;
     awardsCacheLeagueID = queryLeagueID;

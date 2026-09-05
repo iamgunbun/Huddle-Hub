@@ -7,10 +7,9 @@ import { resolvePlayerFromMeta } from '../utils/playerPool';
 import { scoreStatLine } from '../utils/yahooScoring';
 import { fetchAndNormalizeYahooMatchups } from '../utils/yahooService';
 import { isViewingLiveWeek, LIVE_SCORE_POLL_MS } from '../utils/liveScores';
+import { isYahooLeagueId, isEspnLeagueId } from '../utils/platformIds';
 import PlayerModal from '../components/PlayerModal';
 import styles from './Matchups.module.css';
-
-const isYahooLeagueId = (id) => id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
 
 export default function Matchups() {
     const { activeLeague } = useLeague();
@@ -166,6 +165,12 @@ export default function Matchups() {
                         applyMatchupData(flat);
                     })
                     .catch(err => console.error("Yahoo matchups fetch err:", err));
+            } else if (isEspnLeagueId(activeLeague.sleeper_league_id)) {
+                // ESPN matchups aren't built yet -- checked explicitly rather
+                // than falling through, which would otherwise send an ESPN
+                // league's numeric id to Sleeper's API and could come back
+                // with an unrelated real Sleeper league's matchups.
+                applyMatchupData([]);
             } else {
                 fetch(`https://api.sleeper.app/v1/league/${activeLeague.sleeper_league_id}/matchups/${activeWeek}`)
                     .then(res => res.json())

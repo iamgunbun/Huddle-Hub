@@ -5,8 +5,8 @@ import { fetchYahooDraft } from '../utils/yahooService';
 import { isSameLeagueChain } from '../utils/yahooHistory';
 import { resolvePlayerFromMeta } from '../utils/playerPool';
 import styles from './Drafts.module.css';
+import { isYahooLeagueId, isEspnLeagueId } from '../utils/platformIds';
 
-const isYahooLeagueId = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
 const DEFAULT_PLAYER_IMG = 'https://sleepercdn.com/images/v2/icons/player_default.webp';
 
 export default function Drafts() {
@@ -114,6 +114,15 @@ export default function Drafts() {
                     setYahooPlayerMeta(collectedMeta);
                     setDraftsDataMap(picksByDraft);
                     setDraftsList(allDrafts.sort((a, b) => b.season - a.season));
+                    return;
+                }
+
+                if (isEspnLeagueId(curId)) {
+                    // ESPN draft history isn't built yet -- checked explicitly
+                    // rather than falling through, which would otherwise send
+                    // an ESPN league's numeric id to Sleeper's API and could
+                    // come back with an unrelated real Sleeper league's drafts.
+                    setDraftsList([]);
                     return;
                 }
 

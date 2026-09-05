@@ -1,12 +1,36 @@
 // src/utils/espnService.js
+import { supabase } from '../supabaseClient';
+import { fromEspnLeagueId } from './platformIds';
 
-export const fetchAndNormalizeESPNLeague = async (leagueId, cookies = {}) => {
+// Most callers (every page's own `getLeagueData(id)`, with no explicit user)
+// never pass a userId at all -- they're relying on this resolving the current
+// session itself, the same fallback yahooService.js uses for the same reason.
+// Without it, a private ESPN league's stored cookies would never actually get
+// looked up from any of those call sites.
+const getUserId = async (explicitUserId) => {
+    if (explicitUserId) return explicitUserId;
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user?.id || null;
+};
+
+// `leagueId` may be the app's own disambiguated "espn:1234567" form (see
+// platformIds.js) or the bare ESPN id -- ESPN itself has never heard of the
+// prefix and only wants the number, so it's stripped here rather than at
+// every call site.
+//
+// `cookies` are only needed for a league this account hasn't connected yet
+// (the "try connecting" preview on the Add League page, before anything is
+// saved). Once connected, `userId` alone is enough -- the proxy looks up
+// this account's stored ESPN cookies itself, the same way the Yahoo proxy
+// looks up its stored OAuth token.
+export const fetchAndNormalizeESPNLeague = async (leagueId, cookies = {}, userId = null) => {
     if (!leagueId) return null;
 
     try {
         const CURRENT_YEAR = new Date().getFullYear();
-        const cleanId = String(leagueId).trim();
-        
+        const cleanId = fromEspnLeagueId(leagueId).trim();
+        const resolvedUserId = await getUserId(userId);
+
         // PING YOUR OWN SECURE BACKEND INSTEAD OF ESPN
         const response = await fetch('/api/espn-proxy', {
             method: 'POST',
@@ -15,7 +39,8 @@ export const fetchAndNormalizeESPNLeague = async (leagueId, cookies = {}) => {
                 leagueId: cleanId,
                 year: CURRENT_YEAR,
                 espnS2: cookies?.espn_s2,
-                swid: cookies?.swid
+                swid: cookies?.swid,
+                userId: resolvedUserId
             })
         });
 

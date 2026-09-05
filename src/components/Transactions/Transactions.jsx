@@ -5,8 +5,7 @@ import { fetchYahooTransactions } from '../../utils/yahooService';
 import { withResolvedPlayerMeta } from '../../utils/playerPool';
 import { useNavigate } from 'react-router-dom';
 import styles from './Transactions.module.css';
-
-const isYahooLeagueId = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
+import { isYahooLeagueId, isEspnLeagueId } from '../../utils/platformIds';
 
 // Sleeper's image CDN is keyed by SLEEPER ids. In a Yahoo league the
 // transaction id is a Yahoo one, so the crosswalked sleeper_id is what makes
@@ -58,6 +57,12 @@ export default function Transactions({ preview = false }) {
                     // dictionary only knows the ones Sleeper's crosswalk covers
                     // -- the rest read as a bare id without this.
                     players = withResolvedPlayerMeta(players, pData?.playersByName || {}, playerMeta);
+                } else if (isEspnLeagueId(leagueId)) {
+                    // ESPN transactions aren't built yet -- checked explicitly
+                    // rather than falling through, which would otherwise send
+                    // an ESPN league's numeric id to Sleeper's API and could
+                    // come back with an unrelated real Sleeper league's data.
+                    allTxns = [];
                 } else {
                     for (let i = 1; i <= 18; i++) {
                         const res = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/transactions/${i}`);

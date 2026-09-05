@@ -7,6 +7,7 @@ import { fetchYahooAvailablePlayers } from '../utils/yahooService';
 import PlayerModal from '../components/PlayerModal';
 import { scoreStatLine } from '../utils/yahooScoring';
 import styles from './Players.module.css';
+import { isYahooLeagueId, isEspnLeagueId } from '../utils/platformIds';
 
 export default function Players() {
     const { activeLeague } = useLeague();
@@ -79,7 +80,7 @@ export default function Players() {
                 // A Sleeper league gets a new id every season, and the id captured
                 // at connect time keeps answering with that season's rosters. Follow
                 // it forward so availability is judged against the current roster.
-                if (!String(sleeperId).includes('.')) {
+                if (!isYahooLeagueId(sleeperId) && !isEspnLeagueId(sleeperId)) {
                     const currentSeason = nflState?.season;
                     const currentId = await resolveCurrentSeasonLeagueId({
                         storedLeagueId: sleeperId,
@@ -101,7 +102,7 @@ export default function Players() {
                     }
                 }
 
-                if (String(sleeperId).includes('.')) {
+                if (isYahooLeagueId(sleeperId)) {
                     fetchYahooAvailablePlayers(sleeperId)
                         .then(list => { if (isMounted && list?.length) setYahooAvailable(list); })
                         .catch(err => console.warn("Yahoo available-players lookup failed:", err));
@@ -291,7 +292,7 @@ export default function Players() {
         // to Sleeper ids for uncrosswalked players, so names bridge that gap. On
         // Sleeper both sides are Sleeper ids already, and adding names there can
         // only hide a real free agent who shares a name with a rostered player.
-        const isYahooLeague = String(activeLeague?.sleeper_league_id || '').includes('.');
+        const isYahooLeague = isYahooLeagueId(activeLeague?.sleeper_league_id);
         const ownedIndex = buildOwnedIndex(rosters, {
             matchNames: isYahooLeague,
             nameSources: [yahooPlayersMeta, playersInfo],
