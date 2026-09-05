@@ -30,14 +30,23 @@ const formatAvatarUrl = (avatar) => {
 const applyCommissionerFlag = async (userId, league, shouldBeCommissioner, selected, setActiveLeague) => {
     if (!!league.is_commissioner === shouldBeCommissioner) return;
 
-    const { error } = await supabase
+    // Rows back, not just a missing error: Supabase reports success for an
+    // update that matched nothing, which is what a row-level security policy
+    // produces. Without this check the flag flips in memory while the database
+    // stays false -- so the commissioner tools appear, and then nothing they
+    // save ever persists. Better to leave them hidden and say why.
+    const { data, error } = await supabase
         .from('user_leagues')
         .update({ is_commissioner: shouldBeCommissioner })
         .eq('user_id', userId)
-        .eq('league_id', league.id);
+        .eq('league_id', league.id)
+        .select('league_id');
 
-    if (error) {
-        console.warn("Couldn't update commissioner status for", league.name, error);
+    if (error || !data?.length) {
+        console.warn(
+            `Couldn't record commissioner status for "${league.name}" -- this account can't update its own membership row.`,
+            error || 'the update matched no rows'
+        );
         return;
     }
 
