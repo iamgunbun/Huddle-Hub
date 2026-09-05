@@ -19,6 +19,8 @@ import {
     buildYahooDraftBoard,
     parseYahooUserLeagueKeys,
     isKeyInUserLeagues,
+    assignManagerIdentities,
+    yahooText,
 } from '../src/utils/yahooHistory.js';
 
 let pass = 0;
@@ -106,6 +108,64 @@ eq('empty standings -> no podium', buildPodiumFromStandings([], 2024), null);
 // A 2-team result shouldn't claim a wooden spoon that overlaps the podium.
 eq('too few teams -> no toilet bowl',
     buildPodiumFromStandings([{ rosterId: 1, rank: 1 }, { rosterId: 2, rank: 2 }], 2024).toilet, undefined);
+
+// --- Manager identity ----------------------------------------------------
+// This is the bug that merged an entire league into one manager. Yahoo's JSON
+// comes from XML, and an EMPTY element arrives as an empty OBJECT: <guid/> is
+// {} , not "" or null. {} is truthy, so it sailed through a Boolean filter and
+// became every team's identity -- and an object used as a key stringifies to
+// "[object Object]", the same for all ten teams. One bucket got the league's
+// entire win AND loss total, and every manager inherited the champion's ring.
+eq('an empty Yahoo element is not a usable string', yahooText({}), null);
+eq('a real string is kept', yahooText('ABC123'), 'ABC123');
+eq('whitespace is not an identity', yahooText('   '), null);
+eq('null is not an identity', yahooText(null), null);
+eq('an array is not an identity', yahooText([]), null);
+
+const teamWithEmptyGuid = (id) => ({
+    team: [[
+        { team_key: `470.l.604026.t.${id}` },
+        { team_id: String(id) },
+        { name: `Team ${id}` },
+        // Exactly what Yahoo sends when the guid element is empty.
+        { managers: { 0: { manager: { manager_id: String(id), nickname: `Mgr ${id}`, guid: {} } }, count: 1 } },
+    ], { team_standings: { rank: String(id), outcome_totals: { wins: '8', losses: '7', ties: '0' }, points_for: '1500' } }],
+});
+
+const emptyGuidRows = parseYahooStandings({
+    fantasy_content: { league: [{ league_key: '470.l.604026' }, { standings: [{ teams: {
+        0: teamWithEmptyGuid(1), 1: teamWithEmptyGuid(2), 2: teamWithEmptyGuid(3), count: 3,
+    } }] }] },
+});
+eq('empty guids yield no guids at all', emptyGuidRows.every(r => r.managerGuids.length === 0), true);
+
+const emptyGuidIds = assignManagerIdentities(emptyGuidRows);
+eq('identity falls back off unusable guids', emptyGuidIds.source, 'nickname');
+// The load-bearing assertion: three teams must be three managers, never one.
+eq('three teams stay three distinct managers',
+    new Set([...emptyGuidIds.byRosterId.values()].map(ids => ids[0])).size, 3);
+
+// Real guids are preferred -- they're the only id stable across seasons.
+const goodIds = assignManagerIdentities(rows);
+eq('real guids are used when present', goodIds.source, 'guid');
+eq('each team keeps its own guid', goodIds.byRosterId.get(2)[0], 'GUID-A');
+
+// Yahoo hides some managers behind a shared placeholder nickname; that can't
+// identify anyone either, so it has to fall through to the team key.
+const hiddenRows = [1, 2, 3].map(id => ({
+    rosterId: id, teamKey: `470.l.604026.t.${id}`, managerGuids: [], managerNicknames: ['--hidden--'],
+}));
+const hiddenIds = assignManagerIdentities(hiddenRows);
+eq('a shared placeholder nickname is not an identity', hiddenIds.source, 'team_key');
+eq('hidden managers still stay distinct',
+    new Set([...hiddenIds.byRosterId.values()].map(ids => ids[0])).size, 3);
+
+// Nothing usable at all still must not collapse.
+const barren = assignManagerIdentities([{ rosterId: 1 }, { rosterId: 2 }]);
+eq('with nothing usable, roster ids keep teams apart', barren.source, 'roster_id');
+eq('and they are still distinct',
+    new Set([...barren.byRosterId.values()].map(ids => ids[0])).size, 2);
+eq('no teams -> nothing to identify', assignManagerIdentities([]).byRosterId.size, 0);
 
 // --- Season chain integrity ----------------------------------------------
 // A bad renew pointer isn't a visible failure: it splices another league's
