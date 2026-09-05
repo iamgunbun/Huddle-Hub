@@ -347,18 +347,24 @@ export default function PlayerModal({ player, week = 1, onClose }) {
                                     confirmed match for them in our player database.
                                 </div>
                             ) : <>
-                            {/* BLOCKY YEAR FILTER BUTTONS */}
+                            {/* BLOCKY YEAR FILTER BUTTONS -- now that a long career can list 20+
+                                seasons (see the 25-season cap above), this row routinely overflows
+                                its width, so it needs its own scroll affordance rather than relying
+                                on the whole tab to scroll. */}
                             {yearsPlayed.length > 0 && (
-                                <div className={styles.yearFilterBar}>
-                                    {yearsPlayed.map(y => (
-                                        <button 
-                                            key={y} 
-                                            className={`${styles.yearBtn} ${selectedGameLogYear === y ? styles.activeYearBtn : ''}`}
-                                            onClick={() => setSelectedGameLogYear(y)}
-                                        >
-                                            {y}
-                                        </button>
-                                    ))}
+                                <div className={styles.yearFilterBarWrapper}>
+                                    <div className={styles.yearFilterBar}>
+                                        {yearsPlayed.map(y => (
+                                            <button
+                                                key={y}
+                                                className={`${styles.yearBtn} ${selectedGameLogYear === y ? styles.activeYearBtn : ''}`}
+                                                onClick={() => setSelectedGameLogYear(y)}
+                                            >
+                                                {y}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {yearsPlayed.length > 6 && <div className={styles.yearFilterFade} aria-hidden="true"></div>}
                                 </div>
                             )}
 
