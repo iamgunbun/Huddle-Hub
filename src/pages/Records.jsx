@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLeague } from '../context/LeagueContext';
 import { getLeagueRecords, getLeagueTeamManagers } from '../utils/helper';
+import { getManagerIdentity } from '../utils/helperFunctions/universalFunctions';
 import styles from './Records.module.css';
 
 export default function RecordsPage() {
@@ -40,7 +41,10 @@ export default function RecordsPage() {
         if (!teamManagers || !teamManagers.teamManagersMap) {
             return { name: 'Unknown Team', avatar: 'https://sleepercdn.com/images/v2/icons/player_default.webp', handle: '' };
         }
-        const yearRosters = teamManagers.teamManagersMap[year] || teamManagers.teamManagersMap[teamManagers.currentSeason] || {};
+        // That season's rosters only. Roster ids are reused every season, so
+        // falling back to the current season would credit a past year's record
+        // to whoever holds that roster id today.
+        const yearRosters = teamManagers.teamManagersMap[year] || {};
         const roster = yearRosters[rosterId];
         if (roster) {
             const managerId = roster.managers?.[0];
@@ -52,23 +56,6 @@ export default function RecordsPage() {
             };
         }
         return { name: `Team ${rosterId}`, avatar: 'https://sleepercdn.com/images/v2/icons/player_default.webp', handle: '' };
-    };
-
-    // Resolves active display profiles
-    const getManagerDisplayName = (managerId) => {
-        if (!teamManagers) return 'Unknown Manager';
-        if (teamManagers.users?.[managerId]?.display_name) {
-            return teamManagers.users[managerId].display_name;
-        }
-        for (const year of Object.keys(teamManagers.teamManagersMap || {})) {
-            const rosters = teamManagers.teamManagersMap[year] || {};
-            for (const rId in rosters) {
-                if (rosters[rId].managers?.includes(managerId)) {
-                    return rosters[rId].team?.name || 'Former Manager';
-                }
-            }
-        }
-        return 'Former Manager';
     };
 
     // Filter Active Dataset based on Tab Control Selection
@@ -94,9 +81,12 @@ export default function RecordsPage() {
             .map(([managerId, stat]) => {
                 const totalGames = stat.wins + stat.losses + stat.ties;
                 const pct = totalGames ? (stat.wins / totalGames) : 0;
+                const identity = getManagerIdentity(teamManagers, managerId);
                 return {
                     managerId,
-                    name: getManagerDisplayName(managerId),
+                    name: identity.name,
+                    handle: identity.handle,
+                    avatar: identity.avatar,
                     wins: stat.wins,
                     losses: stat.losses,
                     ties: stat.ties,
@@ -163,7 +153,7 @@ export default function RecordsPage() {
                         <thead>
                             <tr>
                                 <th className={styles.textLeft}>Rank</th>
-                                <th className={styles.textLeft}>Manager</th>
+                                <th className={styles.textLeft}>Team</th>
                                 <th>W</th>
                                 <th>L</th>
                                 <th>T</th>
@@ -176,7 +166,15 @@ export default function RecordsPage() {
                             {leaderboard.map((row, idx) => (
                                 <tr key={row.managerId} className={styles.row}>
                                     <td className={styles.rankNum}>{idx + 1}</td>
-                                    <td className={styles.managerNameCell}>{row.name}</td>
+                                    <td className={styles.managerNameCell}>
+                                        <div className={styles.managerCellLayout}>
+                                            <img src={row.avatar} alt="Avatar" className={styles.tableAvatar} />
+                                            <div className={styles.managerIdentityStack}>
+                                                <span className={styles.tableTeamName}>{row.name}</span>
+                                                {row.handle && <span className={styles.tableHandle}>{row.handle}</span>}
+                                            </div>
+                                        </div>
+                                    </td>
                                     <td className={styles.statNum}>{row.wins}</td>
                                     <td className={styles.statNum}>{row.losses}</td>
                                     <td className={styles.statNum}>{row.ties}</td>
@@ -222,7 +220,7 @@ export default function RecordsPage() {
                                     <thead>
                                         <tr>
                                             <th style={{ width: '50px' }}></th>
-                                            <th className={styles.textLeft}>Manager</th>
+                                            <th className={styles.textLeft}>Team</th>
                                             <th>Year</th>
                                             <th>Total Points</th>
                                             <th>PPG</th>
@@ -269,7 +267,7 @@ export default function RecordsPage() {
                                     <thead>
                                         <tr>
                                             <th style={{ width: '50px' }}></th>
-                                            <th className={styles.textLeft}>Manager</th>
+                                            <th className={styles.textLeft}>Team</th>
                                             <th>Year</th>
                                             <th>Total Points</th>
                                             <th>PPG</th>

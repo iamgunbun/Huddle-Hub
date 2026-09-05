@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLeague } from '../context/LeagueContext';
 import { getAwards, getLeagueTeamManagers, getLeagueRecords } from '../utils/helper';
-import { resolveAvatarUrl } from '../utils/helperFunctions/universalFunctions';
+import { getManagerIdentity } from '../utils/helperFunctions/universalFunctions';
 import styles from './Awards.module.css';
 
 const DEFAULT_AVATAR = 'https://sleepercdn.com/images/v2/icons/player_default.webp';
@@ -63,17 +63,13 @@ export default function Awards() {
         return { name: `Team ${rosterId}`, avatar: DEFAULT_AVATAR };
     };
 
+    // All-time record holders are labelled by their TEAM, matching the rest of
+    // the trophy room -- "Highest Score Ever" has always named a team, so naming
+    // the account handle on the cards beside it read as a different league.
     const getUserInfo = (managerId) => {
-        if (!teamManagers || !teamManagers.users || !managerId) return { name: 'Unknown Manager', avatar: 'https://sleepercdn.com/images/v2/icons/player_default.webp' };
-        const user = teamManagers.users[managerId];
-        if (!user) return { name: 'Unknown Manager', avatar: DEFAULT_AVATAR };
-        return {
-            name: user.display_name || user.metadata?.team_name || 'Unknown',
-            // Sleeper stores a bare avatar id that needs its CDN prefix; Yahoo
-            // hands back a full URL already, and prefixing that produces a
-            // broken image.
-            avatar: resolveAvatarUrl(user.avatar, DEFAULT_AVATAR)
-        };
+        if (!teamManagers || !managerId) return { name: 'Unknown Manager', avatar: DEFAULT_AVATAR };
+        const identity = getManagerIdentity(teamManagers, managerId);
+        return { name: identity.name, avatar: identity.avatar || DEFAULT_AVATAR };
     };
 
     // What span of seasons are these "all-time" numbers actually built from?
