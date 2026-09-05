@@ -249,9 +249,38 @@ export default function Players() {
     const rosterPoolIncomplete = !yahooAvailable
         && (loadedTeams === 0 || (expectedTeams > 0 && loadedTeams < expectedTeams));
 
-    const availablePlayers = useMemo(() => {
+    // Every player Sleeper has ever known, cut down to the ones actually on an
+    // NFL roster right now. This is the expensive pass (thousands of entries,
+    // including the long retired) so it only depends on playersInfo -- which
+    // barely changes -- and not on posFilter/searchQuery, which change on
+    // every keystroke and used to force this whole scan to redo itself.
+    const validPositions = useMemo(() => new Set(['QB', 'RB', 'WR', 'TE', 'DEF', 'K']), []);
+
+    const nflPlayerPool = useMemo(() => {
         if (!playersInfo || Object.keys(playersInfo).length === 0) return [];
-        
+
+        return Object.entries(playersInfo).map(([id, p]) => {
+            const pId = p.player_id || id;
+            const pos = p.pos || p.position;
+            const firstName = p.fn || p.first_name || '';
+            const lastName = p.ln || p.last_name || '';
+            const team = p.t || p.team || 'FA';
+
+            return {
+                ...p,
+                player_id: pId,
+                pos,
+                fn: firstName,
+                ln: lastName,
+                t: team,
+            };
+        }).filter(p => validPositions.has(p.pos) && isRosterableNflPlayer(p));
+    }, [playersInfo, validPositions]);
+
+    // The much smaller set of those players nobody in the league has already
+    // rostered. Depends on rosters/the Yahoo pool, not on the search box or
+    // position filter, so typing a search doesn't re-derive ownership either.
+    const unownedPlayers = useMemo(() => {
         // Name matching only where ids genuinely can't be trusted to line up.
         // A Yahoo league's rosters carry Yahoo ids while the dictionary falls back
         // to Sleeper ids for uncrosswalked players, so names bridge that gap. On
@@ -268,30 +297,8 @@ export default function Players() {
         const yahooAvailableNames = yahooAvailable
             ? new Set(yahooAvailable.map(p => playerNameKey(p.fn, p.ln)).filter(Boolean))
             : null;
-        
-        const validPositions = new Set(['QB', 'RB', 'WR', 'TE', 'DEF', 'K']);
-        let list = Object.entries(playersInfo).map(([id, p]) => {
-            const pId = p.player_id || id;
-            const pos = p.pos || p.position;
-            const firstName = p.fn || p.first_name || '';
-            const lastName = p.ln || p.last_name || '';
-            const team = p.t || p.team || 'FA';
-            
-            return {
-                ...p,
-                player_id: pId,
-                pos,
-                fn: firstName,
-                ln: lastName,
-                t: team,
-                projVal: parseFloat(getProjPts(pId)) || 0
-            };
-        }).filter(p => {
-            const isValidPos = validPositions.has(p.pos);
-            // Must actually be on an NFL roster -- the dictionary carries every
-            // player Sleeper has ever known, including the long retired.
-            if (!isValidPos || !isRosterableNflPlayer(p)) return false;
 
+        const list = nflPlayerPool.filter(p => {
             if (yahooAvailableIds) {
                 return yahooAvailableIds.has(String(p.player_id))
                     || yahooAvailableNames.has(playerNameKey(p.fn, p.ln));
@@ -299,20 +306,6 @@ export default function Players() {
             return !isPlayerOwned(p, ownedIndex);
         });
 
-        if (posFilter !== 'ALL') {
-            list = list.filter(p => p.pos === posFilter);
-        }
-        
-        if (searchQuery) {
-            const q = searchQuery.toLowerCase().trim();
-            list = list.filter(p => {
-                const fn = p.fn.toLowerCase();
-                const ln = p.ln.toLowerCase();
-                const full = (p.full_name || `${fn} ${ln}`).toLowerCase();
-                return fn.includes(q) || ln.includes(q) || full.includes(q);
-            });
-        }
-        
         // One line that says exactly how availability was decided, so a wrong
         // pool can be diagnosed from the console instead of guessed at.
         console.info('[Players] availability', {
@@ -326,8 +319,29 @@ export default function Players() {
             available: list.length,
         });
 
+        return list;
+    }, [nflPlayerPool, rosters, yahooPlayersMeta, playersInfo, yahooAvailable, activeLeague, leagueData]);
+
+    const availablePlayers = useMemo(() => {
+        let list = unownedPlayers.map(p => ({ ...p, projVal: parseFloat(getProjPts(p.player_id)) || 0 }));
+
+        if (posFilter !== 'ALL') {
+            list = list.filter(p => p.pos === posFilter);
+        }
+
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase().trim();
+            list = list.filter(p => {
+                const fn = p.fn.toLowerCase();
+                const ln = p.ln.toLowerCase();
+                const full = (p.full_name || `${fn} ${ln}`).toLowerCase();
+                return fn.includes(q) || ln.includes(q) || full.includes(q);
+            });
+        }
+
         return list.sort((a, b) => b.projVal - a.projVal).slice(0, 100);
-    }, [playersInfo, rosters, yahooPlayersMeta, yahooAvailable, activeLeague, leagueData, posFilter, searchQuery, weeklyProjections, weeklyStats, nflScheduleMap]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- getProjPts closes over weeklyProjections/weeklyStats/leagueData/playersInfo/activeWeek directly
+    }, [unownedPlayers, posFilter, searchQuery, weeklyProjections, weeklyStats, nflScheduleMap]);
 
     const renderPlayerRow = (pId, pObj = null, trendCount = null) => {
         const player = pObj || playersInfo[pId] || playersInfo[String(pId)];
