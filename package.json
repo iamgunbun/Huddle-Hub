@@ -13,7 +13,8 @@
     "verify:history": "node scripts/verify-yahoo-history.mjs",
     "verify:projections": "node scripts/verify-projections.mjs",
     "verify:concurrency": "node scripts/verify-concurrency.mjs",
-    "verify": "npm run verify:scoring && npm run verify:pool && npm run verify:history && npm run verify:projections && npm run verify:concurrency"
+    "verify:format": "node scripts/verify-league-format.mjs",
+    "verify": "npm run verify:scoring && npm run verify:pool && npm run verify:history && npm run verify:projections && npm run verify:concurrency && npm run verify:format"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",

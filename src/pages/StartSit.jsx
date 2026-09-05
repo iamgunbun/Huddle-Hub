@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLeague } from '../context/LeagueContext';
-import { loadPlayers, getLeagueData } from '../utils/helper';
+import { loadPlayers, getLeagueData, getNflState } from '../utils/helper';
 import { scoreStatLine } from '../utils/yahooScoring';
 import styles from './StartSit.module.css';
 
@@ -67,18 +67,27 @@ export default function StartSit() {
             if (!activeLeague?.sleeper_league_id) return;
             setLoading(true);
             try {
-                const [pData, lData] = await Promise.all([
+                const [pData, lData, nflState] = await Promise.all([
                     loadPlayers(activeLeague.sleeper_league_id),
-                    getLeagueData(activeLeague.sleeper_league_id)
+                    getLeagueData(activeLeague.sleeper_league_id),
+                    getNflState().catch(() => null)
                 ]);
-                
+
                 if (!isMounted) return;
                 const playersMap = pData?.players || pData || {};
                 setPlayersInfo(playersMap);
                 setLeagueData(lData);
-                
+
                 const fetchedSeason = lData?.season || activeLeague?.season || new Date().getFullYear();
-                const fetchedWeek = lData?.display_week || lData?.settings?.leg || 1;
+                // The real NFL week, not a platform-specific field -- Sleeper's
+                // league object carries no "current week" field of its own either
+                // (that lived on `settings.leg`, which Yahoo leagues never have),
+                // so both platforms are better served by asking what week it
+                // actually is right now than by reading a field that silently
+                // doesn't exist for one of them.
+                let fetchedWeek = 1;
+                if (nflState?.season_type === 'regular') fetchedWeek = nflState.display_week || nflState.week || 1;
+                else if (nflState?.season_type === 'post') fetchedWeek = 18;
                 setActiveWeek(fetchedWeek);
 
                 fetch(`https://api.sleeper.com/projections/nfl/${fetchedSeason}/${fetchedWeek}?season_type=regular`)
