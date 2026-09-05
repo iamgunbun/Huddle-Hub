@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import { useLeague } from '../../context/LeagueContext';
 import { getLeagueTeamManagers } from '../../utils/helper';
+import { updateLeagueSettings } from '../../utils/leagueAdmin';
 import BackButton from '../../components/BackButton';
 import styles from '../Settings.module.css';
 
@@ -17,17 +18,22 @@ export default function AdminFees() {
     const [excludeDefs, setExcludeDefs] = useState(false);
     const [ledger, setLedger] = useState({});
     const [rosters, setRosters] = useState([]);
+    // A blank page is the worst outcome here: it looks identical whether the
+    // league couldn't be read, its teams couldn't be loaded, or everything is
+    // fine and the league is genuinely empty. Say which.
+    const [loadProblem, setLoadProblem] = useState('');
 
     useEffect(() => {
         const loadData = async () => {
             if (!activeLeague?.id) return;
             setLoading(true);
+            setLoadProblem('');
             try {
-                const { data: dbLeague } = await supabase
+                const { data: dbLeague, error: leagueErr } = await supabase
                     .from('leagues')
                     .select('dues_amount, enable_txn_fees, txn_fee_amount, exclude_defenses_from_fees, financial_ledger')
                     .eq('id', activeLeague.id)
-                    .single();
+                    .maybeSingle();
 
                 if (dbLeague) {
                     setDuesAmount(dbLeague.dues_amount ?? 100);
@@ -35,6 +41,11 @@ export default function AdminFees() {
                     setTxnFeeAmount(dbLeague.txn_fee_amount ?? 1);
                     setExcludeDefs(dbLeague.exclude_defenses_from_fees ?? false);
                     setLedger(dbLeague.financial_ledger || {});
+                } else {
+                    // No row came back. Either it isn't there, or this account
+                    // can't see it -- in which case saving won't work either.
+                    console.warn("Couldn't read league financial settings", { leagueId: activeLeague.id, leagueErr });
+                    setLoadProblem("This league's settings couldn't be loaded, so changes here may not save.");
                 }
 
                 if (activeLeague.sleeper_league_id) {
@@ -46,9 +57,15 @@ export default function AdminFees() {
                         avatar: rData.team?.avatar || 'https://sleepercdn.com/images/v2/icons/player_default.webp'
                     }));
                     setRosters(formatted);
+                    if (!formatted.length) {
+                        setLoadProblem(prev => prev || "Couldn't load this league's teams, so there's no ledger to fill in yet.");
+                    }
+                } else {
+                    setLoadProblem(prev => prev || 'This league has no connected platform id, so its teams can\'t be listed.');
                 }
             } catch (e) {
                 console.error("Failed to load fees data", e);
+                setLoadProblem('Something went wrong loading this league. Check the console for details.');
             } finally {
                 setLoading(false);
             }
@@ -66,26 +83,17 @@ export default function AdminFees() {
     const handleSave = async () => {
         if (!activeLeague?.id) return;
         setSaving(true);
-        try {
-            const { error } = await supabase
-                .from('leagues')
-                .update({
-                    dues_amount: duesAmount,
-                    enable_txn_fees: enableTxnFees,
-                    txn_fee_amount: txnFeeAmount,
-                    exclude_defenses_from_fees: excludeDefs,
-                    financial_ledger: ledger
-                })
-                .eq('id', activeLeague.id);
-            
-            if (error) throw error;
-            setMessage('Financial settings saved!');
-            setTimeout(() => setMessage(''), 3000);
-        } catch (err) {
-            setMessage('Error saving financial settings.');
-        } finally {
-            setSaving(false);
-        }
+        const result = await updateLeagueSettings(activeLeague.id, {
+            dues_amount: duesAmount,
+            enable_txn_fees: enableTxnFees,
+            txn_fee_amount: txnFeeAmount,
+            exclude_defenses_from_fees: excludeDefs,
+            financial_ledger: ledger
+        });
+
+        setMessage(result.ok ? 'Financial settings saved!' : result.message);
+        if (result.ok) setTimeout(() => setMessage(''), 3000);
+        setSaving(false);
     };
 
     if (loading) return <div className={styles.loading}>Loading Financials...</div>;
@@ -150,6 +158,8 @@ export default function AdminFees() {
 
                 <h2 className={styles.subHeading}>Payment Ledger</h2>
                 <p className={styles.helperText}>Enter the amount each franchise has paid toward their total balance.</p>
+
+                {loadProblem && <div className={styles.message}>{loadProblem}</div>}
 
                 <div className={styles.ledgerList}>
                     {rosters.map(r => (

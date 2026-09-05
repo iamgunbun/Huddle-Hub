@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../../supabaseClient';
 import { useLeague } from '../../context/LeagueContext';
+import { updateLeagueSettings } from '../../utils/leagueAdmin';
 import BackButton from '../../components/BackButton';
 import styles from '../Settings.module.css';
 
@@ -19,19 +19,10 @@ export default function AdminConstitution() {
     const handleSave = async () => {
         if (!activeLeague?.id) return;
         setSaving(true);
-        try {
-            const { error } = await supabase
-                .from('leagues')
-                .update({ constitution: constitution })
-                .eq('id', activeLeague.id);
-            if (error) throw error;
-            setMessage('Constitution saved successfully!');
-            setTimeout(() => setMessage(''), 3000);
-        } catch (err) {
-            setMessage('Error saving constitution.');
-        } finally {
-            setSaving(false);
-        }
+        const result = await updateLeagueSettings(activeLeague.id, { constitution });
+        setMessage(result.ok ? 'Constitution saved successfully!' : result.message);
+        if (result.ok) setTimeout(() => setMessage(''), 3000);
+        setSaving(false);
     };
 
     return (

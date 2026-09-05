@@ -30,6 +30,7 @@ import {
 } from '../src/utils/yahooHistory.js';
 import { getPlatformLink } from '../src/utils/platformLinks.js';
 import { findSleeperLeagueUser, isSleeperCommissioner } from '../src/utils/leagueMembership.js';
+import { describeLeagueWrite } from '../src/utils/dbWrite.js';
 
 let pass = 0;
 let fail = 0;
@@ -551,6 +552,18 @@ eq('malformed input -> nobody', findSleeperLeagueUser(null, { userId: '111' }), 
 eq('the league owner is the commissioner', isSleeperCommissioner(sleeperUsers[0]), true);
 eq('a regular member is not', isSleeperCommissioner(sleeperUsers[1]), false);
 eq('nobody is not a commissioner', isSleeperCommissioner(null), false);
+
+// --- Did a settings save actually save? ------------------------------------
+// Supabase reports SUCCESS for an update that matched no rows: `error` is null
+// and the statement was valid, it just changed nothing -- which is what a
+// row-level security policy produces. Checking only `error` is how a settings
+// screen ends up saying "Saved!" while the database is untouched.
+eq('a real write is a success', describeLeagueWrite(null, 1).ok, true);
+eq('a database error is a failure', describeLeagueWrite({ message: 'boom' }, 0).ok, false);
+eq('the error message is surfaced', describeLeagueWrite({ message: 'boom' }, 0).message.includes('boom'), true);
+// The load-bearing one: no error, but nothing written.
+eq('changing no rows is NOT a success', describeLeagueWrite(null, 0).ok, false);
+eq('and says why', describeLeagueWrite(null, 0).message.includes('permission'), true);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

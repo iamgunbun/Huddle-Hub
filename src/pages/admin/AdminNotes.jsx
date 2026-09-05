@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../../supabaseClient';
 import { useLeague } from '../../context/LeagueContext';
+import { updateLeagueSettings } from '../../utils/leagueAdmin';
 import BackButton from '../../components/BackButton';
 import styles from '../Settings.module.css';
 
@@ -19,19 +19,10 @@ export default function AdminNotes() {
     const handleSave = async () => {
         if (!activeLeague?.id) return;
         setSaving(true);
-        try {
-            const { error } = await supabase
-                .from('leagues')
-                .update({ commish_note: note })
-                .eq('id', activeLeague.id);
-            if (error) throw error;
-            setMessage('Note saved successfully!');
-            setTimeout(() => setMessage(''), 3000);
-        } catch (err) {
-            setMessage('Error saving note.');
-        } finally {
-            setSaving(false);
-        }
+        const result = await updateLeagueSettings(activeLeague.id, { commish_note: note });
+        setMessage(result.ok ? 'Note saved successfully!' : result.message);
+        if (result.ok) setTimeout(() => setMessage(''), 3000);
+        setSaving(false);
     };
 
     return (
