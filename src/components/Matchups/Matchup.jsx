@@ -24,13 +24,29 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
     const scoreA = teamA.points?.reduce((acc, val) => acc + val, 0) || 0;
     const scoreB = teamB.points?.reduce((acc, val) => acc + val, 0) || 0;
 
-    let projA = 0;
-    let projB = 0;
     const startersA = teamA.starters || [];
     const startersB = teamB.starters || [];
 
-    startersA.forEach(pId => { projA += parseFloat(players[pId]?.wi?.[week]?.p || 0); });
-    startersB.forEach(pId => { projB += parseFloat(players[pId]?.wi?.[week]?.p || 0); });
+    // A team's projected total comes from the league's own platform when the
+    // platform publishes one -- Yahoo does, and it's the number the manager sees
+    // in Yahoo itself, so matching it matters more than matching our own sum.
+    // Sleeper publishes no team projection, so there the starters are summed.
+    //
+    // The per-player figures below stay our own either way: no platform exposes
+    // a per-player projection through its API, so those come from a projection
+    // feed scored under this league's rules. That means the players won't
+    // always add up to a platform-supplied total, which is expected -- they're
+    // two different forecasts, not a rounding error.
+    const sumStarters = (starters) => starters.reduce(
+        (total, pId) => total + parseFloat(players[pId]?.wi?.[week]?.p || 0), 0
+    );
+
+    const platformProjA = Number(teamA.projected_points);
+    const platformProjB = Number(teamB.projected_points);
+    const hasPlatformProj = Number.isFinite(platformProjA) && Number.isFinite(platformProjB);
+
+    const projA = hasPlatformProj ? platformProjA : sumStarters(startersA);
+    const projB = hasPlatformProj ? platformProjB : sumStarters(startersB);
 
     const projectionDifference = projA - projB;
     const varianceScaleKey = 0.045;

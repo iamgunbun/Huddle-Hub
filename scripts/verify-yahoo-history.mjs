@@ -26,6 +26,7 @@ import {
     assignManagerIdentities,
     parseYahooOwnTeams,
     parseYahooPlayers,
+    parseYahooTeamPlayerPoints,
     yahooText,
 } from '../src/utils/yahooHistory.js';
 import { getPlatformLink } from '../src/utils/platformLinks.js';
@@ -237,16 +238,17 @@ eq('an unknown list blocks nothing here', isKeyInUserLeagues('461.l.123', new Se
 eq('no leagues parsed from junk', parseYahooUserLeagueKeys({}).size, 0);
 
 // --- Scoreboard ----------------------------------------------------------
-const sbTeam = (id, points) => ({
+const sbTeam = (id, points, projected) => ({
     team: [
         [{ team_key: `461.l.999.t.${id}` }, { team_id: String(id) }, { name: `Team ${id}` }],
         { team_points: { coverage_type: 'week', week: '1', total: String(points) } },
+        ...(projected === undefined ? [] : [{ team_projected_points: { coverage_type: 'week', week: '1', total: String(projected) } }]),
     ],
 });
 
 const matchup = ({ week, status, playoffs = 0, consolation = 0, a, b }) => ({
     matchup: {
-        0: { teams: { 0: sbTeam(a[0], a[1]), 1: sbTeam(b[0], b[1]), count: 2 } },
+        0: { teams: { 0: sbTeam(a[0], a[1], a[2]), 1: sbTeam(b[0], b[1], b[2]), count: 2 } },
         week: String(week),
         status,
         is_playoffs: String(playoffs),
@@ -263,7 +265,7 @@ const scoreboardPayload = {
                 scoreboard: {
                     0: {
                         matchups: {
-                            0: matchup({ week: 1, status: 'postevent', a: [1, 120.5], b: [2, 99.25] }),
+                            0: matchup({ week: 1, status: 'postevent', a: [1, 120.5, 133.60], b: [2, 99.25, 133.58] }),
                             1: matchup({ week: 2, status: 'postevent', a: [3, 88], b: [4, 101] }),
                             // Not played yet: Yahoo still returns the pairing, at 0-0.
                             2: matchup({ week: 3, status: 'preevent', a: [1, 0], b: [3, 0] }),
@@ -286,6 +288,15 @@ eq('finished matchup is marked played', sb[0].played, true);
 // This is the one that keeps a 0-0 future week out of the "lowest score" records.
 eq('unplayed matchup is not marked played', sb[2].played, false);
 eq('missing scoreboard -> nothing', parseYahooScoreboard({}).length, 0);
+
+// Yahoo publishes a projected total per TEAM (not per player), and it's the
+// number the manager sees in Yahoo -- so the matchup header can match it
+// instead of showing a different model's sum.
+eq('the team projection is read', sb[0].teams[0].projected_points, 133.6);
+eq('both sides get one', sb[0].teams[1].projected_points, 133.58);
+// Absent is null, not 0 -- a real 0.00 projection and "not published" are
+// different things, and the caller falls back to summing starters on null.
+eq('no projection published -> null', sb[1].teams[0].projected_points, null);
 
 // A league with no status field: fall back to whether anyone actually scored.
 const noStatus = parseYahooScoreboard({
@@ -564,6 +575,49 @@ eq('the error message is surfaced', describeLeagueWrite({ message: 'boom' }, 0).
 // The load-bearing one: no error, but nothing written.
 eq('changing no rows is NOT a success', describeLeagueWrite(null, 0).ok, false);
 eq('and says why', describeLeagueWrite(null, 0).message.includes('permission'), true);
+
+// --- Actual points, per player ---------------------------------------------
+// Projections and actuals are different problems. Yahoo publishes no per-player
+// PROJECTION through its API, but it does publish actual points -- which makes
+// them exact, with no scoring rules to re-derive and no crosswalk to miss.
+// Without reading them, every player in a Yahoo matchup sits at 0.00 all season
+// beside a team total that moves.
+const scoredPlayer = (id, total) => ({
+    player: [
+        [{ player_key: `470.p.${id}` }, { player_id: String(id) }, { name: { full: `Player ${id}` } }],
+        ...(total === undefined ? [] : [{ player_points: { coverage_type: 'week', week: '1', total: String(total) } }]),
+    ],
+});
+
+const rosterPointsPayload = {
+    fantasy_content: {
+        teams: {
+            0: {
+                team: [
+                    [{ team_key: '470.l.604026.t.6' }, { team_id: '6' }, { name: 'Straw Hat Pirates' }],
+                    { roster: { 0: { players: { 0: scoredPlayer(31883, 18.4), 1: scoredPlayer(30977, 0), count: 2 } } } },
+                ],
+            },
+            1: {
+                team: [
+                    [{ team_key: '470.l.604026.t.2' }, { team_id: '2' }, { name: 'Obi-Dak Kenobi' }],
+                    { roster: { 0: { players: { 0: scoredPlayer(28392, 7.25), count: 1 } } } },
+                ],
+            },
+            count: 2,
+        },
+    },
+};
+
+const teamPoints = parseYahooTeamPlayerPoints(rosterPointsPayload);
+eq('points come back keyed by team', Object.keys(teamPoints).length, 2);
+eq('a player\'s actual points are read', teamPoints['470.l.604026.t.6']['31883'], 18.4);
+// A genuine zero must survive: it means "played, scored nothing", which is not
+// the same as the blanket 0.00 this replaces.
+eq('a real zero is kept', teamPoints['470.l.604026.t.6']['30977'], 0);
+eq('the other team is separate', teamPoints['470.l.604026.t.2']['28392'], 7.25);
+eq('teams do not bleed into each other', teamPoints['470.l.604026.t.2']['31883'], undefined);
+eq('junk yields nothing', Object.keys(parseYahooTeamPlayerPoints({})).length, 0);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

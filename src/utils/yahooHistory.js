@@ -393,6 +393,12 @@ export const parseYahooScoreboard = (data, fallbackWeek = null) => {
             const pointsNode = Array.isArray(team)
                 ? team.find(x => x && x.team_points)?.team_points
                 : team.team_points;
+            // Yahoo's own projected total for the team. It publishes this per
+            // team but not per player, so it's the only place the app can show
+            // a projection that matches what the league itself shows.
+            const projectedNode = Array.isArray(team)
+                ? team.find(x => x && x.team_projected_points)?.team_projected_points
+                : team.team_projected_points;
 
             const rosterId = parseInt(yahooField(info, 'team_id'));
             if (!Number.isFinite(rosterId)) return;
@@ -401,6 +407,7 @@ export const parseYahooScoreboard = (data, fallbackWeek = null) => {
                 roster_id: rosterId,
                 team_key: yahooField(info, 'team_key') || null,
                 points: num(pointsNode?.total),
+                projected_points: projectedNode?.total !== undefined ? num(projectedNode.total, null) : null,
                 starters: [],
                 starters_points: [],
             });
@@ -613,4 +620,59 @@ export const parseYahooPlayers = (data) => {
     });
 
     return players;
+};
+
+/**
+ * Actual points scored, per player, per team, for one week.
+ *
+ * Unlike projections -- which Yahoo publishes only per team, and only in its web
+ * UI per player -- actual points ARE available per player. That makes them exact
+ * by construction: no scoring rules to re-derive and no crosswalk to miss, just
+ * the number the league itself shows.
+ *
+ * Returns { [teamKey]: { [playerId]: points } }.
+ */
+export const parseYahooTeamPlayerPoints = (data) => {
+    const byTeam = {};
+
+    // The teams collection sits directly under fantasy_content for a
+    // `teams;team_keys=...` request, and nested under the league for a
+    // league-scoped one. findNode searches a wrapper's CHILDREN, so the direct
+    // case has to be read directly.
+    const teamsNode = data?.fantasy_content?.teams
+        || findNode(data?.fantasy_content?.league, 'teams')
+        || findNode(data?.fantasy_content, 'teams');
+
+    yahooCollection(teamsNode).forEach(entry => {
+        const team = entry?.team;
+        if (!team) return;
+
+        const info = Array.isArray(team) ? team[0] : team;
+        const teamKey = yahooText(yahooField(info, 'team_key'));
+        if (!teamKey) return;
+
+        const roster = findNode(team, 'roster');
+        const playersNode = findNode(roster, 'players') || findNode(team, 'players');
+        const points = {};
+
+        yahooCollection(playersNode).forEach(playerEntry => {
+            const player = playerEntry?.player;
+            if (!player) return;
+
+            const playerInfo = Array.isArray(player) ? player[0] : player;
+            const playerId = yahooText(yahooField(playerInfo, 'player_id'));
+            if (!playerId) return;
+
+            const pointsNode = Array.isArray(player)
+                ? player.find(x => x && x.player_points)?.player_points
+                : player.player_points;
+            if (pointsNode?.total === undefined) return;
+
+            points[playerId] = num(pointsNode.total);
+        });
+
+        if (Object.keys(points).length) byTeam[teamKey] = points;
+    });
+
+    return byTeam;
 };

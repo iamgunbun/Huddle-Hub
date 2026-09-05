@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
-import { getLeagueTeamManagers, getLeagueData, loadPlayers, getAwards } from '../utils/helper';
+import { getLeagueTeamManagers, getLeagueData, loadPlayers, getAwards, getLeagueRosters } from '../utils/helper';
 import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
 import styles from './Home.module.css';
 import ProjectionsPanel from '../components/Projections/ProjectionsPanel';
@@ -284,14 +284,28 @@ export default function Home() {
                         setLeagueTenure("Yahoo League");
                     }
 
-                    // Handle generic dues fallback for Yahoo
                     const isDuesSetUp = dbLeagueMeta?.dues_amount !== null && dbLeagueMeta?.dues_amount !== undefined && dbLeagueMeta?.dues_amount !== '';
                     setDuesConfigured(isDuesSetUp);
 
                     if (isDuesSetUp) {
                         const baseDues = Number(dbLeagueMeta.dues_amount) || 0;
                         const ledger = dbLeagueMeta.financial_ledger || {};
-                        const collectedAmount = ulData?.team_name ? (ledger[ulData.team_name] || 0) : 0;
+
+                        // The ledger is keyed by ROSTER ID -- that's what the
+                        // dues manager writes. This was reading it by team name,
+                        // which never matches a key, so every payment recorded
+                        // for a Yahoo league came back as nothing collected.
+                        //
+                        // Yahoo marks the account's own team outright, which
+                        // beats matching a stored name against a team's.
+                        const yahooRosters = await getLeagueRosters(targetId, { teamsOnly: true });
+                        const myRoster = Object.values(yahooRosters?.rosters || {})
+                            .find(r => r?.is_owned_by_current_login);
+
+                        const collectedAmount = myRoster
+                            ? Number(ledger[String(myRoster.roster_id)]) || 0
+                            : 0;
+
                         setMyBalanceOwed(baseDues - collectedAmount);
                     } else {
                         setMyBalanceOwed(0);

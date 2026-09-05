@@ -10,6 +10,7 @@ import {
     assignManagerIdentities,
     parseYahooOwnTeams,
     parseYahooPlayers,
+    parseYahooTeamPlayerPoints,
     yahooText,
     yahooCollection,
 } from './yahooHistory';
@@ -606,6 +607,63 @@ export const fetchYahooScoreboardWeeks = async (leagueId, weeks, passedUserId = 
     return collected;
 };
 
+// Actual points scored per player for a week.
+//
+// Projections and actuals are not the same problem. Yahoo publishes no
+// per-player projection through its API, so those stay a projection feed scored
+// under the league's rules. But it DOES publish actual points per player, which
+// makes them exact -- no scoring rules to re-derive, no crosswalk to miss.
+// Without this, every player in a Yahoo matchup reads 0.00 all season while the
+// team total (which does come from Yahoo) moves, which looks broken and is.
+//
+// Teams are requested a few at a time, with a per-team fallback if the batched
+// form comes back empty, and chunks run one after another -- bursts of proxy
+// calls are what produced intermittent 400s before.
+const TEAM_POINTS_CHUNK = 4;
+
+export const fetchYahooPlayerPoints = async (leagueId, teamKeys, week, passedUserId = null) => {
+    const userId = await getUserId(passedUserId);
+    const keys = [...new Set((teamKeys || []).filter(Boolean).map(String))];
+    const safeWeek = parseInt(week);
+    if (!userId || !keys.length || !Number.isFinite(safeWeek)) return {};
+
+    const rosterPath = (list) =>
+        `teams;team_keys=${list.join(',')}/roster;week=${safeWeek}/players/stats;type=week;week=${safeWeek}`;
+
+    const byTeam = {};
+
+    try {
+        for (const group of chunk(keys, TEAM_POINTS_CHUNK)) {
+            const data = await yahooProxyRequest(
+                userId,
+                () => rosterPath(group),
+                'team-player-points',
+                `player points week ${safeWeek} (${group.length} teams)`
+            );
+
+            const parsed = data ? parseYahooTeamPlayerPoints(data) : {};
+            if (Object.keys(parsed).length) {
+                Object.assign(byTeam, parsed);
+                continue;
+            }
+
+            for (const teamKey of group) {
+                const single = await yahooProxyRequest(
+                    userId,
+                    () => rosterPath([teamKey]),
+                    'team-player-points',
+                    `player points week ${safeWeek} for ${teamKey}`
+                );
+                if (single) Object.assign(byTeam, parseYahooTeamPlayerPoints(single));
+            }
+        }
+    } catch (err) {
+        console.error("Yahoo player points fetch failed:", err);
+    }
+
+    return byTeam;
+};
+
 // Single-week view, in the shape the matchup pages already consume.
 export const fetchAndNormalizeYahooMatchups = async (leagueId, week = 1, passedUserId = null) => {
     const safeWeek = parseInt(week) || 1;
@@ -622,12 +680,27 @@ export const fetchAndNormalizeYahooMatchups = async (leagueId, week = 1, passedU
         );
         if (!data) return { matchups: {}, week: safeWeek };
 
+        const parsed = parseYahooScoreboard(data, safeWeek);
+
+        // Per-player actuals, so a Yahoo matchup shows real player scores
+        // instead of a column of 0.00 beside a moving team total.
+        const pointsByTeam = await fetchYahooPlayerPoints(
+            cleanKey,
+            parsed.flatMap(m => m.teams.map(t => t.team_key)),
+            safeWeek,
+            userId
+        );
+
         const matchups = {};
-        parseYahooScoreboard(data, safeWeek).forEach((m, idx) => {
+        parsed.forEach((m, idx) => {
             matchups[idx + 1] = m.teams.map(t => ({
                 roster_id: t.roster_id,
                 starters: [],
                 points: t.points,
+                // Yahoo's own projection for this team, so the matchup can show
+                // the same total the league does.
+                projected_points: t.projected_points,
+                players_points: pointsByTeam[t.team_key] || {},
                 starters_points: []
             }));
         });
