@@ -31,7 +31,7 @@ export default function Terms() {
                 <li>Playoff odds, championship odds, power rankings, and similar percentages are statistical estimates produced by the App's own simulation, not figures reported by any platform, and carry the uncertainty inherent in any such projection -- particularly early in a season, before many results exist.</li>
                 <li>These figures are provided for informational and entertainment purposes only. They are not guaranteed to be accurate and should not be the sole basis for a lineup, waiver, trade, or draft decision.</li>
                 <li>Live scores, player stats, and game status depend on third-party APIs (Sleeper, Yahoo, ESPN, and public NFL data sources) and public schedule data, and may be delayed, temporarily unavailable, or occasionally incorrect.</li>
-                <li>ESPN league support currently covers the current season's rosters, matchups, standings, transactions, and draft results; multi-season history (past-season records, career manager stats, and rivalry history) is not yet available for ESPN leagues the way it is for Sleeper and Yahoo.</li>
+                <li>ESPN league support covers rosters, matchups, standings, transactions, draft results, trophy-room champions, career manager records, and rivalry history across every season ESPN reports the league having existed. Because ESPN publishes no playoff bracket endpoint, one narrower slice of the Records page -- bracket-specific stats like the largest playoff blowout or closest playoff game -- isn't broken out separately for ESPN leagues yet the way it is for Sleeper and Yahoo.</li>
             </ul>
 
             <h2>5. AI-Generated Analysis</h2>

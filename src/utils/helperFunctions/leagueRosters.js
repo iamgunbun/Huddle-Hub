@@ -53,6 +53,13 @@ export const getLeagueRosters = async (queryLeagueID = defaultLeagueID, { teamsO
     // which would otherwise send an ESPN league's numeric id (indistinguishable
     // in shape from a Sleeper id) to Sleeper's API.
     if (isEspnLeagueId(queryLeagueID)) {
+        if (teamsOnly) {
+            if (seasonTeamsCache[queryLeagueID]) return seasonTeamsCache[queryLeagueID];
+            const eTeams = await fetchAndNormalizeESPNRosters(queryLeagueID, { teamsOnly: true });
+            if (Object.keys(eTeams.rosters).length > 0) seasonTeamsCache[queryLeagueID] = eTeams;
+            return eTeams;
+        }
+
         const eRosters = await fetchAndNormalizeESPNRosters(queryLeagueID);
         if (eRosters && Object.keys(eRosters.rosters).length > 0) {
             rostersStore.update(r => { r[queryLeagueID] = eRosters; return r; });

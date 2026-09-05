@@ -12,6 +12,8 @@ import {
     parseEspnSchedule,
     parseEspnTransactions,
     parseEspnDraftDetail,
+    findPriorEspnSeason,
+    isEspnSeasonComplete,
 } from '../src/utils/espnParsers.js';
 
 let checks = 0;
@@ -189,5 +191,36 @@ check('round two\'s closing pick belongs to the slot that picked first in round 
 check('settings reports team and round counts', board.settings, { teams: 4, rounds: 2 });
 check('no picks at all -> null, not an empty board', parseEspnDraftDetail({ picks: [] }), null);
 check('missing draftDetail -> null', parseEspnDraftDetail(null), null);
+
+// --- findPriorEspnSeason (the previous_league_id stand-in for ESPN) ---
+check('the newest year before this season wins', findPriorEspnSeason([2022, 2023, 2024], 2025), 2024);
+check('years are not assumed sorted', findPriorEspnSeason([2021, 2024, 2022], 2025), 2024);
+check('no list at all -> no prior season', findPriorEspnSeason(null, 2025), null);
+check('an empty list -> no prior season', findPriorEspnSeason([], 2025), null);
+check('every entry is this season or later -> no prior season', findPriorEspnSeason([2025, 2026], 2025), null);
+check('a malformed seasonId -> null rather than a wrong walk', findPriorEspnSeason([2024], 'not-a-year'), null);
+check('non-numeric entries in the list are ignored', findPriorEspnSeason(['bad', 2023], 2025), 2023);
+
+// --- isEspnSeasonComplete ---
+check(
+    'a season before the real current year is always complete',
+    isEspnSeasonComplete({ seasonId: 2023, currentMatchupPeriod: 1, matchupPeriodCount: 17, currentYear: 2026 }),
+    true
+);
+check(
+    'the live season is not complete until its scoring periods run out',
+    isEspnSeasonComplete({ seasonId: 2026, currentMatchupPeriod: 10, matchupPeriodCount: 17, currentYear: 2026 }),
+    false
+);
+check(
+    'the live season completes once currentMatchupPeriod passes the total',
+    isEspnSeasonComplete({ seasonId: 2026, currentMatchupPeriod: 18, matchupPeriodCount: 17, currentYear: 2026 }),
+    true
+);
+check(
+    'no matchupPeriodCount at all -> assume still in progress rather than complete',
+    isEspnSeasonComplete({ seasonId: 2026, currentMatchupPeriod: 5, matchupPeriodCount: 0, currentYear: 2026 }),
+    false
+);
 
 console.log(`OK: ${checks} ESPN parser checks passed`);

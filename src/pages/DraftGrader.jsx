@@ -145,20 +145,41 @@ export default function DraftGrader() {
                 }
 
                 if (isEspnLeagueId(curId)) {
-                    // ESPN keeps one league id across every season (unlike
-                    // Sleeper/Yahoo, which mint a new one each year) -- there's
-                    // no previous_league_id chain to walk, so only the current
-                    // season's board is available here.
-                    const leagueData = await getLeagueData(curId);
-                    const board = await fetchESPNDraft(curId, { season: leagueData?.season });
-                    if (board) {
-                        setYahooPlayerMeta(board.playerMeta || {});
-                        setYahooDraftsMap({ [board.draft_id]: board.picks });
-                        setDraftsList([board]);
-                        setSelectedDraftId(board.draft_id);
-                        setDraftPicks(board.picks || []);
-                    } else {
-                        setDraftsList([]);
+                    // ESPN keeps one league id for its whole lifetime -- a past
+                    // season is a different `year` query against the SAME id
+                    // rather than a different id, encoded as a season-qualified
+                    // form of it (see platformIds.js) that previous_league_id
+                    // points to. Otherwise the same season-chain walk as Yahoo.
+                    const visited = new Set();
+                    const picksByDraft = {};
+                    const collectedMeta = {};
+                    let successor = null;
+
+                    while (curId && curId !== "0" && curId !== 0 && !visited.has(curId)) {
+                        visited.add(curId);
+                        const leagueData = await getLeagueData(curId);
+                        if (!leagueData) break;
+
+                        if (successor && !isSameLeagueChain(leagueData, successor)) break;
+                        successor = leagueData;
+
+                        const board = await fetchESPNDraft(curId, { season: leagueData.season });
+                        if (board) {
+                            picksByDraft[board.draft_id] = board.picks;
+                            Object.assign(collectedMeta, board.playerMeta || {});
+                            allDrafts.push(board);
+                        }
+
+                        curId = leagueData.previous_league_id;
+                    }
+
+                    setYahooPlayerMeta(collectedMeta);
+                    setYahooDraftsMap(picksByDraft);
+                    const sortedEspn = allDrafts.sort((a, b) => b.season - a.season);
+                    setDraftsList(sortedEspn);
+                    if (sortedEspn.length > 0) {
+                        setSelectedDraftId(sortedEspn[0].draft_id);
+                        setDraftPicks(picksByDraft[sortedEspn[0].draft_id] || []);
                     }
                     return;
                 }

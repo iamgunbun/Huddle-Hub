@@ -19,6 +19,48 @@ export const ESPN_PRO_TEAM_MAP = {
 
 export const espnProTeamAbbr = (proTeamId) => ESPN_PRO_TEAM_MAP[proTeamId] || 'FA';
 
+/**
+ * The season immediately before `seasonId`, out of ESPN's own list of every
+ * year this league has existed (`status.previousSeasons`). Null when there
+ * isn't one -- either the list is empty/missing, or every entry in it is the
+ * current season or later (a malformed or out-of-order list shouldn't walk a
+ * history walk backwards into the future).
+ *
+ * ESPN keeps one league id for its whole lifetime -- a past season is a
+ * different `year` query against that SAME id, not a different id the way
+ * Sleeper/Yahoo mint one each season -- so this is what stands in for
+ * Sleeper/Yahoo's own `previous_league_id` field once wrapped by
+ * toEspnSeasonLeagueId (platformIds.js).
+ */
+export const findPriorEspnSeason = (previousSeasons, seasonId) => {
+    const year = parseInt(seasonId);
+    if (!Number.isFinite(year)) return null;
+
+    const prior = (Array.isArray(previousSeasons) ? previousSeasons : [])
+        .map(y => parseInt(y))
+        .filter(y => Number.isFinite(y) && y < year)
+        .sort((a, b) => b - a)[0];
+
+    return Number.isFinite(prior) ? prior : null;
+};
+
+/**
+ * Whether a season's regular-season-plus-playoffs schedule has fully played
+ * out -- any season before the real current year always has, and the live
+ * one has once its last scoring period has come and gone. Records/Awards
+ * read this the same way they already do for Yahoo's `status === 'complete'`,
+ * to decide whether a season's final standing counts as a podium yet (crowning
+ * a champion off October's standings would be wrong).
+ */
+export const isEspnSeasonComplete = ({ seasonId, currentMatchupPeriod, matchupPeriodCount, currentYear = new Date().getFullYear() }) => {
+    const year = parseInt(seasonId);
+    if (Number.isFinite(year) && year < currentYear) return true;
+
+    const total = parseInt(matchupPeriodCount) || 0;
+    if (!total) return false;
+    return (parseInt(currentMatchupPeriod) || 0) > total;
+};
+
 // A player's `defaultPositionId` -- offense/kicker/defense only; ESPN's IDP ids
 // (9-15) are left unmapped since standard leagues don't roster them.
 export const ESPN_POSITION_MAP = { 1: 'QB', 2: 'RB', 3: 'WR', 4: 'TE', 5: 'K', 16: 'DEF' };
@@ -285,12 +327,12 @@ export const parseEspnTransactions = (transactions) => {
  * Yahoo (buildYahooDraftBoard's picks[]): round, pick number, the drafting
  * roster, and the drafted player's id.
  *
- * ESPN keeps one league id across every season (unlike Sleeper/Yahoo, which
- * mint a new one each year), so there is no `previous_league_id` chain to
- * walk here -- only the current season's board is available through this
- * parser. `draftDetail.picks` also carries no player name, position, or team
- * at all -- only a bare id -- so a caller still needs to resolve it against
- * the shared player dictionary or that team's own current roster meta.
+ * Parses one season's draftDetail response -- espnService.js's fetchESPNDraft
+ * is what walks a league's `previous_league_id` chain to fetch each one via
+ * that season's query (see platformIds.js's season-qualified ESPN ids).
+ * `draftDetail.picks` carries no player name, position, or team at all --
+ * only a bare id -- so a caller still needs to resolve it against the shared
+ * player dictionary or that season's own roster meta.
  */
 export const parseEspnDraftDetail = (draftDetail, { season = null, isAuction = false } = {}) => {
     const picks = Array.isArray(draftDetail?.picks) ? draftDetail.picks : [];
