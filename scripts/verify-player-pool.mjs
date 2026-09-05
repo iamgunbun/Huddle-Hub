@@ -5,7 +5,7 @@
 // incomplete, rostered players are presented as free agents and nothing
 // about the page looks broken.
 
-import { buildOwnedIndex, isPlayerOwned, isRosterableNflPlayer, resolvePlayerFromMeta, playerNameKeyNoSuffix } from '../src/utils/playerPool.js';
+import { buildOwnedIndex, isPlayerOwned, isRosterableNflPlayer, resolvePlayerFromMeta, playerNameKeyNoSuffix, withResolvedPlayerMeta } from '../src/utils/playerPool.js';
 import { findSuccessorLeagueId, pickOwnerId } from '../src/utils/leagueSeason.js';
 
 let pass = 0;
@@ -131,6 +131,26 @@ eq('a cycle terminates instead of hanging',
     findSuccessorLeagueId([{ league_id: 'A', previous_league_id: 'B' }, { league_id: 'B', previous_league_id: 'A' }], 'ZZZ'), null);
 eq('takes an owner id off the rosters', pickOwnerId({ 1: { owner_id: 'u1' } }), 'u1');
 eq('no owner id -> null', pickOwnerId({ 1: {} }), null);
+
+// --- Folding a platform's own player details in ---------------------------
+// A Yahoo id that the crosswalk doesn't cover has no entry in the dictionary at
+// all, which is how a transaction ends up reading "Player #40877".
+const txnMeta = {
+    '40877': { id: '40877', fn: 'Michael', ln: 'Pittman Jr.', pos: 'WR', t: 'IND', headshot: 'https://y/p.png' },
+    '99999': { id: '99999', fn: 'Nobody', ln: 'Known', pos: 'WR', t: 'KC' },
+};
+const foldedIn = withResolvedPlayerMeta(dictWithDef, byName, txnMeta);
+eq('the yahoo id now has a name', foldedIn['40877'].fn, 'Michael');
+// The dictionary is consulted by name purely to recover the id the image CDN
+// needs -- without it the headshot can never resolve.
+eq('and a crosswalked sleeper id for the image', foldedIn['40877'].sleeper_id, '99');
+eq('the platform name wins over the dictionary', foldedIn['40877'].ln, 'Pittman Jr.');
+// A player the dictionary has never heard of still gets a name, just no image.
+eq('an unmatched player keeps its name', foldedIn['99999'].fn, 'Nobody');
+eq('and has no sleeper id to build an image from', foldedIn['99999'].sleeper_id, null);
+eq('existing dictionary entries survive', foldedIn.SF.pos, 'DEF');
+eq('no platform meta -> the dictionary unchanged',
+    Object.keys(withResolvedPlayerMeta(dictWithDef, byName, {})).length, Object.keys(dictWithDef).length);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

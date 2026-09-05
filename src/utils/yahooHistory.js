@@ -735,6 +735,7 @@ export const parseYahooTransactions = (data) => {
         const adds = {};
         const drops = {};
         const rosterIds = new Set();
+        const playerKeys = [];
         let cameFromWaivers = false;
 
         yahooCollection(playersNode).forEach(playerEntry => {
@@ -744,6 +745,12 @@ export const parseYahooTransactions = (data) => {
             const info = Array.isArray(player) ? player[0] : player;
             const playerId = yahooText(yahooField(info, 'player_id'));
             if (!playerId) return;
+
+            // Kept so the names can be looked up: the transaction feed carries
+            // ids, and Sleeper's crosswalk (which keys the shared player
+            // dictionary in a Yahoo league) misses plenty of them.
+            const playerKey = yahooText(yahooField(info, 'player_key'));
+            if (playerKey) playerKeys.push(playerKey);
 
             const dataNode = Array.isArray(player)
                 ? player.find(x => x && x.transaction_data)?.transaction_data
@@ -786,6 +793,7 @@ export const parseYahooTransactions = (data) => {
             adds: Object.keys(adds).length ? adds : null,
             drops: Object.keys(drops).length ? drops : null,
             roster_ids: [...rosterIds],
+            player_keys: playerKeys,
             draft_picks: [],
             waiver_budget: [],
             settings: faabBid !== undefined && faabBid !== null ? { waiver_bid: num(faabBid) } : null,

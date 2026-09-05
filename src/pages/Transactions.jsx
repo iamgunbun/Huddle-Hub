@@ -4,6 +4,7 @@ import { getLeagueData, getLeagueTeamManagers, loadPlayers } from '../utils/help
 import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
 import PlayerModal from '../components/PlayerModal';
 import { fetchYahooTransactions } from '../utils/yahooService';
+import { withResolvedPlayerMeta } from '../utils/playerPool';
 import styles from './Transactions.module.css';
 
 const isYahooLeagueId = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
@@ -23,6 +24,7 @@ export default function Transactions() {
     const [searchQuery, setSearchQuery] = useState('');
     
     const [selectedPlayer, setSelectedPlayer] = useState(null);
+    const [playersByName, setPlayersByName] = useState({});
 
     const getPlayerObj = (pId) => {
         if (!pId || pId === "0") return null;
@@ -47,6 +49,7 @@ export default function Transactions() {
                 setLeagueData(lData);
                 setTeamManagers(tmData);
                 setPlayersInfo(pData.players || pData || {});
+                setPlayersByName(pData.playersByName || {});
                 if (lData?.display_week) setActiveWeek(lData.display_week);
 
             } catch (e) {
@@ -70,8 +73,14 @@ export default function Transactions() {
             // whole, each entry carrying a timestamp that the adapter turns into
             // a week. So fetch once and filter here.
             fetchYahooTransactions(leagueId)
-                .then(all => {
+                .then(({ transactions: all, playerMeta }) => {
                     if (!isMounted) return;
+                    // Yahoo names players by id; the shared dictionary only
+                    // covers the ones Sleeper's crosswalk knows, so the rest
+                    // would render as a bare "Player #40877".
+                    if (Object.keys(playerMeta || {}).length) {
+                        setPlayersInfo(prev => withResolvedPlayerMeta(prev, playersByName, playerMeta));
+                    }
                     setTransactions(all.filter(t => t.leg === activeWeek));
                 })
                 .catch(err => console.error("Error fetching Yahoo transactions:", err));
@@ -126,9 +135,17 @@ export default function Transactions() {
         return list.sort((a, b) => b.status_updated - a.status_updated);
     }, [transactions, activeTab, searchQuery, playersInfo, teamManagers, currentSeason]);
 
-    const getAvatar = (pId, pos) => pos === 'DEF' 
-        ? `https://sleepercdn.com/images/team_logos/nfl/${String(pId).toLowerCase()}.png` 
-        : `https://sleepercdn.com/content/nfl/players/thumb/${pId}.jpg`;
+    // Sleeper's image CDN is keyed by SLEEPER ids. In a Yahoo league the id on a
+    // transaction is a Yahoo one, so the crosswalked sleeper_id is what makes
+    // the headshot resolve; a defense is named by its team instead.
+    const getAvatar = (pId, pos, player) => {
+        if (pos === 'DEF') {
+            const team = String(player?.t || player?.sleeper_id || pId || '').toLowerCase();
+            return `https://sleepercdn.com/images/team_logos/nfl/${team}.png`;
+        }
+        if (!player?.sleeper_id && player?.headshot) return player.headshot;
+        return `https://sleepercdn.com/content/nfl/players/thumb/${player?.sleeper_id || pId}.jpg`;
+    };
 
     const formatTimestamp = (ts) => {
         if (!ts) return '';
@@ -152,7 +169,7 @@ export default function Transactions() {
                 </span>
                 <div 
                     className={styles.miniAvatar} 
-                    style={{ backgroundImage: `url(${getAvatar(pId, p.pos)}), url(https://sleepercdn.com/images/v2/icons/player_default.webp)` }}
+                    style={{ backgroundImage: `url(${getAvatar(pId, p.pos, p)}), url(https://sleepercdn.com/images/v2/icons/player_default.webp)` }}
                 ></div>
                 <div className={styles.miniMeta}>
                     <span className={styles.miniName}>{firstName.charAt(0)}. {lastName}</span>
