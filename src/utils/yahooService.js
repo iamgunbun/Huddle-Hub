@@ -875,44 +875,66 @@ export const fetchYahooTransactions = async (leagueId, passedUserId = null) => {
 //
 // Yahoo tracks its own pool, so ask it rather than inferring availability by
 // subtracting rosters from a league-agnostic player database. status=A is
-// "available" (free agents and waivers). Pages are fetched sequentially --
-// bursts of parallel proxy calls are what produced intermittent 400s before.
+// "available" (free agents and waivers). Pages within one pool are requested
+// a few at a time -- a full burst of parallel proxy calls is what produced
+// intermittent 400s before.
+const AVAILABLE_PLAYERS_PAGE = 25;
+
+const fetchYahooAvailablePage = (userId, cleanKey, filterSuffix) => async (start) => {
+    const data = await yahooProxyRequest(
+        userId,
+        (key) => `league/${key}/players;status=A${filterSuffix};sort=AR;start=${start};count=${AVAILABLE_PLAYERS_PAGE}`,
+        cleanKey,
+        `available players${filterSuffix} ${start}-${start + AVAILABLE_PLAYERS_PAGE}`
+    );
+    return data ? parseYahooPlayers(data) : [];
+};
+
+// Pages are requested a few at a time instead of one at a time -- a whole
+// wave running concurrently rather than each page waiting on the last. Still
+// stops once a wave comes back entirely empty (the pool's end), so a small
+// pool doesn't cost a full run to `cap` -- at most one wasted wave beyond it.
+const fetchYahooAvailablePool = async (userId, cleanKey, filterSuffix, cap) => {
+    const starts = [];
+    for (let start = 0; start < cap; start += AVAILABLE_PLAYERS_PAGE) starts.push(start);
+
+    const players = [];
+    const fetchPage = fetchYahooAvailablePage(userId, cleanKey, filterSuffix);
+    for (const wave of chunk(starts, PROXY_CONCURRENCY)) {
+        const pages = await Promise.all(wave.map(fetchPage));
+        if (pages.every(page => !page.length)) break;
+        pages.forEach(page => players.push(...page));
+    }
+    return players;
+};
+
 export const fetchYahooAvailablePlayers = async (leagueId, { maxPlayers = 200, passedUserId = null } = {}) => {
     const cleanKey = cleanYahooKey(leagueId);
     const userId = await getUserId(passedUserId);
     if (!cleanKey || !userId) return null;
 
-    const PAGE = 25;
-    const starts = [];
-    for (let start = 0; start < maxPlayers; start += PAGE) starts.push(start);
-
-    const fetchPage = async (start) => {
-        const data = await yahooProxyRequest(
-            userId,
-            (key) => `league/${key}/players;status=A;sort=AR;start=${start};count=${PAGE}`,
-            cleanKey,
-            `available players ${start}-${start + PAGE}`
-        );
-        return data ? parseYahooPlayers(data) : [];
-    };
-
-    // Pages are requested a few at a time instead of one at a time -- a whole
-    // wave running concurrently rather than each page waiting on the last.
-    // Still stops once a wave comes back entirely empty (the pool's end), so a
-    // small league's pool doesn't cost a full run to maxPlayers -- at most one
-    // wasted wave beyond the real end.
-    const players = [];
-
     try {
-        for (const wave of chunk(starts, PROXY_CONCURRENCY)) {
-            const pages = await Promise.all(wave.map(fetchPage));
-            if (pages.every(page => !page.length)) break;
-            pages.forEach(page => players.push(...page));
-        }
+        // The general pool is sorted by overall value across every position
+        // (sort=AR). Defenses -- being a low-overall-value position -- can rank
+        // below the fetch window entirely even when several are genuinely
+        // available, especially early in a season when the pool ahead of them
+        // is still full of unrostered skill players. Asked for as its own
+        // position-filtered pool instead of hoping it surfaces in the general
+        // one; there are only 32 NFL teams, so a much smaller cap covers it.
+        // Run after the general pool, not alongside it -- each pool already
+        // runs its own pages at PROXY_CONCURRENCY, and stacking two pools'
+        // worth of concurrent requests is exactly the kind of burst that
+        // produced intermittent 400s before.
+        const general = await fetchYahooAvailablePool(userId, cleanKey, '', maxPlayers);
+        const defenses = await fetchYahooAvailablePool(userId, cleanKey, ';position=DEF', 40);
+
+        const byId = new Map();
+        [...general, ...defenses].forEach(p => { if (p?.id) byId.set(p.id, p); });
+        const players = [...byId.values()];
+
+        return players.length ? players : null;
     } catch (err) {
         console.error("Yahoo available-players fetch failed:", err);
-        return players.length ? players : null;
+        return null;
     }
-
-    return players.length ? players : null;
 };
