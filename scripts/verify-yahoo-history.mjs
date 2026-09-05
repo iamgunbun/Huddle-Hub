@@ -26,6 +26,7 @@ import {
     assignManagerIdentities,
     parseYahooOwnTeams,
     parseYahooPlayers,
+    parseYahooTeamPlayerPoints,
     yahooText,
 } from '../src/utils/yahooHistory.js';
 import { getPlatformLink } from '../src/utils/platformLinks.js';
@@ -574,6 +575,49 @@ eq('the error message is surfaced', describeLeagueWrite({ message: 'boom' }, 0).
 // The load-bearing one: no error, but nothing written.
 eq('changing no rows is NOT a success', describeLeagueWrite(null, 0).ok, false);
 eq('and says why', describeLeagueWrite(null, 0).message.includes('permission'), true);
+
+// --- Actual points, per player ---------------------------------------------
+// Projections and actuals are different problems. Yahoo publishes no per-player
+// PROJECTION through its API, but it does publish actual points -- which makes
+// them exact, with no scoring rules to re-derive and no crosswalk to miss.
+// Without reading them, every player in a Yahoo matchup sits at 0.00 all season
+// beside a team total that moves.
+const scoredPlayer = (id, total) => ({
+    player: [
+        [{ player_key: `470.p.${id}` }, { player_id: String(id) }, { name: { full: `Player ${id}` } }],
+        ...(total === undefined ? [] : [{ player_points: { coverage_type: 'week', week: '1', total: String(total) } }]),
+    ],
+});
+
+const rosterPointsPayload = {
+    fantasy_content: {
+        teams: {
+            0: {
+                team: [
+                    [{ team_key: '470.l.604026.t.6' }, { team_id: '6' }, { name: 'Straw Hat Pirates' }],
+                    { roster: { 0: { players: { 0: scoredPlayer(31883, 18.4), 1: scoredPlayer(30977, 0), count: 2 } } } },
+                ],
+            },
+            1: {
+                team: [
+                    [{ team_key: '470.l.604026.t.2' }, { team_id: '2' }, { name: 'Obi-Dak Kenobi' }],
+                    { roster: { 0: { players: { 0: scoredPlayer(28392, 7.25), count: 1 } } } },
+                ],
+            },
+            count: 2,
+        },
+    },
+};
+
+const teamPoints = parseYahooTeamPlayerPoints(rosterPointsPayload);
+eq('points come back keyed by team', Object.keys(teamPoints).length, 2);
+eq('a player\'s actual points are read', teamPoints['470.l.604026.t.6']['31883'], 18.4);
+// A genuine zero must survive: it means "played, scored nothing", which is not
+// the same as the blanket 0.00 this replaces.
+eq('a real zero is kept', teamPoints['470.l.604026.t.6']['30977'], 0);
+eq('the other team is separate', teamPoints['470.l.604026.t.2']['28392'], 7.25);
+eq('teams do not bleed into each other', teamPoints['470.l.604026.t.2']['31883'], undefined);
+eq('junk yields nothing', Object.keys(parseYahooTeamPlayerPoints({})).length, 0);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
