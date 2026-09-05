@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useLeague } from '../../context/LeagueContext';
 import { loadPlayers, getLeagueTeamManagers } from '../../utils/helper';
+import { fetchYahooTransactions } from '../../utils/yahooService';
 import { useNavigate } from 'react-router-dom';
 import styles from './Transactions.module.css';
+
+const isYahooLeagueId = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
 
 export default function Transactions({ preview = false }) {
     const { activeLeague } = useLeague();
@@ -28,19 +31,29 @@ export default function Transactions({ preview = false }) {
                 setPlayersMap(pData?.players || {});
                 setTeamManagers(tmData);
 
+                const leagueId = activeLeague.sleeper_league_id;
                 let allTxns = [];
-                for (let i = 1; i <= 18; i++) {
-                    const res = await fetch(`https://api.sleeper.app/v1/league/${activeLeague.sleeper_league_id}/transactions/${i}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        allTxns = [...allTxns, ...data];
+
+                if (isYahooLeagueId(leagueId)) {
+                    // Yahoo returns the whole season in one collection; there's
+                    // no per-week endpoint to walk. This used to call Sleeper
+                    // with a Yahoo league key, which 404s -- so Yahoo leagues
+                    // showed no transactions at all.
+                    allTxns = await fetchYahooTransactions(leagueId);
+                } else {
+                    for (let i = 1; i <= 18; i++) {
+                        const res = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/transactions/${i}`);
+                        if (res.ok) {
+                            const data = await res.json();
+                            allTxns = [...allTxns, ...data];
+                        }
                     }
                 }
-                
+
                 const validTxns = allTxns
                     .filter(t => t.status === 'complete')
                     .sort((a, b) => b.status_updated - a.status_updated);
-                    
+
                 setTransactions(validTxns);
             } catch (err) {
                 console.error("Failed to load transactions:", err);

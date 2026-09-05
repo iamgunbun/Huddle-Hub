@@ -11,6 +11,8 @@ import {
     parseYahooOwnTeams,
     parseYahooPlayers,
     parseYahooTeamPlayerPoints,
+    parseYahooTransactions,
+    weekFromTimestamp,
     yahooText,
     yahooCollection,
 } from './yahooHistory';
@@ -216,6 +218,9 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
         // An auction draft has costs instead of a pick order, so the draft board
         // has to be laid out differently.
         const isAuctionDraft = Number(settingsData?.is_auction_draft) === 1;
+        // Yahoo stamps transactions with a time but no week. The league's start
+        // date is what turns one into the other.
+        const seasonStart = leagueData.start_date ? Date.parse(`${leagueData.start_date}T00:00:00Z`) : null;
 
         // Yahoo tracks cross-season lineage via "renew" (points at the prior
         // season's league in "<game_key>_<league_id>" form). Mirroring Sleeper's
@@ -252,6 +257,8 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
             season: season,
             status: leagueData.is_finished ? 'complete' : 'in_season',
             draft_status: leagueData.draft_status || null,
+            start_date: leagueData.start_date || null,
+            season_start_ms: Number.isFinite(seasonStart) ? seasonStart : null,
             total_rosters: totalRosters,
             avatar: leagueData.logo_url || '/brand.png',
             platform: 'yahoo',
@@ -793,7 +800,46 @@ export const fetchYahooPlayersByKeys = async (leagueId, playerKeys, passedUserId
     return meta;
 };
 
-// 6. AVAILABLE PLAYERS (league free agents + waivers)
+// 6. TRANSACTIONS (adds, drops, trades)
+//
+// Yahoo returns the whole season's transactions in one collection, with a
+// timestamp on each but no week -- so the week is derived from the league's
+// start date, seven-day blocks out. Fetched whole and filtered by the caller,
+// since there's no per-week endpoint to ask for.
+export const fetchYahooTransactions = async (leagueId, passedUserId = null) => {
+    const cleanKey = cleanYahooKey(leagueId);
+    const userId = await getUserId(passedUserId);
+    if (!cleanKey || !userId) return [];
+
+    try {
+        const data = await yahooProxyRequest(
+            userId,
+            (key) => `league/${key}/transactions`,
+            cleanKey,
+            'league transactions'
+        );
+        if (!data) return [];
+
+        const transactions = parseYahooTransactions(data);
+        if (!transactions.length) return [];
+
+        // Placing each in a week needs the league's own start date and first
+        // week, so read them from the league rather than assuming a calendar.
+        const league = await fetchAndNormalizeYahooLeague(cleanKey, userId).catch(() => null);
+        const seasonStart = league?.season_start_ms ?? null;
+        const startWeek = parseInt(league?.settings?.start_week) || 1;
+
+        return transactions.map(t => ({
+            ...t,
+            leg: weekFromTimestamp(t.status_updated, seasonStart, startWeek),
+        }));
+    } catch (err) {
+        console.error("Yahoo Transactions Adapter Error:", err);
+        return [];
+    }
+};
+
+// 7. AVAILABLE PLAYERS (league free agents + waivers)
 //
 // Yahoo tracks its own pool, so ask it rather than inferring availability by
 // subtracting rosters from a league-agnostic player database. status=A is

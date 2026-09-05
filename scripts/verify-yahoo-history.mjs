@@ -27,6 +27,8 @@ import {
     parseYahooOwnTeams,
     parseYahooPlayers,
     parseYahooTeamPlayerPoints,
+    parseYahooTransactions,
+    weekFromTimestamp,
     yahooText,
 } from '../src/utils/yahooHistory.js';
 import { getPlatformLink } from '../src/utils/platformLinks.js';
@@ -618,6 +620,75 @@ eq('a real zero is kept', teamPoints['470.l.604026.t.6']['30977'], 0);
 eq('the other team is separate', teamPoints['470.l.604026.t.2']['28392'], 7.25);
 eq('teams do not bleed into each other', teamPoints['470.l.604026.t.2']['31883'], undefined);
 eq('junk yields nothing', Object.keys(parseYahooTeamPlayerPoints({})).length, 0);
+
+// --- Transactions ----------------------------------------------------------
+// Yahoo leagues showed no transactions at all, because the page asked Sleeper
+// for them using a Yahoo league key. These are the shape traps in Yahoo's own
+// feed: transaction_data arrives as an object OR an array of them, and an add
+// names its DESTINATION team while a drop names its SOURCE -- read only one and
+// half of every add/drop disappears.
+const txnPlayer = (playerId, moves) => ({
+    player: [
+        [{ player_key: `470.p.${playerId}` }, { player_id: String(playerId) }, { name: { full: `Player ${playerId}` } }],
+        { transaction_data: moves },
+    ],
+});
+
+const transactionsPayload = {
+    fantasy_content: {
+        league: [{ league_key: '470.l.604026' }, {
+            transactions: {
+                // An add/drop pair: one player in, one out, same team.
+                0: { transaction: [
+                    { transaction_key: '470.l.604026.tr.1', transaction_id: '1', type: 'add/drop', status: 'successful', timestamp: '1757462400', faab_bid: '7' },
+                    { players: {
+                        0: txnPlayer(31883, [{ type: 'add', source_type: 'waivers', destination_type: 'team', destination_team_key: '470.l.604026.t.6' }]),
+                        1: txnPlayer(30977, { type: 'drop', source_type: 'team', source_team_key: '470.l.604026.t.6', destination_type: 'waivers' }),
+                        count: 2,
+                    } },
+                ] },
+                // A straight free-agent add, no bid.
+                1: { transaction: [
+                    { transaction_id: '2', type: 'add', status: 'successful', timestamp: '1757376000' },
+                    { players: { 0: txnPlayer(28392, { type: 'add', source_type: 'freeagents', destination_type: 'team', destination_team_key: '470.l.604026.t.2' }), count: 1 } },
+                ] },
+                // A failed waiver claim, which Yahoo keeps in the same feed.
+                2: { transaction: [
+                    { transaction_id: '3', type: 'add', status: 'failed', timestamp: '1757300000' },
+                    { players: { 0: txnPlayer(11111, { type: 'add', destination_team_key: '470.l.604026.t.3' }), count: 1 } },
+                ] },
+                count: 3,
+            },
+        }],
+    },
+};
+
+const txns = parseYahooTransactions(transactionsPayload);
+eq('failed claims are left out', txns.length, 2);
+eq('newest first', txns[0].transaction_id, '1');
+// The array form of transaction_data.
+eq('an add is credited to its destination team', txns[0].adds['31883'], 6);
+// The object form -- and a drop names its SOURCE, not its destination.
+eq('a drop is credited to its source team', txns[0].drops['30977'], 6);
+eq('both sides land on one roster id', txns[0].roster_ids.length, 1);
+eq('a bid makes it a waiver', txns[0].type, 'waiver');
+eq('the bid is kept', txns[0].settings.waiver_bid, 7);
+eq('no bid and no waiver source is a free agent pickup', txns[1].type, 'free_agent');
+eq('a pure add has no drops', txns[1].drops, null);
+// Yahoo counts seconds; the views format milliseconds.
+eq('timestamps are converted to milliseconds', txns[0].status_updated, 1757462400000);
+eq('junk yields nothing', parseYahooTransactions({}).length, 0);
+
+// Yahoo never says which WEEK a transaction belongs to, only when it happened.
+const seasonStart = Date.parse('2025-09-04T00:00:00Z');
+eq('the season opener is week 1', weekFromTimestamp(seasonStart, seasonStart, 1), 1);
+eq('six days in is still week 1', weekFromTimestamp(seasonStart + 6 * 86400000, seasonStart, 1), 1);
+eq('seven days in is week 2', weekFromTimestamp(seasonStart + 7 * 86400000, seasonStart, 1), 2);
+eq('mid-season lands right', weekFromTimestamp(seasonStart + 35 * 86400000, seasonStart, 1), 6);
+// Pre-season pickups belong to the first week, not week zero or negative.
+eq('a pre-season move is week 1', weekFromTimestamp(seasonStart - 86400000, seasonStart, 1), 1);
+eq('a league starting later is respected', weekFromTimestamp(seasonStart, seasonStart, 2), 2);
+eq('no season start -> no week', weekFromTimestamp(seasonStart, null, 1), null);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

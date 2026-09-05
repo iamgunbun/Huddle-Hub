@@ -11,7 +11,8 @@
     "verify:scoring": "node scripts/verify-yahoo-scoring.mjs",
     "verify:pool": "node scripts/verify-player-pool.mjs",
     "verify:history": "node scripts/verify-yahoo-history.mjs",
-    "verify": "npm run verify:scoring && npm run verify:pool && npm run verify:history"
+    "verify:projections": "node scripts/verify-projections.mjs",
+    "verify": "npm run verify:scoring && npm run verify:pool && npm run verify:history && npm run verify:projections"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",
