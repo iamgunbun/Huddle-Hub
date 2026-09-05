@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
-import { getLeagueRosters, getLeagueTeamManagers, loadPlayers, getLeagueData } from '../utils/helper';
+import { getLeagueRosters, getLeagueTeamManagers, loadPlayers, getLeagueData, getNflState } from '../utils/helper';
 import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
 import { resolvePlayerFromMeta } from '../utils/playerPool';
 import { scoreStatLine } from '../utils/yahooScoring';
 import { fetchAndNormalizeYahooMatchups } from '../utils/yahooService';
+import { isViewingLiveWeek, LIVE_SCORE_POLL_MS } from '../utils/liveScores';
 import PlayerModal from '../components/PlayerModal';
 import styles from './Matchups.module.css';
 
@@ -29,6 +30,10 @@ export default function Matchups() {
     const [weeklyProjections, setWeeklyProjections] = useState({});
     const [weeklyStats, setWeeklyStats] = useState({}); 
     const [nflScheduleMap, setNflScheduleMap] = useState({});
+    // The real current NFL week -- used both to land on the right week by
+    // default and to decide whether the viewed week is even worth polling for
+    // live updates (a past or future week's data never changes).
+    const [nflState, setNflState] = useState(null);
     
     const [selectedMatchupId, setSelectedMatchupId] = useState(null);
     const [expandedMatchups, setExpandedMatchups] = useState({});
@@ -70,22 +75,28 @@ export default function Matchups() {
             setLoading(true);
             try {
                 const sleeperId = activeLeague.sleeper_league_id;
-                const [rData, tmData, pData, lData] = await Promise.all([
+                const [rData, tmData, pData, lData, nState] = await Promise.all([
                     getLeagueRosters(sleeperId),
                     getLeagueTeamManagers(sleeperId),
                     loadPlayers(sleeperId),
-                    getLeagueData(sleeperId)
+                    getLeagueData(sleeperId),
+                    getNflState().catch(() => null)
                 ]);
                 if (!isMounted) return;
-                
+
                 setRosters(rData.rosters || {});
                 setYahooPlayersMeta(rData.yahooPlayersMeta || {});
                 setTeamManagers(tmData);
                 setPlayersInfo(pData.players || {});
                 setPlayersByName(pData.playersByName || {});
                 setLeagueData(lData);
-                
-                if (lData?.display_week) setActiveWeek(lData.display_week);
+                setNflState(nState);
+
+                // `leagueData` (Sleeper or Yahoo) carries no "current week" field
+                // of its own -- the real NFL state is the one source both
+                // platforms can be landed on correctly by.
+                if (nState?.season_type === 'regular') setActiveWeek(nState.display_week || nState.week || 1);
+                else if (nState?.season_type === 'post') setActiveWeek(18);
 
                 if (isYahooLeagueId(sleeperId)) {
                     // Yahoo flags the requesting user's own team directly -- this is
@@ -127,7 +138,7 @@ export default function Matchups() {
         const season = leagueData?.season || new Date().getFullYear();
         if (!activeLeague?.sleeper_league_id) return;
         let isMounted = true;
-        
+
         const applyMatchupData = (mData) => {
             if (!isMounted) return;
             setWeeklyMatchups(mData || []);
@@ -140,80 +151,101 @@ export default function Matchups() {
             }
         };
 
-        if (isYahooLeagueId(activeLeague.sleeper_league_id)) {
-            fetchAndNormalizeYahooMatchups(activeLeague.sleeper_league_id, activeWeek)
-                .then(({ matchups }) => {
-                    const flat = [];
-                    Object.entries(matchups || {}).forEach(([mId, pair]) => {
-                        pair.forEach(team => flat.push({ ...team, matchup_id: mId }));
-                    });
-                    applyMatchupData(flat);
-                })
-                .catch(err => console.error("Yahoo matchups fetch err:", err));
-        } else {
-            fetch(`https://api.sleeper.app/v1/league/${activeLeague.sleeper_league_id}/matchups/${activeWeek}`)
+        // Scores, live per-player points and box-score stats all move while a
+        // game is being played, so this whole block is re-run on a timer below
+        // rather than fetched once -- otherwise a matchup only ever updated on
+        // a manual reload or a week change, no matter how the games were going.
+        const loadLiveData = () => {
+            if (isYahooLeagueId(activeLeague.sleeper_league_id)) {
+                fetchAndNormalizeYahooMatchups(activeLeague.sleeper_league_id, activeWeek)
+                    .then(({ matchups }) => {
+                        const flat = [];
+                        Object.entries(matchups || {}).forEach(([mId, pair]) => {
+                            pair.forEach(team => flat.push({ ...team, matchup_id: mId }));
+                        });
+                        applyMatchupData(flat);
+                    })
+                    .catch(err => console.error("Yahoo matchups fetch err:", err));
+            } else {
+                fetch(`https://api.sleeper.app/v1/league/${activeLeague.sleeper_league_id}/matchups/${activeWeek}`)
+                    .then(res => res.json())
+                    .then(applyMatchupData)
+                    .catch(err => console.error("Matchups fetch err:", err));
+            }
+
+            fetch(`https://api.sleeper.com/projections/nfl/${season}/${activeWeek}?season_type=regular`)
                 .then(res => res.json())
-                .then(applyMatchupData)
-                .catch(err => console.error("Matchups fetch err:", err));
+                .then(data => {
+                    if (isMounted) {
+                        if (Array.isArray(data)) {
+                            const map = {};
+                            data.forEach(item => { if (item.player_id) map[item.player_id] = item; });
+                            setWeeklyProjections(map);
+                        } else {
+                            setWeeklyProjections(data || {});
+                        }
+                    }
+                })
+                .catch(err => console.error("Projections fetch err:", err));
+
+            fetch(`https://api.sleeper.com/stats/nfl/${season}/${activeWeek}?season_type=regular`)
+                .then(res => res.json())
+                .then(data => {
+                    if (isMounted) {
+                        if (Array.isArray(data)) {
+                            const map = {};
+                            data.forEach(item => { if (item.player_id) map[item.player_id] = item; });
+                            setWeeklyStats(map);
+                        } else {
+                            setWeeklyStats(data || {});
+                        }
+                    }
+                })
+                .catch(err => console.error("Stats fetch err:", err));
+
+            // PERFECT FIX: ESPN Scoreboard for absolute Home/Away accuracy
+            fetch(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&week=${activeWeek}&dates=${season}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (isMounted && data?.events) {
+                        const map = {};
+                        data.events.forEach(event => {
+                            const comp = event.competitions?.[0];
+                            if (comp && comp.competitors) {
+                                const homeTeam = comp.competitors.find(c => c.homeAway === 'home')?.team?.abbreviation;
+                                const awayTeam = comp.competitors.find(c => c.homeAway === 'away')?.team?.abbreviation;
+
+                                if (homeTeam && awayTeam) {
+                                    const home = normalizeTeam(homeTeam);
+                                    const away = normalizeTeam(awayTeam);
+                                    map[home] = `VS ${away}`;
+                                    map[away] = `@ ${home}`;
+                                }
+                            }
+                        });
+                        setNflScheduleMap(map);
+                    }
+                })
+                .catch(err => console.error("ESPN Schedule fetch err:", err));
+        };
+
+        loadLiveData();
+
+        let intervalId = null;
+        if (isViewingLiveWeek(nflState, activeWeek)) {
+            intervalId = setInterval(() => {
+                // Skip a tick on a backgrounded tab -- there's no one watching
+                // it update, and it'll catch up the moment it's visible again.
+                if (document.hidden) return;
+                loadLiveData();
+            }, LIVE_SCORE_POLL_MS);
         }
 
-        fetch(`https://api.sleeper.com/projections/nfl/${season}/${activeWeek}?season_type=regular`)
-            .then(res => res.json())
-            .then(data => {
-                if (isMounted) {
-                    if (Array.isArray(data)) {
-                        const map = {};
-                        data.forEach(item => { if (item.player_id) map[item.player_id] = item; });
-                        setWeeklyProjections(map);
-                    } else {
-                        setWeeklyProjections(data || {});
-                    }
-                }
-            })
-            .catch(err => console.error("Projections fetch err:", err));
-
-        fetch(`https://api.sleeper.com/stats/nfl/${season}/${activeWeek}?season_type=regular`)
-            .then(res => res.json())
-            .then(data => {
-                if (isMounted) {
-                    if (Array.isArray(data)) {
-                        const map = {};
-                        data.forEach(item => { if (item.player_id) map[item.player_id] = item; });
-                        setWeeklyStats(map);
-                    } else {
-                        setWeeklyStats(data || {});
-                    }
-                }
-            })
-            .catch(err => console.error("Stats fetch err:", err));
-
-        // PERFECT FIX: ESPN Scoreboard for absolute Home/Away accuracy
-        fetch(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&week=${activeWeek}&dates=${season}`)
-            .then(res => res.json())
-            .then(data => {
-                if (isMounted && data?.events) {
-                    const map = {};
-                    data.events.forEach(event => {
-                        const comp = event.competitions?.[0];
-                        if (comp && comp.competitors) {
-                            const homeTeam = comp.competitors.find(c => c.homeAway === 'home')?.team?.abbreviation;
-                            const awayTeam = comp.competitors.find(c => c.homeAway === 'away')?.team?.abbreviation;
-                            
-                            if (homeTeam && awayTeam) {
-                                const home = normalizeTeam(homeTeam);
-                                const away = normalizeTeam(awayTeam);
-                                map[home] = `VS ${away}`;
-                                map[away] = `@ ${home}`; 
-                            }
-                        }
-                    });
-                    setNflScheduleMap(map);
-                }
-            })
-            .catch(err => console.error("ESPN Schedule fetch err:", err));
-
-        return () => { isMounted = false; };
-    }, [activeLeague, activeWeek, leagueData?.season, myRosterId]);
+        return () => {
+            isMounted = false;
+            if (intervalId) clearInterval(intervalId);
+        };
+    }, [activeLeague, activeWeek, leagueData?.season, myRosterId, nflState]);
 
     const getPlayerLivePts = (pId, matchupObj) => {
         if (!pId || pId === "0") return '0.00';

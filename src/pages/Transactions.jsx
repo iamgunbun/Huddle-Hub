@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLeague } from '../context/LeagueContext';
-import { getLeagueData, getLeagueTeamManagers, loadPlayers } from '../utils/helper';
+import { getLeagueData, getLeagueTeamManagers, loadPlayers, getNflState } from '../utils/helper';
 import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
 import PlayerModal from '../components/PlayerModal';
 import { fetchYahooTransactions } from '../utils/yahooService';
@@ -39,10 +39,11 @@ export default function Transactions() {
             setLoading(true);
             try {
                 const sleeperId = activeLeague.sleeper_league_id;
-                const [lData, tmData, pData] = await Promise.all([
+                const [lData, tmData, pData, nflState] = await Promise.all([
                     getLeagueData(sleeperId),
                     getLeagueTeamManagers(sleeperId),
-                    loadPlayers(sleeperId)
+                    loadPlayers(sleeperId),
+                    getNflState().catch(() => null)
                 ]);
 
                 if (!isMounted) return;
@@ -50,7 +51,12 @@ export default function Transactions() {
                 setTeamManagers(tmData);
                 setPlayersInfo(pData.players || pData || {});
                 setPlayersByName(pData.playersByName || {});
-                if (lData?.display_week) setActiveWeek(lData.display_week);
+
+                // `leagueData` (Sleeper or Yahoo) carries no "current week" field
+                // of its own -- the real NFL state is what both platforms are
+                // correctly landed on the current week by.
+                if (nflState?.season_type === 'regular') setActiveWeek(nflState.display_week || nflState.week || 1);
+                else if (nflState?.season_type === 'post') setActiveWeek(18);
 
             } catch (e) {
                 console.error("Error loading base transaction data:", e);

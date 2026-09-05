@@ -96,15 +96,25 @@ export const isRosterableNflPlayer = (player) => {
 // splits them out (or omits one) can't hide an owned player.
 const ROSTER_PLAYER_FIELDS = ['players', 'starters', 'reserve', 'taxi'];
 
+const isDefensePos = (pos) => {
+    const upper = String(pos || '').toUpperCase();
+    return upper.includes('DEF') || upper === 'DST';
+};
+
 /**
  * Builds the set of ids (and optionally names) owned by any team in the league.
  *
  * `matchNames` should only be enabled where ids genuinely can't be trusted to
- * line up -- see the note at the top of this file.
+ * line up -- see the note at the top of this file. Defenses are the one case
+ * even name-matching can't bridge reliably: Yahoo's full team name ("San
+ * Francisco 49ers") and Sleeper's own dictionary naming for the same defense
+ * don't consistently agree, while both platforms DO agree on the team
+ * abbreviation -- so that's indexed separately.
  */
 export const buildOwnedIndex = (rosters, { matchNames = false, nameSources = [] } = {}) => {
     const ids = new Set();
     const names = new Set();
+    const defTeams = new Set();
 
     if (rosters && typeof rosters === 'object') {
         Object.values(rosters).forEach(roster => {
@@ -120,12 +130,19 @@ export const buildOwnedIndex = (rosters, { matchNames = false, nameSources = [] 
                     ids.add(key);
 
                     if (!matchNames) return;
+                    let nameFound = false;
                     for (const source of nameSources) {
                         const meta = source?.[key];
-                        const nameKey = meta ? playerNameKey(meta.fn ?? meta.first_name, meta.ln ?? meta.last_name) : '';
-                        if (nameKey) {
-                            names.add(nameKey);
-                            break;
+                        if (!meta) continue;
+
+                        if (isDefensePos(meta.pos ?? meta.position)) {
+                            const team = String(meta.t ?? meta.team ?? '').toUpperCase();
+                            if (team) defTeams.add(team);
+                        }
+
+                        if (!nameFound) {
+                            const nameKey = playerNameKey(meta.fn ?? meta.first_name, meta.ln ?? meta.last_name);
+                            if (nameKey) { names.add(nameKey); nameFound = true; }
                         }
                     }
                 });
@@ -133,13 +150,14 @@ export const buildOwnedIndex = (rosters, { matchNames = false, nameSources = [] 
         });
     }
 
-    return { ids, names, isEmpty: ids.size === 0 };
+    return { ids, names, defTeams, isEmpty: ids.size === 0 };
 };
 
 /**
  * True when this player is rostered by someone in the league.
- * Checks the player's own id and its crosswalked sleeper_id, plus its name when
- * the index was built with name matching enabled.
+ * Checks the player's own id and its crosswalked sleeper_id, its team
+ * abbreviation for a defense, and its name when the index was built with
+ * name matching enabled.
  */
 export const isPlayerOwned = (player, ownedIndex) => {
     if (!player || !ownedIndex) return false;
@@ -149,6 +167,11 @@ export const isPlayerOwned = (player, ownedIndex) => {
         if (candidate !== null && candidate !== undefined && ownedIndex.ids.has(String(candidate))) {
             return true;
         }
+    }
+
+    if (ownedIndex.defTeams?.size && isDefensePos(player.pos ?? player.position)) {
+        const team = String(player.t ?? player.team ?? '').toUpperCase();
+        if (team && ownedIndex.defTeams.has(team)) return true;
     }
 
     if (!ownedIndex.names.size) return false;

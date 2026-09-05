@@ -53,17 +53,24 @@ export default function Players() {
             setLoading(true);
             try {
                 const sleeperId = activeLeague.sleeper_league_id;
-                const [pData, lData, rData] = await Promise.all([
+                const [pData, lData, rData, nflState] = await Promise.all([
                     loadPlayers(sleeperId),
                     getLeagueData(sleeperId),
-                    getLeagueRosters(sleeperId)
+                    getLeagueRosters(sleeperId),
+                    getNflState().catch(() => null)
                 ]);
-                
+
                 if (!isMounted) return;
                 setPlayersInfo(pData.players || pData || {});
                 setLeagueData(lData);
                 setRosters(rData.rosters || {});
                 setYahooPlayersMeta(rData.yahooPlayersMeta || {});
+
+                // `leagueData` (Sleeper or Yahoo) carries no "current week" field
+                // of its own -- the real NFL state is what both platforms are
+                // correctly landed on the current week by.
+                if (nflState?.season_type === 'regular') setActiveWeek(nflState.display_week || nflState.week || 1);
+                else if (nflState?.season_type === 'post') setActiveWeek(18);
 
                 // For a Yahoo league, ask Yahoo who is actually available rather
                 // than inferring it. Falls back to roster subtraction below if
@@ -73,7 +80,6 @@ export default function Players() {
                 // at connect time keeps answering with that season's rosters. Follow
                 // it forward so availability is judged against the current roster.
                 if (!String(sleeperId).includes('.')) {
-                    const nflState = await getNflState().catch(() => null);
                     const currentSeason = nflState?.season;
                     const currentId = await resolveCurrentSeasonLeagueId({
                         storedLeagueId: sleeperId,
@@ -100,7 +106,6 @@ export default function Players() {
                         .then(list => { if (isMounted && list?.length) setYahooAvailable(list); })
                         .catch(err => console.warn("Yahoo available-players lookup failed:", err));
                 }
-                if (lData?.display_week) setActiveWeek(lData.display_week);
                 
             } catch (e) {
                 console.error("Failed to load base player data:", e);
@@ -297,9 +302,20 @@ export default function Players() {
         const yahooAvailableNames = yahooAvailable
             ? new Set(yahooAvailable.map(p => playerNameKey(p.fn, p.ln)).filter(Boolean))
             : null;
+        // Defenses are the one entry neither id nor full-name matching can be
+        // trusted for: Yahoo's pool keys them by its own numeric id and full
+        // team name ("San Francisco 49ers"), while the dictionary keys them by
+        // Sleeper's own naming for the same team -- but both sides agree on the
+        // team abbreviation (parseYahooPlayers reads it from
+        // editorial_team_abbr), so that's the join key that actually works.
+        const yahooAvailableDefTeams = yahooAvailable
+            ? new Set(yahooAvailable.filter(p => String(p.pos || '').toUpperCase().includes('DEF') || p.pos === 'DST')
+                .map(p => String(p.t || '').toUpperCase()).filter(Boolean))
+            : null;
 
         const list = nflPlayerPool.filter(p => {
             if (yahooAvailableIds) {
+                if (p.pos === 'DEF' && yahooAvailableDefTeams.has(String(p.t || '').toUpperCase())) return true;
                 return yahooAvailableIds.has(String(p.player_id))
                     || yahooAvailableNames.has(playerNameKey(p.fn, p.ln));
             }
