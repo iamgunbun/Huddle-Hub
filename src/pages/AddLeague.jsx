@@ -10,7 +10,7 @@ import styles from './AddLeague.module.css';
 export default function AddLeague() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const { loadLeagueContext } = useLeague();
+    const { loadLeagueContext, isPremium, leagueCount, setShowPremiumModal } = useLeague();
     
     const [activeTab, setActiveTab] = useState('sleeper');
     
@@ -283,6 +283,27 @@ export default function AddLeague() {
 
             const userId = session.user.id;
 
+            // A free account is limited to 2 connected leagues (see PremiumModal's
+            // own feature list) -- checked fresh against the database rather than
+            // only the cached context count, since this is the one gate in the app
+            // that protects an actual paid limit rather than just a nicer feature.
+            // On a failed check, the connection is allowed to proceed rather than
+            // blocking a legitimate user over a transient network error -- there is
+            // no harder guarantee behind this limit to fall back on either way.
+            if (!isPremium) {
+                const { count, error: countErr } = await supabase
+                    .from('user_leagues')
+                    .select('league_id', { count: 'exact', head: true })
+                    .eq('user_id', userId);
+
+                const currentCount = countErr ? leagueCount : (count ?? 0);
+                if (currentCount >= 2) {
+                    setLoading(false);
+                    setShowPremiumModal(true);
+                    return;
+                }
+            }
+
             let dbLeagueId;
             const queryColumn = (league.platform === 'sleeper' || league.platform === 'yahoo') ? 'sleeper_league_id' : 'id';
             
@@ -373,6 +394,30 @@ export default function AddLeague() {
                     <h1 className={styles.title}>Connect League</h1>
                     <p className={styles.subtitle}>Select your fantasy platform to sync your rosters and data.</p>
                 </div>
+
+                {!isPremium && leagueCount >= 2 && (
+                    <div style={{
+                        marginBottom: '20px',
+                        textAlign: 'center',
+                        background: 'rgba(238, 191, 28, 0.1)',
+                        border: '1px solid rgba(238, 191, 28, 0.3)',
+                        borderRadius: '8px',
+                        padding: '15px',
+                        color: '#f8fafc',
+                        fontSize: '0.9em',
+                    }}>
+                        You've connected {leagueCount} leagues, the limit on the free tier. Upgrade to Huddle Pro to connect more.
+                        <div>
+                            <button
+                                type="button"
+                                onClick={() => setShowPremiumModal(true)}
+                                style={{ background: '#eebf1c', border: 'none', color: '#121212', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85em', fontWeight: 'bold', marginTop: '10px' }}
+                            >
+                                Upgrade to Huddle Pro
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 <div className={styles.tabContainer}>
                     <button 
