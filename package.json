@@ -15,7 +15,8 @@
     "verify:concurrency": "node scripts/verify-concurrency.mjs",
     "verify:format": "node scripts/verify-league-format.mjs",
     "verify:statline": "node scripts/verify-player-stat-line.mjs",
-    "verify": "npm run verify:scoring && npm run verify:pool && npm run verify:history && npm run verify:projections && npm run verify:concurrency && npm run verify:format && npm run verify:statline"
+    "verify:livescores": "node scripts/verify-live-scores.mjs",
+    "verify": "npm run verify:scoring && npm run verify:pool && npm run verify:history && npm run verify:projections && npm run verify:concurrency && npm run verify:format && npm run verify:statline && npm run verify:livescores"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",

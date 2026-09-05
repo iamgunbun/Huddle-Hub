@@ -76,6 +76,24 @@ eq('sleeper: namesake free agent is NOT hidden',
 eq('sleeper: the actually-rostered player is still owned',
     isPlayerOwned({ player_id: '4046', fn: 'Patrick', ln: 'Mahomes' }, sleeperNameIdx), true);
 
+// --- Defenses: platforms agree on team abbreviation, not id or full name ---
+// A Yahoo roster carries the defense by Yahoo's own numeric id, and Yahoo's
+// full name ("San Francisco 49ers") doesn't match Sleeper's own dictionary
+// naming for the same defense -- so neither the id check nor the name check
+// above can catch a rostered Yahoo defense. The team abbreviation is the one
+// thing both platforms agree on.
+const yahooDefRosters = { 4: { roster_id: 4, players: ['100304'] } };
+const yahooDefMeta = { '100304': { fn: 'San Francisco', ln: '49ers', pos: 'DEF', t: 'SF' } };
+const defIdx = buildOwnedIndex(yahooDefRosters, { matchNames: true, nameSources: [yahooDefMeta, dict] });
+eq('yahoo: rostered defense caught by team abbreviation even when id and name both miss',
+    isPlayerOwned({ pos: 'DEF', t: 'SF', fn: '49ers', ln: '' }, defIdx), true);
+eq('yahoo: a different team\'s defense is not owned',
+    isPlayerOwned({ pos: 'DEF', t: 'KC', fn: 'Chiefs', ln: '' }, defIdx), false);
+eq('yahoo: a non-defense player at the same "team" key is unaffected',
+    isPlayerOwned({ pos: 'WR', t: 'SF', fn: 'Some', ln: 'Receiver', player_id: 'not-rostered' }, defIdx), false);
+eq('sleeper: defense matching by team never fires without matchNames',
+    isPlayerOwned({ pos: 'DEF', t: 'SF', fn: '49ers', ln: '' }, buildOwnedIndex(yahooDefRosters, { nameSources: [yahooDefMeta] })), false);
+
 // --- Only players currently on an NFL roster are available ---
 eq('active player on a team is rosterable',
     isRosterableNflPlayer({ fn: 'A', ln: 'B', t: 'KC', active: true, status: 'Active' }), true);
