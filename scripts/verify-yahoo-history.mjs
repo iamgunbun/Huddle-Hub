@@ -1,11 +1,15 @@
-// Dependency-free checks for the Yahoo league-history parsing.
+// Dependency-free checks for reading a league's history and membership.
 // Run with: npm run verify:history
 //
-// Yahoo can't be reached from here, so these fixtures are the only place the
-// response shapes get exercised. They're written to match Yahoo's real quirks:
-// collections arriving as numbered objects with a `count`, entities arriving as
-// arrays of single-key objects, and sub-collections hiding under a "0" key
-// alongside sibling scalars.
+// Mostly Yahoo, which can't be reached from here -- so these fixtures are the
+// only place its response shapes get exercised. They're written to match its
+// real quirks: collections arriving as numbered objects with a `count`,
+// entities arriving as arrays of single-key objects, sub-collections hiding
+// under a "0" key alongside sibling scalars, and empty elements arriving as
+// empty objects rather than null.
+//
+// Also covers the cross-platform bits that decide who someone is and where
+// their league lives, since both platforms are handled side by side.
 
 import {
     yahooCollection,
@@ -25,6 +29,7 @@ import {
     yahooText,
 } from '../src/utils/yahooHistory.js';
 import { getPlatformLink } from '../src/utils/platformLinks.js';
+import { findSleeperLeagueUser, isSleeperCommissioner } from '../src/utils/leagueMembership.js';
 
 let pass = 0;
 let fail = 0;
@@ -513,6 +518,39 @@ eq('a sleeper league still links to Sleeper',
 eq('a numeric id is read as Sleeper',
     getPlatformLink({ sleeper_league_id: '1312102318602207232' }).platform, 'sleeper');
 eq('no league -> no crash', getPlatformLink(null).label, 'Go to Sleeper');
+
+// --- Finding the connected account in a Sleeper league ---------------------
+// Sleeper returns every member of a league identically -- there's no "my team"
+// endpoint the way Yahoo has -- so the account has to be picked out. Getting
+// this wrong hands commissioner tools to the wrong person.
+const sleeperUsers = [
+    { user_id: '111', display_name: 'GunnerA', is_owner: true, metadata: { team_name: 'Straw Hat Pirates' } },
+    { user_id: '222', display_name: 'thomas', metadata: { team_name: 'Trumpy Trouts' } },
+    { user_id: '333', display_name: 'thomas', metadata: { team_name: 'Dakstreet Boys' } },
+];
+
+eq('the user id is an exact match',
+    findSleeperLeagueUser(sleeperUsers, { userId: '222' })?.metadata.team_name, 'Trumpy Trouts');
+eq('a unique display name matches',
+    findSleeperLeagueUser(sleeperUsers, { teamName: 'GunnerA' })?.user_id, '111');
+eq('a team name matches too',
+    findSleeperLeagueUser(sleeperUsers, { teamName: 'Dakstreet Boys' })?.user_id, '333');
+eq('matching ignores case and spacing',
+    findSleeperLeagueUser(sleeperUsers, { teamName: '  straw   hat pirates ' })?.user_id, '111');
+// The one that matters: two members share "thomas", so a name alone can't say
+// which is the account -- guessing could hand over commissioner tools.
+eq('an ambiguous name is not guessed at',
+    findSleeperLeagueUser(sleeperUsers, { teamName: 'thomas' }), null);
+eq('the id wins over an ambiguous name',
+    findSleeperLeagueUser(sleeperUsers, { userId: '333', teamName: 'thomas' })?.user_id, '333');
+eq('an unknown name matches nobody',
+    findSleeperLeagueUser(sleeperUsers, { teamName: 'Nobody' }), null);
+eq('no members -> nobody', findSleeperLeagueUser([], { userId: '111' }), null);
+eq('malformed input -> nobody', findSleeperLeagueUser(null, { userId: '111' }), null);
+
+eq('the league owner is the commissioner', isSleeperCommissioner(sleeperUsers[0]), true);
+eq('a regular member is not', isSleeperCommissioner(sleeperUsers[1]), false);
+eq('nobody is not a commissioner', isSleeperCommissioner(null), false);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

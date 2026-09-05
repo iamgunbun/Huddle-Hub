@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { supabase } from '../supabaseClient';
 import { fetchAndNormalizeESPNLeague } from '../utils/espnService';
 import { fetchAndNormalizeYahooLeague, fetchYahooOwnTeams } from '../utils/yahooService';
+import { findSleeperLeagueUser, isSleeperCommissioner } from '../utils/leagueMembership';
 
 const LeagueContext = createContext();
 
@@ -21,45 +22,80 @@ const formatAvatarUrl = (avatar) => {
     return `https://sleepercdn.com/avatars/thumbs/${avatar}`;
 };
 
-// Brings stored commissioner status back in line with Yahoo's answer.
+// Brings stored commissioner status back in line with what the platform says.
 //
-// One request covers every Yahoo league the account is in, and only rows that
-// actually disagree are written, so the common case (already correct) costs a
-// single read and no writes.
+// Connections made before this was captured have it stored as false regardless
+// of the truth, which silently hides the commissioner tools. Only rows that
+// actually disagree are written, so the common case costs reads and no writes.
+const applyCommissionerFlag = async (userId, league, shouldBeCommissioner, selected, setActiveLeague) => {
+    if (!!league.is_commissioner === shouldBeCommissioner) return;
+
+    const { error } = await supabase
+        .from('user_leagues')
+        .update({ is_commissioner: shouldBeCommissioner })
+        .eq('user_id', userId)
+        .eq('league_id', league.id);
+
+    if (error) {
+        console.warn("Couldn't update commissioner status for", league.name, error);
+        return;
+    }
+
+    if (selected && league.id === selected.id) {
+        setActiveLeague(prev => (prev ? { ...prev, is_commissioner: shouldBeCommissioner } : prev));
+    }
+};
+
+// Yahoo answers for every league at once: one request returns the account's own
+// team in each, flagged. That's an exact, authoritative read, so it corrects in
+// both directions.
 const syncYahooCommissionerFlags = async (userId, leagues, selected, setActiveLeague) => {
     const yahooLeagues = (leagues || []).filter(l => l?.platform === 'yahoo' && l.sleeper_league_id);
-    if (!userId || !yahooLeagues.length) return;
+    if (!yahooLeagues.length) return;
 
+    const ownTeams = await fetchYahooOwnTeams(userId);
+    if (!Object.keys(ownTeams).length) return;
+
+    for (const league of yahooLeagues) {
+        const ownTeam = ownTeams[String(league.sleeper_league_id)];
+        // No entry means Yahoo didn't report a team for this account in that
+        // league this season -- not evidence either way, so leave it alone.
+        if (!ownTeam) continue;
+        await applyCommissionerFlag(userId, league, !!ownTeam.isCommissioner, selected, setActiveLeague);
+    }
+};
+
+// Sleeper needs a request per league and returns every member identically, so
+// only the league actually in view is reconciled -- that's the one whose tools
+// matter right now, and it keeps app load to a single extra request.
+//
+// Identification here is by stored team name, which is a heuristic: two members
+// can share a display name, and a member can rename their team. So this only
+// GRANTS commissioner status, never revokes it. Taking someone's access away on
+// the strength of a name match would be the worse error, and a connection made
+// from now on records the flag exactly, from the account's own Sleeper user id.
+const syncSleeperCommissionerFlag = async (userId, selected, setActiveLeague) => {
+    if (!selected || selected.platform !== 'sleeper' || !selected.sleeper_league_id) return;
+    if (selected.is_commissioner) return;
+
+    const res = await fetch(`https://api.sleeper.app/v1/league/${selected.sleeper_league_id}/users`);
+    if (!res.ok) return;
+
+    const me = findSleeperLeagueUser(await res.json(), { teamName: selected.team_name });
+    if (!isSleeperCommissioner(me)) return;
+
+    await applyCommissionerFlag(userId, selected, true, selected, setActiveLeague);
+};
+
+const syncCommissionerFlags = async (userId, leagues, selected, setActiveLeague) => {
+    if (!userId) return;
     try {
-        const ownTeams = await fetchYahooOwnTeams(userId);
-        if (!Object.keys(ownTeams).length) return;
-
-        for (const league of yahooLeagues) {
-            const ownTeam = ownTeams[String(league.sleeper_league_id)];
-            // No entry means Yahoo didn't report a team for this account in that
-            // league this season -- not evidence either way, so leave it alone.
-            if (!ownTeam) continue;
-
-            const shouldBeCommissioner = !!ownTeam.isCommissioner;
-            if (!!league.is_commissioner === shouldBeCommissioner) continue;
-
-            const { error } = await supabase
-                .from('user_leagues')
-                .update({ is_commissioner: shouldBeCommissioner })
-                .eq('user_id', userId)
-                .eq('league_id', league.id);
-
-            if (error) {
-                console.warn("Couldn't update commissioner status for", league.name, error);
-                continue;
-            }
-
-            if (selected && league.id === selected.id) {
-                setActiveLeague(prev => (prev ? { ...prev, is_commissioner: shouldBeCommissioner } : prev));
-            }
-        }
+        await Promise.all([
+            syncYahooCommissionerFlags(userId, leagues, selected, setActiveLeague),
+            syncSleeperCommissionerFlag(userId, selected, setActiveLeague),
+        ]);
     } catch (err) {
-        console.warn("Couldn't reconcile Yahoo commissioner status:", err);
+        console.warn("Couldn't reconcile commissioner status:", err);
     }
 };
 
@@ -211,11 +247,11 @@ export function LeagueProvider({ children }) {
                     setActiveLeague(selected);
                     localStorage.setItem('huddle_active_league_id', selected.id);
 
-                    // Yahoo connections made before commissioner status was
-                    // captured have it stored as false regardless of the truth,
-                    // which silently hides the commissioner tools. Yahoo knows,
-                    // so ask it and correct the record.
-                    syncYahooCommissionerFlags(userId, flattenedLeagues, selected, setActiveLeague);
+                    // Connections made before commissioner status was captured
+                    // have it stored as false regardless of the truth. Both
+                    // platforms can say who runs the league, so ask and correct
+                    // the record.
+                    syncCommissionerFlags(userId, flattenedLeagues, selected, setActiveLeague);
                 }
             } else {
                 setUserLeagues([]);

@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
 import { fetchAndNormalizeESPNLeague } from '../utils/espnService';
 import { parseYahooOwnTeams } from '../utils/yahooHistory';
+import { findSleeperLeagueUser, isSleeperCommissioner } from '../utils/leagueMembership';
 import styles from './AddLeague.module.css';
 
 export default function AddLeague() {
@@ -68,7 +69,8 @@ export default function AddLeague() {
                 name: l.name,
                 avatar: l.avatar ? `https://sleepercdn.com/avatars/thumbs/${l.avatar}` : '/brand.png',
                 platform: 'sleeper',
-                managerName: userData.display_name // Captures precise username for user_leagues insert
+                managerName: userData.display_name, // Captures precise username for user_leagues insert
+                sleeperUserId: userData.user_id // Identifies the account exactly when reading commissioner status
             }));
 
             setFoundLeagues(formattedLeagues);
@@ -76,6 +78,23 @@ export default function AddLeague() {
             setErrorMsg(err.message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Sleeper has no "my team" endpoint -- every member comes back the same --
+    // so the account is found by its own user id, which is exact. A failure here
+    // must not block connecting the league; it only means the commissioner tools
+    // stay hidden until the next load reconciles them.
+    const readSleeperCommissioner = async (league) => {
+        try {
+            const res = await fetch(`https://api.sleeper.app/v1/league/${league.id}/users`);
+            if (!res.ok) return false;
+            const users = await res.json();
+            const me = findSleeperLeagueUser(users, { userId: league.sleeperUserId, teamName: league.managerName });
+            return isSleeperCommissioner(me);
+        } catch (err) {
+            console.warn("Couldn't read Sleeper commissioner status:", err);
+            return false;
         }
     };
 
@@ -270,16 +289,23 @@ export default function AddLeague() {
                 throw new Error("You are already connected to this league.");
             }
 
+            // Commissioner status, recorded at connect time so the tools are
+            // available straight away. This was never captured on EITHER
+            // platform, so it sat false for every connection regardless of the
+            // truth. Yahoo states it on the account's own team (read when the
+            // league list was fetched); Sleeper marks the commissioner as the
+            // league's owner, which takes one more call for the chosen league.
+            let isCommissioner = !!league.isCommissioner;
+            if (league.platform === 'sleeper') {
+                isCommissioner = await readSleeperCommissioner(league);
+            }
+
             const { error: insertErr } = await supabase.from('user_leagues').insert({
                 user_id: userId,
                 league_id: dbLeagueId,
                 platform: league.platform,
                 team_name: league.managerName || sleeperUsername.trim() || league.name, // Safely inputs actual username
-                // Recorded at connect time so commissioner tools are available
-                // straight away. Yahoo states this on the account's own team;
-                // it was never being captured, so no Yahoo connection has ever
-                // had it set.
-                is_commissioner: !!league.isCommissioner
+                is_commissioner: isCommissioner
             });
 
             if (insertErr) throw insertErr;
