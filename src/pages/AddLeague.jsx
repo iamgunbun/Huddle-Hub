@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
 import { fetchAndNormalizeESPNLeague } from '../utils/espnService';
 import { parseYahooOwnTeams } from '../utils/yahooHistory';
-import { findSleeperLeagueUser, isSleeperCommissioner } from '../utils/leagueMembership';
+import { findSleeperLeagueUser, isSleeperCommissioner, teamClaimKey } from '../utils/leagueMembership';
 import styles from './AddLeague.module.css';
 
 export default function AddLeague() {
@@ -82,20 +82,22 @@ export default function AddLeague() {
     };
 
     // Sleeper has no "my team" endpoint -- every member comes back the same --
-    // so the account is found by its own user id, which is exact. A failure here
-    // must not block connecting the league; it only means the commissioner tools
-    // stay hidden until the next load reconciles them.
-    const readSleeperCommissioner = async (league) => {
-        try {
-            const res = await fetch(`https://api.sleeper.app/v1/league/${league.id}/users`);
-            if (!res.ok) return false;
-            const users = await res.json();
-            const me = findSleeperLeagueUser(users, { userId: league.sleeperUserId, teamName: league.managerName });
-            return isSleeperCommissioner(me);
-        } catch (err) {
-            console.warn("Couldn't read Sleeper commissioner status:", err);
-            return false;
+    // so the account is found by its own user id, which is exact.
+    //
+    // This is also the membership check. The invite flow always verified that
+    // the named account is genuinely in the league; connecting directly did not,
+    // so anyone could type a league they had no part in and attach themselves
+    // to it. Both paths now ask Sleeper the same question.
+    const findMeInSleeperLeague = async (league) => {
+        const res = await fetch(`https://api.sleeper.app/v1/league/${league.id}/users`);
+        if (!res.ok) throw new Error("Could not verify league members with Sleeper. Try again in a moment.");
+
+        const users = await res.json();
+        const me = findSleeperLeagueUser(users, { userId: league.sleeperUserId, teamName: league.managerName });
+        if (!me) {
+            throw new Error(`"${league.managerName}" is not a member of ${league.name}.`);
         }
+        return me;
     };
 
     const searchESPN = async (e) => {
@@ -234,6 +236,44 @@ export default function AddLeague() {
         }
     };
 
+    /**
+     * Refuses a team another account already holds.
+     *
+     * Sleeper has no OAuth, so knowing someone's username is enough to list
+     * their leagues -- the account itself can't be proven. What can be
+     * guaranteed is that a team belongs to one app account: whoever connects it
+     * first holds it, and a second attempt is turned away rather than quietly
+     * creating two people who both think they manage the same roster.
+     *
+     * This check is for a clear message. It is NOT the guarantee -- anything the
+     * app checks can be skipped by calling the API directly, so the real
+     * enforcement is the unique index in supabase/schema-guards.sql.
+     */
+    const assertTeamUnclaimed = async ({ dbLeagueId, teamName, userId }) => {
+        const claim = teamClaimKey(teamName);
+        if (!claim) return;
+
+        const { data: claims, error } = await supabase
+            .from('user_leagues')
+            .select('user_id, team_name')
+            .eq('league_id', dbLeagueId);
+
+        // Can't read the other claims: let the database's own constraint decide
+        // rather than blocking a legitimate connection on a failed lookup.
+        if (error) {
+            console.warn("Couldn't check existing team claims:", error);
+            return;
+        }
+
+        const taken = (claims || []).find(c => c.user_id !== userId && teamClaimKey(c.team_name) === claim);
+        if (taken) {
+            throw new Error(
+                `"${teamName}" is already connected by another Huddle account. ` +
+                `If that's you, sign in with that account; if not, ask your commissioner to sort it out.`
+            );
+        }
+    };
+
     const connectLeague = async (league) => {
         setLoading(true);
         setErrorMsg(null);
@@ -290,21 +330,28 @@ export default function AddLeague() {
             }
 
             // Commissioner status, recorded at connect time so the tools are
-            // available straight away. This was never captured on EITHER
-            // platform, so it sat false for every connection regardless of the
-            // truth. Yahoo states it on the account's own team (read when the
-            // league list was fetched); Sleeper marks the commissioner as the
-            // league's owner, which takes one more call for the chosen league.
+            // available straight away. Yahoo states it on the account's own team
+            // (read when the league list was fetched); Sleeper marks the
+            // commissioner as the league's owner, which is on the same call that
+            // confirms membership.
             let isCommissioner = !!league.isCommissioner;
+            let teamName = league.managerName || sleeperUsername.trim() || league.name;
+
             if (league.platform === 'sleeper') {
-                isCommissioner = await readSleeperCommissioner(league);
+                const me = await findMeInSleeperLeague(league);
+                isCommissioner = isSleeperCommissioner(me);
+                // The team's own name, the way the invite flow records it, so a
+                // claim means the same thing however someone joined.
+                teamName = me.metadata?.team_name || me.display_name || teamName;
             }
+
+            await assertTeamUnclaimed({ dbLeagueId, teamName, userId });
 
             const { error: insertErr } = await supabase.from('user_leagues').insert({
                 user_id: userId,
                 league_id: dbLeagueId,
                 platform: league.platform,
-                team_name: league.managerName || sleeperUsername.trim() || league.name, // Safely inputs actual username
+                team_name: teamName,
                 is_commissioner: isCommissioner
             });
 
