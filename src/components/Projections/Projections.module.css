@@ -31,3 +31,18 @@
 .oddsRow { display: flex; gap: 5px; margin-bottom: 2px; }
 .oddsLabel { color: #94a3b8; }
 .oddsValue { color: #f8fafc; font-weight: bold; }
+/* Movement since the last completed week. Kept narrow and fixed-width so the
+   rank column doesn't shift as arrows appear and disappear week to week. */
+.movement {
+    width: 30px;
+    flex-shrink: 0;
+    text-align: center;
+    font-size: 0.7em;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+}
+
+.movementUp { color: #00ceb8; }
+.movementDown { color: #ff2a6d; }
+.movementFlat { color: #475569; }
+.movementNew { color: #64748b; }
