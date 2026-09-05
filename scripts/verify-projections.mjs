@@ -14,6 +14,7 @@ import {
     simulateSeason,
     toWholePercentages,
     pairMatchupRows,
+    PRESEASON_STRENGTH_UNCERTAINTY,
 } from '../src/utils/seasonSimulation.js';
 import { movementFromSnapshots, withSnapshot } from '../src/utils/rankMovement.js';
 
@@ -93,12 +94,12 @@ ok('playoff odds total the number of spots', Math.abs(totalPlayoff - 2) < 0.001,
 const totalTitles = result.reduce((s, t) => s + t.titleOdds, 0);
 ok('championship odds total one', Math.abs(totalTitles - 1) < 0.001, `got ${totalTitles.toFixed(3)}`);
 
-const byId = Object.fromEntries(result.map(t => [t.rosterId, t]));
+const byId = Object.fromEntries(result.map(t => [String(t.rosterId), t]));
 ok('the strongest team is likeliest to make the playoffs',
-    byId[1].playoffOdds > byId[4].playoffOdds, `${byId[1].playoffOdds.toFixed(3)} vs ${byId[4].playoffOdds.toFixed(3)}`);
-ok('and likeliest to win it', byId[1].titleOdds > byId[4].titleOdds);
+    byId['1'].playoffOdds > byId['4'].playoffOdds, `${byId['1'].playoffOdds.toFixed(3)} vs ${byId['4'].playoffOdds.toFixed(3)}`);
+ok('and likeliest to win it', byId['1'].titleOdds > byId['4'].titleOdds);
 ok('odds decrease down the strength order',
-    byId[1].playoffOdds >= byId[2].playoffOdds && byId[2].playoffOdds >= byId[3].playoffOdds);
+    byId['1'].playoffOdds >= byId['2'].playoffOdds && byId['2'].playoffOdds >= byId['3'].playoffOdds);
 ok('nobody is impossible or certain in an even league',
     result.every(t => t.playoffOdds > 0 && t.playoffOdds < 1));
 ok('projected wins are within the games available',
@@ -108,8 +109,8 @@ ok('projected wins are within the games available',
 const withRecord = buildTeams([110, 110, 110, 110]);
 withRecord[3] = { ...withRecord[3], wins: 6, pointsFor: 6 * 130 };
 const recordResult = simulateSeason({ teams: withRecord, schedule, playoffSpots: 2, iterations: 1200, rng: makeRng(seedFrom('sim', 2)) });
-const leader = recordResult.find(t => t.rosterId === 4);
-const evenTeam = recordResult.find(t => t.rosterId === 1);
+const leader = recordResult.find(t => String(t.rosterId) === '4');
+const evenTeam = recordResult.find(t => String(t.rosterId) === '1');
 ok('a banked 6-0 start beats an identical roster at 0-0',
     leader.playoffOdds > evenTeam.playoffOdds, `${leader.playoffOdds.toFixed(3)} vs ${evenTeam.playoffOdds.toFixed(3)}`);
 
@@ -122,13 +123,35 @@ const finished = simulateSeason({
     ],
     schedule: [], playoffSpots: 2, iterations: 200, rng: makeRng(seedFrom('done')),
 });
-eq('a settled season is certain at the top', finished.find(t => t.rosterId === 1).playoffOdds, 1);
-eq('and certain at the bottom', finished.find(t => t.rosterId === 3).playoffOdds, 0);
+eq('a settled season is certain at the top', finished.find(t => String(t.rosterId) === '1').playoffOdds, 1);
+eq('and certain at the bottom', finished.find(t => String(t.rosterId) === '3').playoffOdds, 0);
 
 // Determinism: the same seed must reproduce the same odds exactly.
 const runA = simulateSeason({ teams, schedule, playoffSpots: 2, iterations: 300, rng: makeRng(seedFrom('stable')) });
 const runB = simulateSeason({ teams, schedule, playoffSpots: 2, iterations: 300, rng: makeRng(seedFrom('stable')) });
 eq('the same seed reproduces the same odds', JSON.stringify(runA), JSON.stringify(runB));
+
+// Roster ids arrive as numbers from a matchup row and as strings from a
+// standings map. Mixing them made every game get skipped, so the standings
+// never moved and the odds came out as a row of 100%s and 0%s at 0-0.
+const stringTeams = [1, 2, 3, 4].map(i => ({
+    rosterId: String(i), wins: 0, losses: 0, ties: 0, pointsFor: 0, mean: 120, stdDev: 30,
+}));
+const numericSchedule = [{ week: 1, home: 1, away: 2 }, { week: 1, home: 3, away: 4 }];
+const stringSchedule = [{ week: 1, home: '1', away: '2' }, { week: 1, home: '3', away: '4' }];
+const numericRun = simulateSeason({ teams: stringTeams, schedule: numericSchedule, playoffSpots: 2, iterations: 400, rng: makeRng(seedFrom('ids')) });
+const stringRun = simulateSeason({ teams: stringTeams, schedule: stringSchedule, playoffSpots: 2, iterations: 400, rng: makeRng(seedFrom('ids')) });
+eq('numeric and string roster ids give the same answer',
+    JSON.stringify(numericRun), JSON.stringify(stringRun));
+ok('an even league at 0-0 is never a certainty',
+    numericRun.every(t => t.playoffOdds > 0 && t.playoffOdds < 1),
+    numericRun.map(t => (t.playoffOdds * 100).toFixed(0) + '%').join(' '));
+// Teams keyed numerically must work too, in case a caller passes them straight
+// through from a platform payload.
+const numericTeams = stringTeams.map(t => ({ ...t, rosterId: Number(t.rosterId) }));
+ok('numerically-keyed teams simulate too',
+    simulateSeason({ teams: numericTeams, schedule: numericSchedule, playoffSpots: 2, iterations: 200, rng: makeRng(seedFrom('ids2')) })
+        .every(t => t.playoffOdds > 0 && t.playoffOdds < 1));
 
 eq('no teams -> no odds', simulateSeason({ teams: [], schedule }).length, 0);
 // More playoff spots than teams would otherwise ask for seeds that don't exist.
@@ -137,6 +160,47 @@ const tiny = simulateSeason({
     playoffSpots: 6, iterations: 100, rng: makeRng(seedFrom('tiny')),
 });
 eq('more spots than teams -> everyone is in', tiny.every(t => t.playoffOdds === 1), true);
+
+// --- Preseason confidence ---------------------------------------------------
+// Week-to-week variance isn't the only unknown in September: the roster estimate
+// itself is a guess, and treating it as exact is what hands out near-certain
+// odds before a game has been played. A team's true level is drawn once per
+// simulated season, with the spread shrinking as real results accumulate.
+ok('there is preseason uncertainty to shrink', PRESEASON_STRENGTH_UNCERTAINTY > 0);
+
+const gap = [130, 125, 120, 115, 110, 105, 100, 95];
+// Records that match the strength order, so the leader has actually banked the
+// advantage its roster implies -- giving everyone the same record instead would
+// test nothing about confidence, since nobody would be ahead.
+const ladder = (weeksPlayed) => gap.map((mean, i) => {
+    const wins = weeksPlayed ? Math.max(0, weeksPlayed - i) : 0;
+    return {
+        rosterId: String(i + 1),
+        wins, losses: weeksPlayed - wins, ties: 0,
+        pointsFor: mean * weeksPlayed, mean, stdDev: mean * 0.26, weeksPlayed,
+    };
+});
+const runFrom = (weeksPlayed, weeksLeft, label) => {
+    const games = [];
+    for (let w = 0; w < weeksLeft; w++) {
+        for (let i = 0; i < 4; i++) games.push({ week: weeksPlayed + w + 1, home: i + 1, away: 8 - i });
+    }
+    return simulateSeason({
+        teams: ladder(weeksPlayed), schedule: games, playoffSpots: 4,
+        iterations: 1500, rng: makeRng(seedFrom(label)),
+    });
+};
+
+const preseason = runFrom(0, 13, 'pre');
+const lateSeason = runFrom(10, 3, 'late');
+const topPre = preseason.find(t => t.rosterId === '1').playoffOdds;
+const topLate = lateSeason.find(t => t.rosterId === '1').playoffOdds;
+// This is the reported complaint: nothing should read as settled in September.
+ok('the best roster is not a lock before a game is played', topPre < 0.97, `got ${(topPre * 100).toFixed(1)}%`);
+ok('nobody is written off before a game is played',
+    preseason.every(t => t.playoffOdds > 0.02), preseason.map(t => (t.playoffOdds * 100).toFixed(0) + '%').join(' '));
+// And the model should get MORE confident as evidence arrives, not less.
+ok('confidence grows once results are in', topLate > topPre, `${(topPre * 100).toFixed(1)}% -> ${(topLate * 100).toFixed(1)}%`);
 
 // --- Whole percentages ------------------------------------------------------
 // Rounding each figure alone is what makes a column of odds total 97 or 104.
@@ -159,11 +223,12 @@ const weekRows = [
 const paired = pairMatchupRows(weekRows, 5);
 eq('a week of rows becomes games', paired.length, 2);
 eq('the week is carried onto each game', paired[0].week, 5);
-eq('both sides of a matchup are kept', JSON.stringify([paired[0].home, paired[0].away]), JSON.stringify([1, 4]));
+eq('both sides of a matchup are kept', JSON.stringify([paired[0].home, paired[0].away]), JSON.stringify(['1', '4']));
 // A lone entry means a bye or a malformed week -- inventing an opponent would
 // put a fictional game into every simulated season.
 eq('an unpaired team is dropped',
     pairMatchupRows([{ roster_id: 1, matchup_id: 1 }], 5).length, 0);
+eq('paired ids are normalised to strings', typeof paired[0].home, 'string');
 eq('rows without a matchup id are dropped',
     pairMatchupRows([{ roster_id: 1 }, { roster_id: 2 }], 5).length, 0);
 eq('nothing in -> nothing out', pairMatchupRows(null, 1).length, 0);

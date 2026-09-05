@@ -678,6 +678,10 @@ eq('a pure add has no drops', txns[1].drops, null);
 // Yahoo counts seconds; the views format milliseconds.
 eq('timestamps are converted to milliseconds', txns[0].status_updated, 1757462400000);
 eq('junk yields nothing', parseYahooTransactions({}).length, 0);
+// The player keys ride along so the names can be looked up -- without them a
+// transaction can only render a bare id.
+eq('player keys are kept for lookup', txns[0].player_keys.length, 2);
+eq('and are the full yahoo keys', txns[0].player_keys[0], '470.p.31883');
 
 // Yahoo never says which WEEK a transaction belongs to, only when it happened.
 const seasonStart = Date.parse('2025-09-04T00:00:00Z');

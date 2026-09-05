@@ -2,10 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { useLeague } from '../../context/LeagueContext';
 import { loadPlayers, getLeagueTeamManagers } from '../../utils/helper';
 import { fetchYahooTransactions } from '../../utils/yahooService';
+import { withResolvedPlayerMeta } from '../../utils/playerPool';
 import { useNavigate } from 'react-router-dom';
 import styles from './Transactions.module.css';
 
 const isYahooLeagueId = (id) => !!id && (String(id).includes('.') || !/^\d+$/.test(String(id)));
+
+// Sleeper's image CDN is keyed by SLEEPER ids. In a Yahoo league the
+// transaction id is a Yahoo one, so the crosswalked sleeper_id is what makes
+// the headshot resolve; a defense is named by its team instead.
+const playerImage = (pId, player) => {
+    if (player?.pos === 'DEF') {
+        const team = String(player.t || player.sleeper_id || pId || '').toLowerCase();
+        return `https://sleepercdn.com/images/team_logos/nfl/${team}.png`;
+    }
+    if (!player?.sleeper_id && player?.headshot) return player.headshot;
+    return `https://sleepercdn.com/content/nfl/players/thumb/${player?.sleeper_id || pId}.jpg`;
+};
 
 export default function Transactions({ preview = false }) {
     const { activeLeague } = useLeague();
@@ -28,7 +41,7 @@ export default function Transactions({ preview = false }) {
                     loadPlayers(activeLeague.sleeper_league_id),
                     getLeagueTeamManagers(activeLeague.sleeper_league_id)
                 ]);
-                setPlayersMap(pData?.players || {});
+                let players = pData?.players || {};
                 setTeamManagers(tmData);
 
                 const leagueId = activeLeague.sleeper_league_id;
@@ -39,7 +52,12 @@ export default function Transactions({ preview = false }) {
                     // no per-week endpoint to walk. This used to call Sleeper
                     // with a Yahoo league key, which 404s -- so Yahoo leagues
                     // showed no transactions at all.
-                    allTxns = await fetchYahooTransactions(leagueId);
+                    const { transactions, playerMeta } = await fetchYahooTransactions(leagueId);
+                    allTxns = transactions;
+                    // Transactions name players by Yahoo id, and the shared
+                    // dictionary only knows the ones Sleeper's crosswalk covers
+                    // -- the rest read as a bare id without this.
+                    players = withResolvedPlayerMeta(players, pData?.playersByName || {}, playerMeta);
                 } else {
                     for (let i = 1; i <= 18; i++) {
                         const res = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/transactions/${i}`);
@@ -54,6 +72,7 @@ export default function Transactions({ preview = false }) {
                     .filter(t => t.status === 'complete')
                     .sort((a, b) => b.status_updated - a.status_updated);
 
+                setPlayersMap(players);
                 setTransactions(validTxns);
             } catch (err) {
                 console.error("Failed to load transactions:", err);
@@ -115,8 +134,7 @@ export default function Transactions({ preview = false }) {
                         <div className={styles.assetContainer}>
                             {moves.adds.map(pId => {
                                 const player = playersMap[pId];
-                                const isDef = player?.pos === 'DEF';
-                                const avatarUrl = isDef ? `https://sleepercdn.com/images/team_logos/nfl/${pId.toLowerCase()}.png` : `https://sleepercdn.com/content/nfl/players/thumb/${pId}.jpg`;
+                                const avatarUrl = playerImage(pId, player);
                                 const fallback = 'https://sleepercdn.com/images/v2/icons/player_default.webp';
                                 
                                 return (
@@ -136,8 +154,7 @@ export default function Transactions({ preview = false }) {
 
                             {moves.drops.map(pId => {
                                 const player = playersMap[pId];
-                                const isDef = player?.pos === 'DEF';
-                                const avatarUrl = isDef ? `https://sleepercdn.com/images/team_logos/nfl/${pId.toLowerCase()}.png` : `https://sleepercdn.com/content/nfl/players/thumb/${pId}.jpg`;
+                                const avatarUrl = playerImage(pId, player);
                                 const fallback = 'https://sleepercdn.com/images/v2/icons/player_default.webp';
                                 
                                 return (
@@ -186,8 +203,7 @@ export default function Transactions({ preview = false }) {
                                     
                                     {addedPlayers.map(pId => {
                                         const player = playersMap[pId];
-                                        const isDef = player?.pos === 'DEF';
-                                        const avatarUrl = isDef ? `https://sleepercdn.com/images/team_logos/nfl/${pId.toLowerCase()}.png` : `https://sleepercdn.com/content/nfl/players/thumb/${pId}.jpg`;
+                                        const avatarUrl = playerImage(pId, player);
                                         const fallback = 'https://sleepercdn.com/images/v2/icons/player_default.webp';
                                         
                                         return (

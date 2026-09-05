@@ -16,6 +16,13 @@
 // Dependency-free on purpose: the maths is the part worth testing, and it can't
 // be checked against a live league.
 
+// Roster ids arrive as numbers from one place and strings from another -- a
+// standings map is keyed by object key (string), while a matchup row carries
+// roster_id as a number. Mixing the two silently: `map.get(6)` misses `'6'`, so
+// every game gets skipped, the standings never move, and the odds come out as a
+// row of 100%s and 0%s. Everything here goes through this.
+const key = (id) => (id === null || id === undefined ? null : String(id));
+
 // --- Randomness -------------------------------------------------------------
 // Seeded so a league's odds don't jitter between renders, and so tests can
 // assert on exact numbers. mulberry32: small, fast, good enough for this.
@@ -66,9 +73,9 @@ export const pairMatchupRows = (rows, week) => {
         const rosterId = row?.roster_id;
         const matchupId = row?.matchup_id;
         if (rosterId === undefined || rosterId === null || matchupId === undefined || matchupId === null) return;
-        const key = String(matchupId);
-        if (!byMatchup.has(key)) byMatchup.set(key, []);
-        byMatchup.get(key).push(rosterId);
+        const matchupKey = String(matchupId);
+        if (!byMatchup.has(matchupKey)) byMatchup.set(matchupKey, []);
+        byMatchup.get(matchupKey).push(key(rosterId));
     });
 
     const games = [];
@@ -107,6 +114,22 @@ export const blendedScoringMean = ({ pointsFor = 0, weeksPlayed = 0, rosterStren
 // Week-to-week spread. Fantasy weekly scores sit around a quarter of the mean
 // in standard deviation; used only when a league's own history isn't available.
 export const DEFAULT_SCORE_VOLATILITY = 0.26;
+
+// How wrong a preseason roster estimate can be about a team's TRUE strength.
+//
+// Week-to-week variance alone isn't the only unknown in September: the estimate
+// itself is a guess. Injuries, breakouts and busts move a roster's real level,
+// and treating the estimate as exact is what makes a model hand out 99% playoff
+// odds before a game has been played. Drawing each team's true strength once per
+// simulated season -- rather than only its weekly scores -- puts that
+// uncertainty where it belongs. It shrinks as real results accumulate, because
+// by then the record is evidence about the level rather than noise around it.
+export const PRESEASON_STRENGTH_UNCERTAINTY = 0.10;
+
+const strengthUncertaintyFor = (mean, weeksPlayed, priorGames = 4) => {
+    const played = Math.max(0, weeksPlayed || 0);
+    return Math.abs(mean) * PRESEASON_STRENGTH_UNCERTAINTY * Math.sqrt(priorGames / (priorGames + played));
+};
 
 // --- Standings --------------------------------------------------------------
 
@@ -175,18 +198,36 @@ const playGame = (aId, bId, rng, teamsById) => {
  * @param {function} rng
  */
 export const simulateSeason = ({ teams, schedule = [], playoffSpots = 6, iterations = 2000, rng = Math.random }) => {
-    const roster = (teams || []).filter(t => t && t.rosterId !== undefined && t.rosterId !== null);
+    const roster = (teams || [])
+        .filter(t => t && t.rosterId !== undefined && t.rosterId !== null)
+        .map(t => ({ ...t, rosterId: key(t.rosterId) }));
     if (!roster.length) return [];
 
     const spots = Math.max(1, Math.min(playoffSpots, roster.length));
-    const teamsById = new Map(roster.map(t => [t.rosterId, {
-        mean: Number(t.mean) || 0,
-        stdDev: Math.max(1, Number(t.stdDev) || (Number(t.mean) || 0) * DEFAULT_SCORE_VOLATILITY),
-    }]));
+    const baseline = new Map(roster.map(t => {
+        const mean = Number(t.mean) || 0;
+        return [t.rosterId, {
+            mean,
+            stdDev: Math.max(1, Number(t.stdDev) || mean * DEFAULT_SCORE_VOLATILITY),
+            strengthSd: strengthUncertaintyFor(mean, t.weeksPlayed),
+        }];
+    }));
 
     const tally = new Map(roster.map(t => [t.rosterId, { playoffs: 0, titles: 0, wins: 0, pointsFor: 0 }]));
 
     for (let run = 0; run < iterations; run++) {
+        // Each simulated season gets its own view of how good every team really
+        // is, drawn once and held for the whole run. Redrawing it per game would
+        // just be more weekly noise; the point is that a team can turn out to be
+        // better or worse than its September estimate for the entire year.
+        const teamsById = new Map();
+        baseline.forEach((b, id) => {
+            teamsById.set(id, {
+                mean: b.strengthSd > 0 ? Math.max(0, drawScore(rng, b.mean, b.strengthSd)) : b.mean,
+                stdDev: b.stdDev,
+            });
+        });
+
         const season = new Map(roster.map(t => [t.rosterId, {
             rosterId: t.rosterId,
             wins: Number(t.wins) || 0,
@@ -196,12 +237,14 @@ export const simulateSeason = ({ teams, schedule = [], playoffSpots = 6, iterati
         }]));
 
         for (const game of schedule) {
-            const home = season.get(game.home);
-            const away = season.get(game.away);
+            const homeId = key(game.home);
+            const awayId = key(game.away);
+            const home = season.get(homeId);
+            const away = season.get(awayId);
             if (!home || !away) continue;
 
-            const homeScore = drawScore(rng, teamsById.get(game.home).mean, teamsById.get(game.home).stdDev);
-            const awayScore = drawScore(rng, teamsById.get(game.away).mean, teamsById.get(game.away).stdDev);
+            const homeScore = drawScore(rng, teamsById.get(homeId).mean, teamsById.get(homeId).stdDev);
+            const awayScore = drawScore(rng, teamsById.get(awayId).mean, teamsById.get(awayId).stdDev);
 
             home.pointsFor += homeScore;
             away.pointsFor += awayScore;

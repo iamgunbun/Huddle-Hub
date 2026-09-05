@@ -809,7 +809,7 @@ export const fetchYahooPlayersByKeys = async (leagueId, playerKeys, passedUserId
 export const fetchYahooTransactions = async (leagueId, passedUserId = null) => {
     const cleanKey = cleanYahooKey(leagueId);
     const userId = await getUserId(passedUserId);
-    if (!cleanKey || !userId) return [];
+    if (!cleanKey || !userId) return { transactions: [], playerMeta: {} };
 
     try {
         const data = await yahooProxyRequest(
@@ -818,10 +818,10 @@ export const fetchYahooTransactions = async (leagueId, passedUserId = null) => {
             cleanKey,
             'league transactions'
         );
-        if (!data) return [];
+        if (!data) return { transactions: [], playerMeta: {} };
 
         const transactions = parseYahooTransactions(data);
-        if (!transactions.length) return [];
+        if (!transactions.length) return { transactions: [], playerMeta: {} };
 
         // Placing each in a week needs the league's own start date and first
         // week, so read them from the league rather than assuming a calendar.
@@ -829,13 +829,25 @@ export const fetchYahooTransactions = async (leagueId, passedUserId = null) => {
         const seasonStart = league?.season_start_ms ?? null;
         const startWeek = parseInt(league?.settings?.start_week) || 1;
 
-        return transactions.map(t => ({
-            ...t,
-            leg: weekFromTimestamp(t.status_updated, seasonStart, startWeek),
-        }));
+        // Yahoo's own details for every player involved. Without these the
+        // views can only show a bare id, since the shared dictionary is keyed
+        // by a crosswalk that doesn't cover every Yahoo player.
+        const playerMeta = await fetchYahooPlayersByKeys(
+            cleanKey,
+            transactions.flatMap(t => t.player_keys || []),
+            userId
+        );
+
+        return {
+            transactions: transactions.map(t => ({
+                ...t,
+                leg: weekFromTimestamp(t.status_updated, seasonStart, startWeek),
+            })),
+            playerMeta,
+        };
     } catch (err) {
         console.error("Yahoo Transactions Adapter Error:", err);
-        return [];
+        return { transactions: [], playerMeta: {} };
     }
 };
 

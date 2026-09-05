@@ -155,3 +155,29 @@ export const isPlayerOwned = (player, ownedIndex) => {
     const nameKey = playerNameKey(player.fn ?? player.first_name, player.ln ?? player.last_name);
     return nameKey ? ownedIndex.names.has(nameKey) : false;
 };
+
+/**
+ * Folds a platform's own player details into the shared dictionary.
+ *
+ * In a Yahoo league every id in a roster, draft or transaction is a Yahoo id,
+ * while the shared dictionary is keyed by Sleeper's community-maintained
+ * crosswalk. Anything the crosswalk misses has no name, position or team at
+ * all -- which is how a transaction ends up reading "Player #40877".
+ *
+ * The platform's own details are authoritative for who the player IS, so they
+ * win; the dictionary is still consulted by name to recover a sleeper_id, which
+ * is the only thing that makes the headshot resolve.
+ */
+export const withResolvedPlayerMeta = (playersInfo, playersByName, platformMeta) => {
+    const merged = { ...(playersInfo || {}) };
+
+    Object.entries(platformMeta || {}).forEach(([id, meta]) => {
+        if (!meta) return;
+        const matched = resolvePlayerFromMeta(meta, playersInfo, playersByName);
+        merged[id] = matched
+            ? { ...matched, ...meta, sleeper_id: matched.sleeper_id }
+            : { ...meta, sleeper_id: null };
+    });
+
+    return merged;
+};
