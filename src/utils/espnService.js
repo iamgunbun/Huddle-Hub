@@ -14,6 +14,8 @@ import {
     parseEspnAthleteResponse,
     isEspnLeagueManager,
     espnSwidMatches,
+    espnLeagueManagerIds,
+    describeEspnMemberFlags,
     toProxiedEspnImageUrl,
     espnDefenseMetaFromId,
 } from './espnParsers';
@@ -255,22 +257,24 @@ export const fetchESPNCommissionerStatus = async (leagueId, passedUserId = null)
         if (!data || !resolvedSwid) return false;
 
         const members = Array.isArray(data.members) ? data.members : [];
-        const isManager = isEspnLeagueManager(members, resolvedSwid);
+        const isManager = isEspnLeagueManager(members, resolvedSwid, data);
 
         // ESPN's member shape isn't something this app can verify against a
-        // live league from its own network, so say exactly what came back --
-        // enough to tell "no members in the response" apart from "the SWID
-        // didn't match any member" apart from "matched, but not flagged".
+        // live league from its own network, so when no manager flag is found,
+        // report the shape itself: the matched member's field names and every
+        // boolean it carries. That names the field ESPN actually uses instead
+        // of leaving it to be guessed at. Values only for booleans -- no
+        // names, emails or ids are logged.
         if (!isManager) {
+            const me = members.find(m => espnSwidMatches(m?.id, resolvedSwid));
             console.info('[ESPN] commissioner check', {
                 league: leagueId,
                 membersReturned: members.length,
-                swidMatchedAMember: members.some(m => espnSwidMatches(m?.id, resolvedSwid)),
-                managerFlagsSeen: members.map(m => ({
-                    matches: espnSwidMatches(m?.id, resolvedSwid),
-                    isLeagueManager: m?.isLeagueManager ?? null,
-                    isLeagueCreator: m?.isLeagueCreator ?? null,
-                })),
+                swidMatchedAMember: !!me,
+                matchedMemberShape: describeEspnMemberFlags(me),
+                leagueLevelManagerListFound: espnLeagueManagerIds(data).length > 0,
+                leagueKeys: Object.keys(data || {}),
+                settingsKeys: Object.keys(data?.settings || {}),
             });
         }
 

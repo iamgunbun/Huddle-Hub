@@ -373,17 +373,56 @@ export const espnSwidMatches = (a, b) => {
     return !!left && left === normalizeSwid(b);
 };
 
-export const isEspnLeagueManager = (members, swid) => {
-    if (!Array.isArray(members) || !normalizeSwid(swid)) return false;
-    return members.some(m => (
-        espnSwidMatches(m?.id, swid)
-        // ESPN calls the commissioner a "League Manager" in its own UI, and
-        // flags them on the member record. `isLeagueCreator` is accepted
-        // alongside it because the account that created the league is a
-        // manager of it by definition, and is the more likely of the two to
-        // be present on an older league's member record.
-        && (!!m?.isLeagueManager || !!m?.isLeagueCreator)
-    ));
+// ESPN calls the commissioner a "League Manager", but the exact field it
+// flags them with isn't documented anywhere and a live league's member record
+// can't be inspected from this app's own network. Rather than betting on one
+// spelling (`isLeagueManager` and `isLeagueCreator` were both wrong for at
+// least one real league), any boolean field the member carries whose NAME is
+// about running or creating the league counts. Only `true` counts, and only
+// on a key that matches -- so this can't be tripped by an unrelated flag.
+const MANAGER_FLAG_KEY = /manager|commissioner|creator|admin|owner/i;
+
+export const memberHasManagerFlag = (member) => {
+    if (!member || typeof member !== 'object') return false;
+    return Object.entries(member).some(([key, value]) => value === true && MANAGER_FLAG_KEY.test(key));
+};
+
+// Some responses name the league's managers in a list of their own instead of
+// flagging each member, either as bare SWIDs or as objects carrying one.
+export const espnLeagueManagerIds = (leagueData) => {
+    const lists = [
+        leagueData?.leagueManagers,
+        leagueData?.managers,
+        leagueData?.settings?.leagueManagers,
+        leagueData?.settings?.managers,
+    ];
+    const found = lists.find(Array.isArray);
+    if (!found) return [];
+    return found.map(entry => (typeof entry === 'string' ? entry : entry?.id)).filter(Boolean);
+};
+
+export const isEspnLeagueManager = (members, swid, leagueData = null) => {
+    if (!normalizeSwid(swid)) return false;
+
+    const list = Array.isArray(members) ? members : [];
+    if (list.some(m => espnSwidMatches(m?.id, swid) && memberHasManagerFlag(m))) return true;
+
+    return espnLeagueManagerIds(leagueData).some(id => espnSwidMatches(id, swid));
+};
+
+/**
+ * Every boolean field a member carries, plus its full key list -- what the
+ * commissioner check logs when it can't find a manager flag, so the field
+ * ESPN actually uses can be read off a real league instead of guessed at.
+ * Deliberately values-only for booleans: no names, emails or ids are logged.
+ */
+export const describeEspnMemberFlags = (member) => {
+    if (!member || typeof member !== 'object') return null;
+    const booleans = {};
+    Object.entries(member).forEach(([key, value]) => {
+        if (typeof value === 'boolean') booleans[key] = value;
+    });
+    return { keys: Object.keys(member), booleans };
 };
 
 // A team that hasn't uploaded a custom logo doesn't always get a usable
