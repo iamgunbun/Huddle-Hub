@@ -113,7 +113,7 @@ export default function MatchupsAndBrackets({ matchupsData, leagueTeamManagers, 
                                                         <div className={styles.matchLabel}>First Round Bye</div>
                                                         <div className={`${styles.teamRow} ${styles.byeRow}`}>
                                                             <div className={styles.teamInfo}>
-                                                                {meta ? <img src={resolveImageSrc(meta.avatar, '/brand.png')} className={styles.avatar} alt="bye" onError={onImageError(meta.avatar, '/brand.png')} /> : <div className={styles.avatarPlaceholder} />}
+                                                                {meta ? <img src={resolveImageSrc(meta.avatar, '/brand.png')} className={styles.avatar} alt="bye" referrerPolicy="no-referrer" onError={onImageError(meta.avatar, '/brand.png')} /> : <div className={styles.avatarPlaceholder} />}
                                                                 <span className={styles.teamName}>{meta ? meta.name : (item.team.roster_id ? "Unknown Team" : "TBD")}</span>
                                                             </div>
                                                             <span className={styles.score} style={{color: '#64748b', fontWeight: '800'}}>BYE</span>
@@ -141,7 +141,7 @@ export default function MatchupsAndBrackets({ matchupsData, leagueTeamManagers, 
                                                     
                                                     <div className={`${styles.teamRow} ${t1.w ? styles.winnerRow : ''}`}>
                                                         <div className={styles.teamInfo}>
-                                                            {meta1 ? <img src={resolveImageSrc(meta1.avatar, '/brand.png')} className={styles.avatar} alt="t1" onError={onImageError(meta1.avatar, '/brand.png')} /> : <div className={styles.avatarPlaceholder} />}
+                                                            {meta1 ? <img src={resolveImageSrc(meta1.avatar, '/brand.png')} className={styles.avatar} alt="t1" referrerPolicy="no-referrer" onError={onImageError(meta1.avatar, '/brand.png')} /> : <div className={styles.avatarPlaceholder} />}
                                                             <span className={styles.teamName}>{meta1 ? meta1.name : "TBD"}</span>
                                                         </div>
                                                         <span className={styles.score}>{t1.roster_id ? getPlayoffScore(t1.points) : "-"}</span>
@@ -149,7 +149,7 @@ export default function MatchupsAndBrackets({ matchupsData, leagueTeamManagers, 
 
                                                     <div className={`${styles.teamRow} ${t2.w ? styles.winnerRow : ''}`}>
                                                         <div className={styles.teamInfo}>
-                                                            {meta2 ? <img src={resolveImageSrc(meta2.avatar, '/brand.png')} className={styles.avatar} alt="t2" onError={onImageError(meta2.avatar, '/brand.png')} /> : <div className={styles.avatarPlaceholder} />}
+                                                            {meta2 ? <img src={resolveImageSrc(meta2.avatar, '/brand.png')} className={styles.avatar} alt="t2" referrerPolicy="no-referrer" onError={onImageError(meta2.avatar, '/brand.png')} /> : <div className={styles.avatarPlaceholder} />}
                                                             <span className={styles.teamName}>{meta2 ? meta2.name : "TBD"}</span>
                                                         </div>
                                                         <span className={styles.score}>{t2.roster_id ? getPlayoffScore(t2.points) : "-"}</span>
@@ -213,14 +213,14 @@ export default function MatchupsAndBrackets({ matchupsData, leagueTeamManagers, 
                                                     <div className={styles.matchLabel}>{clabel}</div>
                                                     <div className={styles.teamRow}>
                                                         <div className={styles.teamInfo}>
-                                                            {cmeta1 ? <img src={resolveImageSrc(cmeta1.avatar, '/brand.png')} className={styles.avatar} alt="ct1" onError={onImageError(cmeta1.avatar, '/brand.png')} /> : <div className={styles.avatarPlaceholder} />}
+                                                            {cmeta1 ? <img src={resolveImageSrc(cmeta1.avatar, '/brand.png')} className={styles.avatar} alt="ct1" referrerPolicy="no-referrer" onError={onImageError(cmeta1.avatar, '/brand.png')} /> : <div className={styles.avatarPlaceholder} />}
                                                             <span className={styles.teamName}>{cmeta1 ? cmeta1.name : "TBD"}</span>
                                                         </div>
                                                         <span className={styles.score}>{ct1.roster_id ? getPlayoffScore(ct1.points) : "-"}</span>
                                                     </div>
                                                     <div className={styles.teamRow}>
                                                         <div className={styles.teamInfo}>
-                                                            {cmeta2 ? <img src={resolveImageSrc(cmeta2.avatar, '/brand.png')} className={styles.avatar} alt="ct2" onError={onImageError(cmeta2.avatar, '/brand.png')} /> : <div className={styles.avatarPlaceholder} />}
+                                                            {cmeta2 ? <img src={resolveImageSrc(cmeta2.avatar, '/brand.png')} className={styles.avatar} alt="ct2" referrerPolicy="no-referrer" onError={onImageError(cmeta2.avatar, '/brand.png')} /> : <div className={styles.avatarPlaceholder} />}
                                                             <span className={styles.teamName}>{cmeta2 ? cmeta2.name : "TBD"}</span>
                                                         </div>
                                                         <span className={styles.score}>{ct2.roster_id ? getPlayoffScore(ct2.points) : "-"}</span>

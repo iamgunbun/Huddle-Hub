@@ -36,9 +36,19 @@ const check = (name, actual, expected) => {
 // --- basic maps ---
 check('proTeamId 25 is SF', espnProTeamAbbr(25), 'SF');
 check('unknown proTeamId falls back to FA', espnProTeamAbbr(999), 'FA');
+check('defaultPositionId 0 is QB', espnPositionName(0), 'QB');
 check('defaultPositionId 2 is RB', espnPositionName(2), 'RB');
+check('defaultPositionId 4 is WR', espnPositionName(4), 'WR');
+check('defaultPositionId 6 is TE', espnPositionName(6), 'TE');
 check('defaultPositionId 16 is DEF', espnPositionName(16), 'DEF');
+check('defaultPositionId 17 is K', espnPositionName(17), 'K');
 check('unknown position falls back to BN', espnPositionName(999), 'BN');
+// These are the WRONG (pre-fix) numbers for QB/WR/TE/K -- confirming they no
+// longer resolve is what guards against reintroducing the small-sequential
+// 1-5 numbering this used to (incorrectly) use instead of ESPN's real one.
+check('the old, wrong QB id (1) no longer resolves to QB', espnPositionName(1), 'BN');
+check('the old, wrong WR id (3) no longer resolves to WR', espnPositionName(3), 'BN');
+check('the old, wrong TE id (5) no longer resolves to TE', espnPositionName(5), 'BN');
 check('bench slot (20) is not a starter', isEspnStarterSlot(20), false);
 check('IR slot (21) is not a starter', isEspnStarterSlot(21), false);
 check('IR slot is reserve', isEspnReserveSlot(21), true);
@@ -126,6 +136,29 @@ check('no week requested -> no points resolved', parsedBench.actualPoints, null)
 
 check('a missing player entry resolves to null', parseEspnRosterEntry({ playerId: 1, lineupSlotId: 20 }), null);
 
+// A defense pseudo-player: the DEF lineup slot (16) is trusted over
+// defaultPositionId, in case that field ever comes back unset or wrong for
+// a non-athlete roster entry like a team defense.
+const defEntry = {
+    playerId: 25,
+    lineupSlotId: 16,
+    playerPoolEntry: { player: { id: 25, firstName: '', lastName: '49ers D/ST', defaultPositionId: 16, proTeamId: 25, stats: [] } },
+};
+const parsedDef = parseEspnRosterEntry(defEntry);
+check('a DEF slot entry resolves pos to DEF', parsedDef.pos, 'DEF');
+check('a defense has no athlete headshot url', parsedDef.headshot, null);
+
+const defWithBadPositionId = {
+    playerId: 26,
+    lineupSlotId: 16,
+    playerPoolEntry: { player: { id: 26, firstName: '', lastName: 'Some Defense', defaultPositionId: 999, proTeamId: 1, stats: [] } },
+};
+check(
+    'the DEF slot resolves pos to DEF even when defaultPositionId is missing/wrong',
+    parseEspnRosterEntry(defWithBadPositionId).pos,
+    'DEF'
+);
+
 // --- parseEspnTeamRoster / parseEspnLeagueRosters ---
 const irEntry = { playerId: 6000, lineupSlotId: 21, playerPoolEntry: { player: { id: 6000, firstName: 'Hurt', lastName: 'Guy', defaultPositionId: 4, proTeamId: 0, stats: [] } } };
 const team = {
@@ -174,8 +207,8 @@ const shuffledTeam = {
     record: { overall: {} },
     roster: {
         entries: [
-            mkEntry(9001, 17, 5), // K
-            mkEntry(9002, 0, 1),  // QB
+            mkEntry(9001, 17, 17), // K
+            mkEntry(9002, 0, 0),  // QB
             mkEntry(9003, 16, 16), // DEF
             mkEntry(9004, 2, 2),  // RB
             mkEntry(9005, 23, 2), // FLEX

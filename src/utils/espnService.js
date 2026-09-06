@@ -21,7 +21,20 @@ import {
 // looked up from any of those call sites.
 const getUserId = async (explicitUserId) => {
     if (explicitUserId) return explicitUserId;
-    const { data: { session } } = await supabase.auth.getSession();
+    let { data: { session } } = await supabase.auth.getSession();
+
+    // On a fresh page load, this can fire before Supabase has finished
+    // hydrating the session from storage -- returning null here doesn't fail
+    // loudly, it makes every roster/team fetch resolve to "no data", which a
+    // roster-subtraction page (Available Players) reads as "nobody owns
+    // anything" rather than as an error. One short retry gives that hydration
+    // a chance to finish instead of the page quietly showing a rostered
+    // player as available for the rest of the session.
+    if (!session?.user?.id) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+        ({ data: { session } } = await supabase.auth.getSession());
+    }
+
     return session?.user?.id || null;
 };
 

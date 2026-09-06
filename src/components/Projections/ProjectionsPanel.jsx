@@ -345,7 +345,7 @@ export default function ProjectionsPanel() {
                             <span className={styles.movementFlat}>–</span>
                         )}
                     </div>
-                    <img src={resolveImageSrc(team.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} alt="Avatar" className={styles.avatar} onError={onImageError(team.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} />
+                    <img src={resolveImageSrc(team.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} alt="Avatar" className={styles.avatar} referrerPolicy="no-referrer" onError={onImageError(team.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} />
                     
                     <div className={styles.teamInfo} style={{ flex: 1, minWidth: 0, paddingRight: '10px' }}>
                         <span className={styles.teamName} style={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

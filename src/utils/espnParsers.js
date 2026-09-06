@@ -163,9 +163,16 @@ export const isEspnSeasonComplete = ({ seasonId, currentMatchupPeriod, matchupPe
     return (parseInt(currentMatchupPeriod) || 0) > total;
 };
 
-// A player's `defaultPositionId` -- offense/kicker/defense only; ESPN's IDP ids
-// (9-15) are left unmapped since standard leagues don't roster them.
-export const ESPN_POSITION_MAP = { 1: 'QB', 2: 'RB', 3: 'WR', 4: 'TE', 5: 'K', 16: 'DEF' };
+// A player's `defaultPositionId` uses the SAME numbering ESPN's lineup slot
+// ids do (see ESPN_LINEUP_SLOT_MAP below) -- 0=QB, 2=RB, 4=WR, 6=TE, 16=D/ST,
+// 17=K, not the small sequential 1-5 scheme a naive reading of "QB, RB, WR,
+// TE, K" in numeric order would suggest. Getting this wrong silently
+// mislabeled real WRs as TE and left QB/TE/K falling through to the "BN"
+// fallback -- which broke defense identification specifically hard, since
+// a defense that doesn't read as pos "DEF" skips the team-abbreviation
+// matching every other defense-aware code path (ownership, scoring)
+// depends on, leaving it correctly named by nothing at all.
+export const ESPN_POSITION_MAP = { 0: 'QB', 2: 'RB', 4: 'WR', 6: 'TE', 16: 'DEF', 17: 'K' };
 
 export const espnPositionName = (defaultPositionId) => ESPN_POSITION_MAP[defaultPositionId] || 'BN';
 
@@ -320,13 +327,23 @@ export const parseEspnRosterEntry = (entry, week = null) => {
         if (projected && Number.isFinite(projected.appliedTotal)) projectedPoints = projected.appliedTotal;
     }
 
+    // A defense's own `defaultPositionId` is trusted first, but the DEF slot
+    // (16) is only ever occupied by a defense -- a reliable fallback signal
+    // if that field ever comes back unset or wrong for a pseudo-player
+    // entity like a team defense (unlike a real athlete, it doesn't have one
+    // fixed position independent of the roster).
+    const pos = entry.lineupSlotId === 16 ? 'DEF' : espnPositionName(player.defaultPositionId);
+
     return {
         id,
         fn: player.firstName || firstName || fullName,
         ln: player.lastName || lastParts.join(' '),
-        pos: espnPositionName(player.defaultPositionId),
+        pos,
         t: espnProTeamAbbr(player.proTeamId),
-        headshot: espnHeadshotUrl(id),
+        // A defense has no athlete headshot -- leaving this null lets the
+        // consuming pages fall through to their own team-logo-based image
+        // for a DEF entry, the same way they already do for Sleeper/Yahoo.
+        headshot: pos === 'DEF' ? null : espnHeadshotUrl(id),
         injStatus: player.injuryStatus && player.injuryStatus !== 'ACTIVE' ? player.injuryStatus : null,
         isStarter: isEspnStarterSlot(entry.lineupSlotId),
         isReserve: isEspnReserveSlot(entry.lineupSlotId),

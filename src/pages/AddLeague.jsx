@@ -656,7 +656,7 @@ export default function AddLeague() {
                             {foundLeagues.map(league => (
                                 <div key={league.id} className={styles.leagueItem}>
                                     <div className={styles.leagueInfo}>
-                                        <img src={resolveImageSrc(league.avatar, '/brand.png')} alt="Logo" className={styles.leagueAvatar} onError={onImageError(league.avatar, '/brand.png')} />
+                                        <img src={resolveImageSrc(league.avatar, '/brand.png')} alt="Logo" className={styles.leagueAvatar} referrerPolicy="no-referrer" onError={onImageError(league.avatar, '/brand.png')} />
                                         <div className={styles.leagueMeta}>
                                             <span className={styles.leagueName}>{league.name}</span>
                                             <span className={styles.leaguePlatform}>

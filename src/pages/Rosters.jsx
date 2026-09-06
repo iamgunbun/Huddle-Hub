@@ -6,7 +6,7 @@ import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunct
 import { resolvePlayerFromMeta } from '../utils/playerPool';
 import { scoreStatLine } from '../utils/yahooScoring';
 import { fetchAndNormalizeYahooMatchups } from '../utils/yahooService';
-import { fetchAndNormalizeESPNMatchups } from '../utils/espnService';
+import { fetchAndNormalizeESPNMatchups, fetchAndNormalizeESPNRosters } from '../utils/espnService';
 import { isViewingLiveWeek, LIVE_SCORE_POLL_MS } from '../utils/liveScores';
 import { isYahooLeagueId, isEspnLeagueId } from '../utils/platformIds';
 import { resolveImageSrc, onImageError } from '../utils/imageFallback';
@@ -53,9 +53,15 @@ export default function Rosters() {
         if (!pId || pId === "0") return null;
 
         const direct = playersInfo[pId] || playersInfo[String(pId)] || playersInfo[Number(pId)];
-        if (direct) return direct;
-
         const yahooMeta = yahooPlayersMeta[String(pId)];
+        // ESPN's own pre-computed points (already scored under the league's
+        // real rules) beat rebuilding them from Sleeper's generic feed --
+        // carried over regardless of which path below resolves the rest of
+        // the player's identity, since only yahooMeta (this platform's own
+        // roster metadata) ever carries these.
+        const espnPoints = yahooMeta ? { actualPoints: yahooMeta.actualPoints, projectedPoints: yahooMeta.projectedPoints } : null;
+
+        if (direct) return espnPoints ? { ...direct, ...espnPoints } : direct;
         if (!yahooMeta) return null;
 
         // Yahoo gave us this player but Sleeper's yahoo_id crosswalk didn't map
@@ -63,7 +69,7 @@ export default function Rosters() {
         // abbreviation for defenses -- Sleeper keys those by team and gives them
         // no yahoo_id -- and by name, suffix-tolerantly, for everyone else.
         const matched = resolvePlayerFromMeta(yahooMeta, playersInfo, playersByName);
-        if (matched) return { ...matched, headshot: yahooMeta.headshot || null };
+        if (matched) return { ...matched, headshot: yahooMeta.headshot || null, ...espnPoints };
 
         return yahooMeta;
     };
@@ -162,6 +168,20 @@ export default function Rosters() {
                         setWeeklyMatchups(flat);
                     })
                     .catch(err => console.error("ESPN matchups fetch err:", err));
+
+                // ESPN pre-computes each player's actual/projected points under
+                // the league's own scoring rules -- that's more reliable than
+                // rebuilding them from Sleeper's generic feed below, which has
+                // little to no real defense coverage. Re-fetched with this
+                // week's scoringPeriodId (the initial roster load has no week
+                // yet, so it never gets these) and merged into the platform
+                // metadata every other lookup already falls back to.
+                fetchAndNormalizeESPNRosters(activeLeague.sleeper_league_id, { week: activeWeek })
+                    .then(({ yahooPlayersMeta: weekMeta }) => {
+                        if (!isMounted || !weekMeta) return;
+                        setYahooPlayersMeta(prev => ({ ...prev, ...weekMeta }));
+                    })
+                    .catch(err => console.error("ESPN weekly player points fetch err:", err));
             } else {
                 fetch(`https://api.sleeper.app/v1/league/${activeLeague.sleeper_league_id}/matchups/${activeWeek}`)
                     .then(res => res.json())
@@ -264,11 +284,23 @@ export default function Rosters() {
         if (matchup?.players_points && matchup.players_points[pId] !== undefined) {
             return parseFloat(matchup.players_points[pId]).toFixed(2);
         }
+        // ESPN's matchup feed only carries team totals, not a per-player
+        // breakdown (players_points is always empty) -- its roster fetch is
+        // the one place actual per-player points for the week come from.
+        const actual = getPlayerObj(pId)?.actualPoints;
+        if (Number.isFinite(actual)) return actual.toFixed(2);
         return '0.00';
     };
 
     const getPlayerProjPts = (playerId) => {
         const playerObj = getPlayerObj(playerId);
+
+        // ESPN pre-computes this under the league's own scoring rules -- more
+        // reliable than rebuilding it from Sleeper's generic feed below, which
+        // has little to no real defense coverage (the actual bug report this
+        // fixes: a DEF's projection reading 0 even mid-week).
+        if (Number.isFinite(playerObj?.projectedPoints)) return playerObj.projectedPoints.toFixed(1);
+
         // Sleeper's projections/stats feeds are keyed by Sleeper player ids. In a
         // Yahoo league the roster ids are Yahoo's, so look the player up by their
         // crosswalked sleeper_id as well -- otherwise every lookup misses and the
@@ -440,7 +472,7 @@ export default function Rosters() {
                     className={`${styles.teamHeader} ${viewMode === 'all' ? styles.clickable : ''}`} 
                     onClick={() => viewMode === 'all' && toggleTeamExpand(rosterId)}
                 >
-                    <img src={resolveImageSrc(teamMeta.avatar, '/brand.png')} alt="Avatar" className={styles.teamAvatar} onError={onImageError(teamMeta.avatar, '/brand.png')} />
+                    <img src={resolveImageSrc(teamMeta.avatar, '/brand.png')} alt="Avatar" className={styles.teamAvatar} referrerPolicy="no-referrer" onError={onImageError(teamMeta.avatar, '/brand.png')} />
                     <div className={styles.teamDetails}>
                         <h3 className={styles.teamName}>{teamMeta.name}</h3>
                         <div className={styles.teamStats}>

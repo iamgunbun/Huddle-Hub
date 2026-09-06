@@ -501,7 +501,7 @@ export default function Home() {
                                          src={resolveImageSrc(formatChampAvatar(champTeam.avatar), '/brand.png')}
                                          alt="Champ"
                                          style={{ width: '80px', height: '80px', borderRadius: '50%', border: '3px solid #eebf1c', display: 'block', objectFit: 'cover' }}
-                                         onError={onImageError(formatChampAvatar(champTeam.avatar), '/brand.png')}
+                                         referrerPolicy="no-referrer" onError={onImageError(formatChampAvatar(champTeam.avatar), '/brand.png')}
                                      />
                                     <span style={{ position: 'absolute', bottom: '-4px', right: '-4px', background: '#eebf1c', borderRadius: '50%', width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.5)' }}>
                                         <i className="material-icons" style={{ fontSize: '16px', color: '#000' }}>emoji_events</i>
@@ -618,7 +618,7 @@ export default function Home() {
                                                 src={resolveImageSrc(formatChampAvatar(champTeam.avatar), '/brand.png')}
                                                 alt="Champ"
                                                 style={{ width: '60px', height: '60px', borderRadius: '50%', border: '2px solid #eebf1c', objectFit: 'cover' }}
-                                                onError={onImageError(formatChampAvatar(champTeam.avatar), '/brand.png')}
+                                                referrerPolicy="no-referrer" onError={onImageError(formatChampAvatar(champTeam.avatar), '/brand.png')}
                                             />
                                         </div>
                                     </div>
