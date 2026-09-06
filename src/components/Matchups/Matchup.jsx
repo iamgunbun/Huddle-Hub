@@ -83,7 +83,7 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                 <div className={styles.desktopScoreboard}>
                     <div className={styles.teamHeader}>
                         <div className={styles.teamIdentity}>
-                            <img src={resolveImageSrc(metaA.avatar, '/brand.png')} alt="Team A" className={styles.teamAvatar} referrerPolicy="no-referrer" onError={onImageError(metaA.avatar, '/brand.png')} />
+                            <img src={resolveImageSrc(metaA.avatar, '/fallback.png')} alt="Team A" className={styles.teamAvatar} referrerPolicy="no-referrer" onError={onImageError(metaA.avatar, '/fallback.png')} />
                             <div className={styles.teamNameContainer}>
                                 <div className={styles.teamName}>{metaA.name}</div>
                                 <div className={styles.projTotal}>Proj: {projA.toFixed(2)}</div>
@@ -110,7 +110,7 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                                 <div className={styles.teamName}>{metaB.name}</div>
                                 <div className={styles.projTotal}>Proj: {projB.toFixed(2)}</div>
                             </div>
-                            <img src={resolveImageSrc(metaB.avatar, '/brand.png')} alt="Team B" className={styles.teamAvatar} referrerPolicy="no-referrer" onError={onImageError(metaB.avatar, '/brand.png')} />
+                            <img src={resolveImageSrc(metaB.avatar, '/fallback.png')} alt="Team B" className={styles.teamAvatar} referrerPolicy="no-referrer" onError={onImageError(metaB.avatar, '/fallback.png')} />
                         </div>
                     </div>
                 </div>
@@ -119,7 +119,7 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                 <div className={styles.mobileScoreboard}>
                     <div className={styles.mGridTop}>
                         <div className={styles.mProfileLeft}>
-                            <img src={resolveImageSrc(metaA.avatar, '/brand.png')} className={styles.mAvatar} alt="A" referrerPolicy="no-referrer" onError={onImageError(metaA.avatar, '/brand.png')} />
+                            <img src={resolveImageSrc(metaA.avatar, '/fallback.png')} className={styles.mAvatar} alt="A" referrerPolicy="no-referrer" onError={onImageError(metaA.avatar, '/fallback.png')} />
                             <div className={styles.mNameStack}>
                                 <span className={styles.mTeamNameText}>{metaA.name}</span>
                             </div>
@@ -132,7 +132,7 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                             <div className={`${styles.mNameStack} ${styles.mRightAlign}`}>
                                 <span className={styles.mTeamNameText}>{metaB.name}</span>
                             </div>
-                            <img src={resolveImageSrc(metaB.avatar, '/brand.png')} className={styles.mAvatar} alt="B" referrerPolicy="no-referrer" onError={onImageError(metaB.avatar, '/brand.png')} />
+                            <img src={resolveImageSrc(metaB.avatar, '/fallback.png')} className={styles.mAvatar} alt="B" referrerPolicy="no-referrer" onError={onImageError(metaB.avatar, '/fallback.png')} />
                         </div>
                     </div>
 

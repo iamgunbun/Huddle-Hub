@@ -345,7 +345,7 @@ export default function ProjectionsPanel() {
                             <span className={styles.movementFlat}>–</span>
                         )}
                     </div>
-                    <img src={resolveImageSrc(team.avatar, '/brand.png')} alt="Avatar" className={styles.avatar} referrerPolicy="no-referrer" onError={onImageError(team.avatar, '/brand.png')} />
+                    <img src={resolveImageSrc(team.avatar, '/fallback.png')} alt="Avatar" className={styles.avatar} referrerPolicy="no-referrer" onError={onImageError(team.avatar, '/fallback.png')} />
                     
                     <div className={styles.teamInfo} style={{ flex: 1, minWidth: 0, paddingRight: '10px' }}>
                         <span className={styles.teamName} style={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

@@ -265,7 +265,7 @@ export const fetchAndNormalizeYahooLeague = async (leagueId, passedUserId = null
             start_date: leagueData.start_date || null,
             season_start_ms: Number.isFinite(seasonStart) ? seasonStart : null,
             total_rosters: totalRosters,
-            avatar: leagueData.logo_url || '/brand.png',
+            avatar: leagueData.logo_url || '/fallback.png',
             platform: 'yahoo',
             roster_positions: rosterPositions,
             scoring_settings: scoringSettings,
@@ -320,7 +320,7 @@ const standingsRowToRoster = (row, overrides = {}) => {
         co_owners: managerIds.slice(1).map(yahooText).filter(Boolean),
         team_key: teamKey || null,
         team_name: overrides.teamName ?? sMap.teamName ?? `Team ${rosterId}`,
-        avatar: overrides.teamLogo ?? sMap.logoUrl ?? '/brand.png',
+        avatar: overrides.teamLogo ?? sMap.logoUrl ?? '/fallback.png',
         manager_name: overrides.managerName ?? sMap.managerName ?? overrides.teamName ?? sMap.teamName,
         players: [],
         starters: [],
@@ -455,7 +455,7 @@ export const fetchAndNormalizeYahooRosters = async (leagueId, passedUserId = nul
             const teamId = parseInt(teamInfoArray.find(x => x.team_id)?.team_id);
             const teamName = teamInfoArray.find(x => x.name)?.name || `Team ${teamId}`;
             
-            let teamLogo = '/brand.png';
+            let teamLogo = '/fallback.png';
             const logosArr = teamInfoArray.find(x => x.team_logos)?.team_logos;
             if (Array.isArray(logosArr) && logosArr[0]?.team_logo?.url) teamLogo = logosArr[0].team_logo.url;
 

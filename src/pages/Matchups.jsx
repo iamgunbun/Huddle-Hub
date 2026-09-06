@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
 import { getLeagueRosters, getLeagueTeamManagers, loadPlayers, getLeagueData, getNflState } from '../utils/helper';
 import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
-import { resolvePlayerFromMeta } from '../utils/playerPool';
+import { resolvePlayerFromMeta, entryOwnsLookupId } from '../utils/playerPool';
 import { scoreStatLine } from '../utils/yahooScoring';
 import { fetchAndNormalizeYahooMatchups } from '../utils/yahooService';
 import { fetchAndNormalizeESPNMatchups, fetchAndNormalizeESPNRosters } from '../utils/espnService';
@@ -65,7 +65,12 @@ export default function Matchups() {
         // roster metadata) ever carries these.
         const espnPoints = yahooMeta ? { actualPoints: yahooMeta.actualPoints, projectedPoints: yahooMeta.projectedPoints } : null;
 
-        if (direct) return espnPoints ? { ...direct, ...espnPoints } : direct;
+        // A direct hit is only this player if the entry owns the id space it
+        // sits in. On ESPN/Yahoo the dictionary falls back to a Sleeper id for
+        // anyone the crosswalk misses, so a real platform id can otherwise
+        // land on an unrelated player with the same number -- see
+        // entryOwnsLookupId.
+        if (direct && entryOwnsLookupId(direct)) return espnPoints ? { ...direct, ...espnPoints } : direct;
         if (!yahooMeta) return null;
 
         // Yahoo gave us this player but Sleeper's yahoo_id crosswalk didn't map
@@ -194,11 +199,18 @@ export default function Matchups() {
                 // than reconstructing them from Sleeper's generic feed, especially
                 // for defenses, which that feed barely covers.
                 fetchAndNormalizeESPNRosters(activeLeague.sleeper_league_id, { week: activeWeek })
-                    .then(({ yahooPlayersMeta: weekMeta }) => {
-                        if (!isMounted || !weekMeta) return;
-                        setYahooPlayersMeta(prev => ({ ...prev, ...weekMeta }));
+                    .then(({ rosters: weekRosters, yahooPlayersMeta: weekMeta }) => {
+                        if (!isMounted) return;
+                        if (weekMeta) setYahooPlayersMeta(prev => ({ ...prev, ...weekMeta }));
+                        // The lineups too, not just the points: the starters
+                        // rendered here come from the roster fetch, and the
+                        // league-level one is always TODAY's lineup. Without
+                        // this, opening a past week showed that week's scores
+                        // against the current lineup -- players who were never
+                        // started that week, and none of the ones who were.
+                        if (weekRosters && Object.keys(weekRosters).length) setRosters(weekRosters);
                     })
-                    .catch(err => console.error("ESPN weekly player points fetch err:", err));
+                    .catch(err => console.error("ESPN weekly roster/points fetch err:", err));
             } else {
                 fetch(`https://api.sleeper.app/v1/league/${activeLeague.sleeper_league_id}/matchups/${activeWeek}`)
                     .then(res => res.json())
@@ -417,7 +429,7 @@ export default function Matchups() {
                 >
                     <div className={styles.bannerTeam}>
                         <div className={styles.avatarRow}>
-                            <img src={resolveImageSrc(leftTeamMeta?.avatar, '/brand.png')} alt="" className={styles.bannerAvatar} referrerPolicy="no-referrer" onError={onImageError(leftTeamMeta?.avatar, '/brand.png')} />
+                            <img src={resolveImageSrc(leftTeamMeta?.avatar, '/fallback.png')} alt="" className={styles.bannerAvatar} referrerPolicy="no-referrer" onError={onImageError(leftTeamMeta?.avatar, '/fallback.png')} />
                             <span className={`${styles.winBadge} ${leftOddStyle}`}>{leftWinProb}% WIN</span>
                         </div>
                         <div className={styles.scoreGroup}>
@@ -433,7 +445,7 @@ export default function Matchups() {
 
                     <div className={styles.bannerTeam} style={{ alignItems: 'flex-end', textAlign: 'right' }}>
                         <div className={styles.avatarRow} style={{ flexDirection: 'row-reverse' }}>
-                            <img src={resolveImageSrc(rightTeamMeta?.avatar, '/brand.png')} alt="" className={styles.bannerAvatar} referrerPolicy="no-referrer" onError={onImageError(rightTeamMeta?.avatar, '/brand.png')} />
+                            <img src={resolveImageSrc(rightTeamMeta?.avatar, '/fallback.png')} alt="" className={styles.bannerAvatar} referrerPolicy="no-referrer" onError={onImageError(rightTeamMeta?.avatar, '/fallback.png')} />
                             <span className={`${styles.winBadge} ${rightOddStyle}`}>{rightWinProb}% WIN</span>
                         </div>
                         <div className={styles.scoreGroup} style={{ alignItems: 'flex-end' }}>

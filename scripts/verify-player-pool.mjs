@@ -5,7 +5,7 @@
 // incomplete, rostered players are presented as free agents and nothing
 // about the page looks broken.
 
-import { buildOwnedIndex, isPlayerOwned, isRosterableNflPlayer, resolvePlayerFromMeta, playerNameKeyNoSuffix, withResolvedPlayerMeta, resolveRosterPlayers, isLessProminentDuplicate } from '../src/utils/playerPool.js';
+import { buildOwnedIndex, isPlayerOwned, isRosterableNflPlayer, resolvePlayerFromMeta, playerNameKeyNoSuffix, withResolvedPlayerMeta, resolveRosterPlayers, isLessProminentDuplicate, entryOwnsLookupId } from '../src/utils/playerPool.js';
 import { findSuccessorLeagueId, pickOwnerId } from '../src/utils/leagueSeason.js';
 
 let pass = 0;
@@ -236,6 +236,39 @@ eq('missing searchRank on the existing entry treats it as unranked (loses to any
     isLessProminentDuplicate({}, { searchRank: 12 }), false);
 eq('missing searchRank on the incoming entry treats it as unranked (existing wins)',
     isLessProminentDuplicate({ searchRank: 12 }, {}), true);
+
+// --- Platform-id ownership: a direct hit can be the WRONG player ----------
+// On Yahoo/ESPN the dictionary is keyed by that platform's id, falling back to
+// the Sleeper id for anyone the crosswalk misses. So a lookup by a real
+// platform id can land on a stand-in whose unrelated Sleeper id is the same
+// number -- a wrong player, not a missing one.
+eq('an entry that owns its platform id beats a stand-in, regardless of rank',
+    isLessProminentDuplicate({ ownsPlatformId: true, searchRank: 9000 }, { ownsPlatformId: false, searchRank: 5 }), true);
+eq('and a stand-in never holds the slot against the real owner',
+    isLessProminentDuplicate({ ownsPlatformId: false, searchRank: 5 }, { ownsPlatformId: true, searchRank: 9000 }), false);
+eq('between two owners, the more prominent still wins',
+    isLessProminentDuplicate({ ownsPlatformId: true, searchRank: 5 }, { ownsPlatformId: true, searchRank: 9000 }), true);
+eq('between two stand-ins, the more prominent still wins',
+    isLessProminentDuplicate({ ownsPlatformId: false, searchRank: 5 }, { ownsPlatformId: false, searchRank: 9000 }), true);
+
+eq('an owner entry is trustworthy for a direct id lookup', entryOwnsLookupId({ ownsPlatformId: true }), true);
+eq('a stand-in entry is not', entryOwnsLookupId({ ownsPlatformId: false }), false);
+eq('an entry from before this flag existed is treated as trustworthy',
+    entryOwnsLookupId({ searchRank: 1 }), true);
+
+// A roster full of real platform ids must not silently absorb a stand-in.
+const espnDict = {
+    // The stand-in: a Sleeper-only player parked at a key that is a real ESPN id.
+    '12483': { fn: 'Someone', ln: 'Else', pos: 'WR', sleeper_id: '12483', ownsPlatformId: false, wi: { 1: { p: 99 } } },
+    '99': { fn: 'Matthew', ln: 'Stafford', pos: 'QB', sleeper_id: '99', ownsPlatformId: true, wi: { 1: { p: 18 } } },
+};
+const espnByName = { 'matthew stafford': espnDict['99'] };
+const espnMeta = { '12483': { fn: 'Matthew', ln: 'Stafford', pos: 'QB', t: 'LAR' } };
+const espnResolved = resolveRosterPlayers(['12483'], espnDict, espnByName, espnMeta);
+eq('a roster id landing on a stand-in resolves by name instead',
+    espnResolved.players[0].ln, 'Stafford');
+eq('and does not credit the roster with the stranger\'s projection',
+    espnResolved.players[0].wi[1].p, 18);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

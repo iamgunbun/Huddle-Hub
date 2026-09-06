@@ -74,7 +74,7 @@ export default function AddLeague() {
             const formattedLeagues = leaguesData.map(l => ({
                 id: String(l.league_id),
                 name: l.name,
-                avatar: l.avatar ? `https://sleepercdn.com/avatars/thumbs/${l.avatar}` : '/brand.png',
+                avatar: l.avatar ? `https://sleepercdn.com/avatars/thumbs/${l.avatar}` : '/fallback.png',
                 platform: 'sleeper',
                 managerName: userData.display_name, // Captures precise username for user_leagues insert
                 sleeperUserId: userData.user_id // Identifies the account exactly when reading commissioner status
@@ -231,7 +231,7 @@ export default function AddLeague() {
                                 leaguesArray.push({
                                     id: String(leagueData.league_key),
                                     name: leagueData.name,
-                                    avatar: leagueData.logo_url || '/brand.png',
+                                    avatar: leagueData.logo_url || '/fallback.png',
                                     platform: 'yahoo',
                                     managerName: ownTeam?.teamName || null,
                                     isCommissioner: !!ownTeam?.isCommissioner
@@ -656,7 +656,7 @@ export default function AddLeague() {
                             {foundLeagues.map(league => (
                                 <div key={league.id} className={styles.leagueItem}>
                                     <div className={styles.leagueInfo}>
-                                        <img src={resolveImageSrc(league.avatar, '/brand.png')} alt="Logo" className={styles.leagueAvatar} referrerPolicy="no-referrer" onError={onImageError(league.avatar, '/brand.png')} />
+                                        <img src={resolveImageSrc(league.avatar, '/fallback.png')} alt="Logo" className={styles.leagueAvatar} referrerPolicy="no-referrer" onError={onImageError(league.avatar, '/fallback.png')} />
                                         <div className={styles.leagueMeta}>
                                             <span className={styles.leagueName}>{league.name}</span>
                                             <span className={styles.leaguePlatform}>

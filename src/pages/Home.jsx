@@ -368,7 +368,7 @@ export default function Home() {
     const champTeam = (recentChamp && teamManagers) ? getTeamFromTeamManagers(teamManagers, recentChamp.champion, recentChamp.year) : null;
 
     const formatChampAvatar = (avatar) => {
-        if (!avatar) return '/brand.png';
+        if (!avatar) return '/fallback.png';
         if (avatar.startsWith('http://') || avatar.startsWith('https://') || avatar.startsWith('/')) {
             return avatar;
         }
@@ -498,10 +498,10 @@ export default function Home() {
                                 </h3>
                                 <div style={{ position: 'relative', width: '80px', height: '80px', margin: '15px auto' }}>
                                     <img
-                                         src={resolveImageSrc(formatChampAvatar(champTeam.avatar), '/brand.png')}
+                                         src={resolveImageSrc(formatChampAvatar(champTeam.avatar), '/fallback.png')}
                                          alt="Champ"
                                          style={{ width: '80px', height: '80px', borderRadius: '50%', border: '3px solid #eebf1c', display: 'block', objectFit: 'cover' }}
-                                         referrerPolicy="no-referrer" onError={onImageError(formatChampAvatar(champTeam.avatar), '/brand.png')}
+                                         referrerPolicy="no-referrer" onError={onImageError(formatChampAvatar(champTeam.avatar), '/fallback.png')}
                                      />
                                     <span style={{ position: 'absolute', bottom: '-4px', right: '-4px', background: '#eebf1c', borderRadius: '50%', width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.5)' }}>
                                         <i className="material-icons" style={{ fontSize: '16px', color: '#000' }}>emoji_events</i>
@@ -615,10 +615,10 @@ export default function Home() {
                                                 <div style={{ color: '#eebf1c', fontSize: '1.2em', fontWeight: 800, textTransform: 'uppercase', textAlign: 'left' }}>{champTeam.name}</div>
                                             </div>
                                             <img
-                                                src={resolveImageSrc(formatChampAvatar(champTeam.avatar), '/brand.png')}
+                                                src={resolveImageSrc(formatChampAvatar(champTeam.avatar), '/fallback.png')}
                                                 alt="Champ"
                                                 style={{ width: '60px', height: '60px', borderRadius: '50%', border: '2px solid #eebf1c', objectFit: 'cover' }}
-                                                referrerPolicy="no-referrer" onError={onImageError(formatChampAvatar(champTeam.avatar), '/brand.png')}
+                                                referrerPolicy="no-referrer" onError={onImageError(formatChampAvatar(champTeam.avatar), '/fallback.png')}
                                             />
                                         </div>
                                     </div>

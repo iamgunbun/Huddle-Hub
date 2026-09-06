@@ -63,7 +63,7 @@ export const getLeagueTeamManagers = async (queryLeagueID) => {
                     teamManagersMap[year][roster.roster_id] = {
                         team: {
                             name: roster.team_name || `Team ${roster.roster_id}`,
-                            avatar: roster.avatar || '/brand.png'
+                            avatar: roster.avatar || '/fallback.png'
                         },
                         managers
                     };
@@ -71,7 +71,7 @@ export const getLeagueTeamManagers = async (queryLeagueID) => {
                         if (!finalUsers[managerID]) {
                             finalUsers[managerID] = {
                                 display_name: roster.manager_name || roster.team_name,
-                                avatar: roster.avatar || '/brand.png',
+                                avatar: roster.avatar || '/fallback.png',
                                 user_id: managerID
                             };
                         }

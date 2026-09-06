@@ -272,7 +272,7 @@ export default function Transactions() {
                                     <div className={styles.tradeGrid}>
                                         <div className={styles.tradeColumn}>
                                             <div className={styles.teamHeaderRow}>
-                                                <img src={resolveImageSrc(teamA?.avatar, '/brand.png')} alt="" className={styles.teamAvatar} referrerPolicy="no-referrer" onError={onImageError(teamA?.avatar, '/brand.png')} />
+                                                <img src={resolveImageSrc(teamA?.avatar, '/fallback.png')} alt="" className={styles.teamAvatar} referrerPolicy="no-referrer" onError={onImageError(teamA?.avatar, '/fallback.png')} />
                                                 <span className={styles.teamName}>{teamA?.name || 'Team 1'}</span>
                                             </div>
                                             <div className={styles.receivedLabel}>Received:</div>
@@ -296,7 +296,7 @@ export default function Transactions() {
 
                                         <div className={styles.tradeColumn}>
                                             <div className={styles.teamHeaderRow}>
-                                                <img src={resolveImageSrc(teamB?.avatar, '/brand.png')} alt="" className={styles.teamAvatar} referrerPolicy="no-referrer" onError={onImageError(teamB?.avatar, '/brand.png')} />
+                                                <img src={resolveImageSrc(teamB?.avatar, '/fallback.png')} alt="" className={styles.teamAvatar} referrerPolicy="no-referrer" onError={onImageError(teamB?.avatar, '/fallback.png')} />
                                                 <span className={styles.teamName}>{teamB?.name || 'Team 2'}</span>
                                             </div>
                                             <div className={styles.receivedLabel}>Received:</div>
@@ -342,7 +342,7 @@ export default function Transactions() {
 
                                 <div className={styles.waiverBody}>
                                     <div className={styles.teamHeaderRowSingle}>
-                                        <img src={resolveImageSrc(teamMeta?.avatar, '/brand.png')} alt="" className={styles.teamAvatar} referrerPolicy="no-referrer" onError={onImageError(teamMeta?.avatar, '/brand.png')} />
+                                        <img src={resolveImageSrc(teamMeta?.avatar, '/fallback.png')} alt="" className={styles.teamAvatar} referrerPolicy="no-referrer" onError={onImageError(teamMeta?.avatar, '/fallback.png')} />
                                         <span className={styles.teamName}>{teamMeta?.name || 'Manager'}</span>
                                     </div>
 

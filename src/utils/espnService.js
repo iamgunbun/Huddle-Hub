@@ -13,6 +13,7 @@ import {
     espnTeamLogoUrl,
     parseEspnAthleteResponse,
     isEspnLeagueManager,
+    espnSwidMatches,
     toProxiedEspnImageUrl,
     espnDefenseMetaFromId,
 } from './espnParsers';
@@ -120,7 +121,7 @@ export const fetchAndNormalizeESPNLeague = async (leagueId, cookies = {}, userId
         // always carry a usable absolute URL, so this skips those instead of
         // handing the UI something that renders as a broken image.
         const firstTeamWithLogo = data.teams?.find(t => espnTeamLogoUrl(t.logo));
-        const avatar = toProxiedEspnImageUrl(espnTeamLogoUrl(firstTeamWithLogo?.logo), resolvedUserId) || '/brand.png';
+        const avatar = toProxiedEspnImageUrl(espnTeamLogoUrl(firstTeamWithLogo?.logo), resolvedUserId) || '/fallback.png';
 
         const playoffWeekStart = (data.settings.scheduleSettings?.matchupPeriodCount || 14) + 1;
         const isAuctionDraft = String(data.settings.draftSettings?.type || '').toUpperCase() === 'OFFLINE'
@@ -243,12 +244,37 @@ export const fetchESPNCommissionerStatus = async (leagueId, passedUserId = null)
     if (!userId) return false;
 
     try {
+        // Both views: `members` travels with the base league object, and the
+        // reference ESPN clients only ever read it off a request that asked
+        // for mTeam alongside mSettings -- so ask for both rather than bet on
+        // which one carries it.
         const [data, resolvedSwid] = await Promise.all([
-            espnProxyRequest(leagueId, { views: ['mSettings'] }, userId),
+            espnProxyRequest(leagueId, { views: ['mSettings', 'mTeam'] }, userId),
             fetchResolvedSwid(userId).catch(() => null),
         ]);
         if (!data || !resolvedSwid) return false;
-        return isEspnLeagueManager(data.members, resolvedSwid);
+
+        const members = Array.isArray(data.members) ? data.members : [];
+        const isManager = isEspnLeagueManager(members, resolvedSwid);
+
+        // ESPN's member shape isn't something this app can verify against a
+        // live league from its own network, so say exactly what came back --
+        // enough to tell "no members in the response" apart from "the SWID
+        // didn't match any member" apart from "matched, but not flagged".
+        if (!isManager) {
+            console.info('[ESPN] commissioner check', {
+                league: leagueId,
+                membersReturned: members.length,
+                swidMatchedAMember: members.some(m => espnSwidMatches(m?.id, resolvedSwid)),
+                managerFlagsSeen: members.map(m => ({
+                    matches: espnSwidMatches(m?.id, resolvedSwid),
+                    isLeagueManager: m?.isLeagueManager ?? null,
+                    isLeagueCreator: m?.isLeagueCreator ?? null,
+                })),
+            });
+        }
+
+        return isManager;
     } catch (err) {
         console.warn("ESPN commissioner status check failed:", err);
         return false;
