@@ -14,7 +14,12 @@ import {
     parseEspnDraftDetail,
     findPriorEspnSeason,
     isEspnSeasonComplete,
+    buildEspnScoringSettings,
+    espnLineupSlotName,
+    buildEspnRosterPositions,
+    espnTeamLogoUrl,
 } from '../src/utils/espnParsers.js';
+import { scoreStatLine } from '../src/utils/yahooScoring.js';
 
 let checks = 0;
 const check = (name, actual, expected) => {
@@ -42,6 +47,40 @@ check('no id -> no headshot url', espnHeadshotUrl(null), null);
 check('team name prefers the explicit name field', espnTeamDisplayName({ id: 1, name: 'The Bengals of Fortune' }), 'The Bengals of Fortune');
 check('team name falls back to location + nickname', espnTeamDisplayName({ id: 2, location: 'Team', nickname: 'Two' }), 'Team Two');
 check('team name falls back to a generic label', espnTeamDisplayName({ id: 3 }), 'Team 3');
+
+// --- espnTeamLogoUrl ---
+check('a normal absolute https url passes through', espnTeamLogoUrl('https://g.espncdn.com/logo.png'), 'https://g.espncdn.com/logo.png');
+check('a protocol-relative url gets https: prepended', espnTeamLogoUrl('//g.espncdn.com/logo.png'), 'https://g.espncdn.com/logo.png');
+check('an empty string -> null, not a broken image', espnTeamLogoUrl(''), null);
+check('null -> null', espnTeamLogoUrl(null), null);
+check('a bare filename with no scheme -> null', espnTeamLogoUrl('logo_default_1.svg'), null);
+
+// --- espnLineupSlotName / buildEspnRosterPositions ---
+check('slot 0 is QB', espnLineupSlotName(0), 'QB');
+check('slot 23 is FLEX', espnLineupSlotName(23), 'FLEX');
+check('slot 7 is a superflex', espnLineupSlotName(7), 'SUPER_FLEX');
+check('slot 20 is bench', espnLineupSlotName(20), 'BN');
+check('an unknown slot falls back to bench', espnLineupSlotName(999), 'BN');
+
+const rosterPositions = buildEspnRosterPositions({
+    '0': 1,  // QB
+    '2': 2,  // RB x2
+    '4': 2,  // WR x2
+    '6': 1,  // TE
+    '23': 1, // FLEX
+    '17': 1, // K
+    '16': 1, // DEF
+    '20': 6, // BN x6
+    '21': 1, // IR -- excluded from roster_positions entirely
+});
+check(
+    'starters are grouped in the shared slot order, bench appended after',
+    rosterPositions,
+    ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'DEF', 'K', 'BN', 'BN', 'BN', 'BN', 'BN', 'BN']
+);
+check('IR is never counted in roster_positions', rosterPositions.includes('IR'), false);
+check('no lineup slot counts at all -> an empty array, not a throw', buildEspnRosterPositions(null), []);
+check('a zero count contributes nothing', buildEspnRosterPositions({ '0': 1, '2': 0 }), ['QB']);
 
 // --- parseEspnRosterEntry ---
 const starterEntry = {
@@ -117,6 +156,37 @@ check('both teams are indexed by roster id', Object.keys(leagueRosters.rosters).
 check('only the resolved-swid team is marked owned', leagueRosters.rosters[2].is_owned_by_current_login, false);
 check('startersAndReserve carries both teams\' starters and reserve', leagueRosters.startersAndReserve.sort(), ['4000', '6000']);
 check('the merged platform meta carries every parsed player', Object.keys(leagueRosters.yahooPlayersMeta).sort(), ['4000', '5000', '6000']);
+
+// A team whose entries arrive in a different order than the canonical slot
+// order (K before QB, DEF before RB) -- the exact bug that showed every ESPN
+// starter labeled "BN": the Rosters page pairs starters[i] with
+// roster_positions[i] by index, so starters has to come out pre-sorted into
+// that same order regardless of what order ESPN happened to list them in.
+const mkEntry = (playerId, lineupSlotId, defaultPositionId) => ({
+    playerId, lineupSlotId,
+    playerPoolEntry: { player: { id: playerId, firstName: 'P', lastName: String(playerId), defaultPositionId, proTeamId: 0, stats: [] } },
+});
+const shuffledTeam = {
+    id: 9,
+    name: 'Shuffled',
+    owners: [],
+    record: { overall: {} },
+    roster: {
+        entries: [
+            mkEntry(9001, 17, 5), // K
+            mkEntry(9002, 0, 1),  // QB
+            mkEntry(9003, 16, 16), // DEF
+            mkEntry(9004, 2, 2),  // RB
+            mkEntry(9005, 23, 2), // FLEX
+        ],
+    },
+};
+const { roster: shuffledRoster } = parseEspnTeamRoster(shuffledTeam);
+check(
+    'starters come out in canonical slot order regardless of entry order',
+    shuffledRoster.starters,
+    ['9002', '9004', '9005', '9003', '9001']
+);
 
 // --- parseEspnSchedule ---
 const schedule = [
@@ -222,5 +292,39 @@ check(
     isEspnSeasonComplete({ seasonId: 2026, currentMatchupPeriod: 5, matchupPeriodCount: 0, currentYear: 2026 }),
     false
 );
+
+// --- buildEspnScoringSettings ---
+const espnScoring = buildEspnScoringSettings({
+    scoringItems: [
+        { statId: 3, points: 0.04 },   // pass_yd
+        { statId: 4, points: 4 },      // pass_td
+        { statId: 20, points: 2, isReverseItem: true },   // pass_int, penalty
+        { statId: 24, points: 0.1 },   // rush_yd
+        { statId: 25, points: 6 },     // rush_td
+        { statId: 42, points: 0.1 },   // rec_yd
+        { statId: 43, points: 6 },     // rec_td
+        { statId: 53, points: 1 },     // rec (full PPR)
+        { statId: 72, points: -2 },    // fum_lost, already negative
+        { statId: 999, points: 5 },    // unknown id -- ignored
+    ],
+});
+check('passing yards rate carries over as-is', espnScoring.pass_yd, 0.04);
+check('passing touchdown value carries over', espnScoring.pass_td, 4);
+check('a reverse item is always a penalty, even stored positive', espnScoring.pass_int, -2);
+check('an already-negative reverse item is not double-negated', espnScoring.fum_lost, -2);
+check('reception value reflects full PPR', espnScoring.rec, 1);
+check('rushing/receiving touchdown values carry over', [espnScoring.rush_td, espnScoring.rec_td], [6, 6]);
+check('an unmapped statId is silently ignored', Object.prototype.hasOwnProperty.call(espnScoring, '999'), false);
+check('no scoring settings at all -> an empty object, not a throw', buildEspnScoringSettings(null), {});
+check('no scoringItems array -> an empty object', buildEspnScoringSettings({}), {});
+
+// A scored projection under real ESPN-derived settings is the actual bug this
+// fixes: ESPN projections were silently using generic Sleeper standard/PPR
+// scoring regardless of the league's real rules, because scoring_settings was
+// never populated for an ESPN league at all.
+const statLine = { pass_yd: 300, pass_td: 3, rush_yd: 20 };
+const scored = scoreStatLine(statLine, espnScoring, 'QB');
+// 300*0.04 + 3*4 + 20*0.1 = 12 + 12 + 2 = 26
+check('a QB stat line scores correctly under the league\'s real ESPN settings', scored, 26);
 
 console.log(`OK: ${checks} ESPN parser checks passed`);

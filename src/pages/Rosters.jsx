@@ -439,7 +439,7 @@ export default function Rosters() {
                     className={`${styles.teamHeader} ${viewMode === 'all' ? styles.clickable : ''}`} 
                     onClick={() => viewMode === 'all' && toggleTeamExpand(rosterId)}
                 >
-                    <img src={teamMeta.avatar} alt="Avatar" className={styles.teamAvatar} />
+                    <img src={teamMeta.avatar} alt="Avatar" className={styles.teamAvatar} onError={(e) => { e.target.onerror = null; e.target.src = '/brand.png'; }} />
                     <div className={styles.teamDetails}>
                         <h3 className={styles.teamName}>{teamMeta.name}</h3>
                         <div className={styles.teamStats}>

@@ -8,6 +8,9 @@ import {
     parseEspnDraftDetail,
     findPriorEspnSeason,
     isEspnSeasonComplete,
+    buildEspnScoringSettings,
+    buildEspnRosterPositions,
+    espnTeamLogoUrl,
 } from './espnParsers';
 
 // Most callers (every page's own `getLeagueData(id)`, with no explicit user)
@@ -95,9 +98,11 @@ export const fetchAndNormalizeESPNLeague = async (leagueId, cookies = {}, userId
         const keeperCount = data.settings.draftSettings?.keeperCount || 0;
         const leagueType = keeperCount > 5 ? 2 : (keeperCount > 0 ? 1 : 0);
 
-        // Fallback league avatar
-        const firstTeamWithLogo = data.teams?.find(t => t.logo);
-        const avatar = firstTeamWithLogo?.logo || '/brand.png';
+        // Fallback league avatar -- a team without a custom logo doesn't
+        // always carry a usable absolute URL, so this skips those instead of
+        // handing the UI something that renders as a broken image.
+        const firstTeamWithLogo = data.teams?.find(t => espnTeamLogoUrl(t.logo));
+        const avatar = espnTeamLogoUrl(firstTeamWithLogo?.logo) || '/brand.png';
 
         const playoffWeekStart = (data.settings.scheduleSettings?.matchupPeriodCount || 14) + 1;
         const isAuctionDraft = String(data.settings.draftSettings?.type || '').toUpperCase() === 'OFFLINE'
@@ -114,6 +119,22 @@ export const fetchAndNormalizeESPNLeague = async (leagueId, cookies = {}, userId
             currentMatchupPeriod: data.status?.currentMatchupPeriod,
             matchupPeriodCount: data.settings.scheduleSettings?.matchupPeriodCount,
         });
+
+        // Built from the league's own settings rather than left unset -- every
+        // page that projects a player's points (Rosters, Matchups, Start/Sit,
+        // Trade Grader) reads `leagueData.scoring_settings` and falls back to
+        // Sleeper's generic standard/PPR total when it's empty, which is what
+        // made ESPN projections look off for any league running non-default
+        // scoring (a different PPR value, 6pt passing TDs, etc.).
+        const scoringSettings = buildEspnScoringSettings(data.settings.scoringSettings);
+
+        // The league's real starting lineup, rather than nothing -- the
+        // Rosters page labels each starter by walking this array in lockstep
+        // with a roster's own starters[] (index i's player occupies
+        // roster_positions[i]'s slot), and with nothing here that lookup
+        // always missed, showing every starter labeled "BN" regardless of
+        // their actual position.
+        const rosterPositions = buildEspnRosterPositions(data.settings.rosterSettings?.lineupSlotCounts);
 
         return {
             // `id`/`sleeper_league_id` are deliberately the BARE id, not the
@@ -132,12 +153,15 @@ export const fetchAndNormalizeESPNLeague = async (leagueId, cookies = {}, userId
             status: seasonComplete ? 'complete' : 'in_season',
             platform: 'espn',
             total_rosters: totalRosters,
+            scoring_settings: scoringSettings,
+            roster_positions: rosterPositions,
             settings: {
                 type: leagueType,
                 playoff_week_start: playoffWeekStart,
                 is_auction_draft: isAuctionDraft,
                 divisions: (data.settings.scheduleSettings?.divisions || []).length,
                 playoff_teams: data.settings.scheduleSettings?.playoffTeamCount || 4,
+                roster_positions: rosterPositions,
             },
             avatar: avatar,
             raw_espn: data,
