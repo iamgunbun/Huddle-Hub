@@ -158,7 +158,7 @@ export default function Sidebar({ isOpen, onClose }) {
                                             alt="Logo" 
                                             className={styles.leagueItemAvatar} 
                                             style={{ borderColor: activeLeague?.id === l.id ? '#eebf1c' : '#475569' }} 
-                                            onError={(e) => e.target.src = '/brand.png'}
+                                            onError={(e) => e.target.src = '/fallback.png'}
                                         />
                                     ) : (
                                         <div className={styles.radio} style={{ backgroundColor: activeLeague?.id === l.id ? '#eebf1c' : 'transparent', borderColor: activeLeague?.id === l.id ? '#eebf1c' : '#475569' }}></div>

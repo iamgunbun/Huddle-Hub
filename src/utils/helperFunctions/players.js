@@ -48,14 +48,15 @@ export const loadPlayers = async (activeLeagueId) => {
     // of N, and keeps an ESPN league from silently reading back a Yahoo-keyed
     // cache (or vice versa) when a user switches between them.
     const cacheScope = isEspn ? 'espn' : (isYahoo ? 'yahoo' : 'sleeper');
-    const cacheKey = `playersInfo_v11_${cacheScope}`;
-    const expirationKey = `expiration_v11_${cacheScope}`;
+    const cacheKey = `playersInfo_v12_${cacheScope}`;
+    const expirationKey = `expiration_v12_${cacheScope}`;
 
-    // Drop superseded caches: v9 was per-league (quota bloat) and v10 predates
-    // the `active` flag the availability filter needs.
+    // Drop superseded caches: v9 was per-league (quota bloat), v10 predates the
+    // `active` flag the availability filter needs, and v11 predates
+    // `ownsPlatformId` -- without which every entry reads as a stand-in.
     try {
         Object.keys(localStorage)
-            .filter(k => /^(playersInfo|expiration)_v(9|10)_/.test(k))
+            .filter(k => /^(playersInfo|expiration)_v(9|10|11)_/.test(k))
             .forEach(k => localStorage.removeItem(k));
     } catch (e) {
         console.warn("Failed to prune legacy player caches:", e);
@@ -159,14 +160,23 @@ export const loadPlayers = async (activeLeagueId) => {
             // key when viewing a league on that platform, so its rosters (which
             // only know their own ids) can look players up directly.
             let primaryId = p.player_id;
+            // Whether this key is really this player's id ON THE CONNECTED
+            // PLATFORM, or just their Sleeper id standing in because the
+            // crosswalk has nothing. A lookup by a real platform id that lands
+            // on a stand-in is a wrong player, not a missing one -- see
+            // entryOwnsLookupId.
+            let ownsPlatformId = true;
             if (isYahoo) {
+                ownsPlatformId = !!p.yahoo_id;
                 primaryId = String(p.yahoo_id || p.player_id);
             } else if (isEspn) {
+                ownsPlatformId = !!p.espn_id;
                 primaryId = String(p.espn_id || p.player_id);
             }
 
             const playerObj = {
                 id: primaryId,
+                ownsPlatformId,
                 sleeper_id: p.player_id,
                 fn: p.first_name,
                 ln: p.last_name,

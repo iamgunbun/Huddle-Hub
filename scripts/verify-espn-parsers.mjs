@@ -20,6 +20,8 @@ import {
     espnTeamLogoUrl,
     parseEspnAthleteResponse,
     isEspnLeagueManager,
+    normalizeSwid,
+    espnSwidMatches,
     toProxiedEspnImageUrl,
     isEspnCdnUrl,
     espnDefenseProTeamId,
@@ -493,5 +495,26 @@ check('a non-manager member is not the commissioner', isEspnLeagueManager(member
 check('a swid with no matching member is not the commissioner', isEspnLeagueManager(members, '{ZZZ-999}'), false);
 check('no members array -> false, not a throw', isEspnLeagueManager(null, '{DEF-456}'), false);
 check('no swid -> false', isEspnLeagueManager(members, null), false);
+// The commissioner is a "League Manager" in ESPN's own UI; the account that
+// created the league counts too.
+check('a member flagged only isLeagueCreator also counts as commissioner',
+    isEspnLeagueManager([{ id: '{AAA}', isLeagueCreator: true }], '{AAA}'), true);
+check('a member with neither flag does not',
+    isEspnLeagueManager([{ id: '{AAA}' }], '{AAA}'), false);
+
+// --- SWID normalisation ---
+// ESPN brace-wraps the SWID it stores on members/owners, but a value copied
+// out of a cookie inspector routinely arrives bare, URL-encoded, or padded.
+// A literal comparison fails silently on all three.
+check('braces are stripped', normalizeSwid('{ABC-123}'), 'ABC-123');
+check('url-encoded braces are stripped', normalizeSwid('%7BABC-123%7D'), 'ABC-123');
+check('whitespace and case are normalised', normalizeSwid('  {abc-123} '), 'ABC-123');
+check('null normalises to an empty string', normalizeSwid(null), '');
+check('a bare swid matches ESPN\'s brace-wrapped one', espnSwidMatches('ABC-123', '{ABC-123}'), true);
+check('a url-encoded swid matches too', espnSwidMatches('%7Babc-123%7D', '{ABC-123}'), true);
+check('two different swids still do not match', espnSwidMatches('{AAA}', '{BBB}'), false);
+check('an empty swid never matches, not even another empty one', espnSwidMatches('', ''), false);
+check('a brace-less stored swid finds its league manager',
+    isEspnLeagueManager([{ id: '{DEF-456}', isLeagueManager: true }], 'DEF-456'), true);
 
 console.log(`OK: ${checks} ESPN parser checks passed`);

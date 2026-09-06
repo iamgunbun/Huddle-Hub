@@ -34,8 +34,33 @@ export const playerNameKey = (fn, ln) =>
 // is the same tie-break that dictionary builder's own name index already
 // uses for name collisions. Defined here (not there) so it stays testable
 // without that module's svelte-store/network dependencies.
-export const isLessProminentDuplicate = (existing, incoming) =>
-    !!existing && (existing.searchRank ?? 999999) <= (incoming?.searchRank ?? 999999);
+export const isLessProminentDuplicate = (existing, incoming) => {
+    if (!existing) return false;
+
+    // An entry that genuinely OWNS this platform id always beats one merely
+    // parked at the same key because it had no platform id of its own and
+    // fell back to its Sleeper id. Both are "real players"; only one of them
+    // is the player this key actually refers to on the connected platform.
+    const existingOwns = !!existing.ownsPlatformId;
+    const incomingOwns = !!incoming?.ownsPlatformId;
+    if (existingOwns !== incomingOwns) return existingOwns;
+
+    return (existing.searchRank ?? 999999) <= (incoming?.searchRank ?? 999999);
+};
+
+/**
+ * Whether a dictionary entry found by a direct id lookup is really the player
+ * that id refers to on the connected platform.
+ *
+ * A miss here is NOT a missing entry -- it's a wrong one. On Yahoo/ESPN the
+ * dictionary is keyed by that platform's player id, falling back to the
+ * Sleeper id for anyone the crosswalk doesn't cover. So a lookup by a real
+ * platform id can land on a fallback-keyed player whose unrelated Sleeper id
+ * happens to be the same number, and hand back a completely different person.
+ * Those entries are only trustworthy when they own the id space they're
+ * sitting in; everything else has to be resolved by name/team instead.
+ */
+export const entryOwnsLookupId = (entry) => !entry || entry.ownsPlatformId !== false;
 
 // Generational suffixes are inconsistent between platforms -- Yahoo tends to
 // carry "Michael Pittman Jr." in the full name while Sleeper's last_name is
@@ -261,7 +286,10 @@ export const resolveRosterPlayers = (playerIds, playersInfo = {}, playersByName 
         if (pId === null || pId === undefined || pId === '0') return;
 
         const direct = playersInfo[pId] || playersInfo[String(pId)];
-        if (direct) { players.push(direct); return; }
+        // A direct hit on someone who doesn't own this id space is a
+        // coincidence, not a match -- resolve by name/team below instead of
+        // silently crediting this roster with a stranger's projections.
+        if (direct && entryOwnsLookupId(direct)) { players.push(direct); return; }
 
         const meta = platformMeta[pId] || platformMeta[String(pId)];
         const matched = meta ? resolvePlayerFromMeta(meta, playersInfo, playersByName) : null;

@@ -13,7 +13,7 @@ export function useLeague() {
 
 const formatAvatarUrl = (avatar) => {
     if (!avatar || typeof avatar !== 'string' || avatar.trim() === '' || avatar === 'null') {
-        return '/brand.png';
+        return '/fallback.png';
     }
     
     if (avatar.startsWith('http') || avatar.startsWith('/')) {
@@ -249,7 +249,7 @@ export function LeagueProvider({ children }) {
 
                     const resolvedName = liveData.name || matchedLeague.league_name || matchedLeague.name || ul.team_name || "Unnamed League";
                     const rawAvatar = liveData.avatar || matchedLeague.avatar || matchedLeague.league_avatar || ul.avatar;
-                    const finalAvatar = (isESPN || isYahoo) ? (rawAvatar || '/brand.png') : formatAvatarUrl(rawAvatar);
+                    const finalAvatar = (isESPN || isYahoo) ? (rawAvatar || '/fallback.png') : formatAvatarUrl(rawAvatar);
 
                     return {
                         ...matchedLeague, 
@@ -281,7 +281,7 @@ export function LeagueProvider({ children }) {
                         ...activeConnection, 
                         is_commissioner: activeConnection.is_commissioner, 
                         team_name: activeConnection.team_name,
-                        avatar: activeConnection.avatar || '/brand.png'
+                        avatar: activeConnection.avatar || '/fallback.png'
                     };
                     setActiveLeague(selected);
                     localStorage.setItem('huddle_active_league_id', selected.id);
@@ -318,7 +318,7 @@ export function LeagueProvider({ children }) {
                     ...target,
                     is_commissioner: target.is_commissioner,
                     team_name: target.team_name,
-                    avatar: target.avatar || '/brand.png'
+                    avatar: target.avatar || '/fallback.png'
                 };
                 setActiveLeague(updated);
                 localStorage.setItem('huddle_active_league_id', target.id);

@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
 import { getLeagueRosters, getLeagueTeamManagers, loadPlayers, getLeagueData, getLeagueStandings, getNflState } from '../utils/helper';
 import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
-import { resolvePlayerFromMeta } from '../utils/playerPool';
+import { resolvePlayerFromMeta, entryOwnsLookupId } from '../utils/playerPool';
 import { scoreStatLine } from '../utils/yahooScoring';
 import { fetchAndNormalizeYahooMatchups } from '../utils/yahooService';
 import { fetchAndNormalizeESPNMatchups, fetchAndNormalizeESPNRosters } from '../utils/espnService';
@@ -64,7 +64,12 @@ export default function Rosters() {
         // roster metadata) ever carries these.
         const espnPoints = yahooMeta ? { actualPoints: yahooMeta.actualPoints, projectedPoints: yahooMeta.projectedPoints } : null;
 
-        if (direct) return espnPoints ? { ...direct, ...espnPoints } : direct;
+        // A direct hit is only this player if the entry owns the id space it
+        // sits in. On ESPN/Yahoo the dictionary falls back to a Sleeper id for
+        // anyone the crosswalk misses, so a real platform id can otherwise
+        // land on an unrelated player with the same number -- see
+        // entryOwnsLookupId.
+        if (direct && entryOwnsLookupId(direct)) return espnPoints ? { ...direct, ...espnPoints } : direct;
         if (!yahooMeta) return null;
 
         // Yahoo gave us this player but Sleeper's yahoo_id crosswalk didn't map
@@ -474,7 +479,7 @@ export default function Rosters() {
                     className={`${styles.teamHeader} ${viewMode === 'all' ? styles.clickable : ''}`} 
                     onClick={() => viewMode === 'all' && toggleTeamExpand(rosterId)}
                 >
-                    <img src={resolveImageSrc(teamMeta.avatar, '/brand.png')} alt="Avatar" className={styles.teamAvatar} referrerPolicy="no-referrer" onError={onImageError(teamMeta.avatar, '/brand.png')} />
+                    <img src={resolveImageSrc(teamMeta.avatar, '/fallback.png')} alt="Avatar" className={styles.teamAvatar} referrerPolicy="no-referrer" onError={onImageError(teamMeta.avatar, '/fallback.png')} />
                     <div className={styles.teamDetails}>
                         <h3 className={styles.teamName}>{teamMeta.name}</h3>
                         <div className={styles.teamStats}>

@@ -349,10 +349,41 @@ export const espnDefenseMetaFromId = (playerId) => {
  * defensively so a wrong or renamed field degrades to "not the commissioner"
  * rather than granting Commissioner Tools to the wrong account.
  */
+/**
+ * An ESPN SWID reduced to just its identifying characters.
+ *
+ * ESPN's own SWID cookie is brace-wrapped ("{XXXX-...}"), but a value copied
+ * out of a browser's cookie inspector routinely arrives without the braces,
+ * URL-encoded (%7B...%7D), or with stray whitespace -- and it's compared
+ * against `members[].id` / `team.owners[]`, which ESPN always brace-wraps. A
+ * literal string comparison therefore fails for a perfectly valid SWID, and
+ * it fails SILENTLY: the account simply never matches any member, so it never
+ * looks like the commissioner and never looks like it owns a team.
+ */
+export const normalizeSwid = (swid) =>
+    String(swid ?? '')
+        .trim()
+        .replace(/%7B/gi, '')
+        .replace(/%7D/gi, '')
+        .replace(/[{}]/g, '')
+        .toUpperCase();
+
+export const espnSwidMatches = (a, b) => {
+    const left = normalizeSwid(a);
+    return !!left && left === normalizeSwid(b);
+};
+
 export const isEspnLeagueManager = (members, swid) => {
-    if (!Array.isArray(members) || !swid) return false;
-    const target = String(swid).toUpperCase();
-    return members.some(m => String(m?.id || '').toUpperCase() === target && !!m?.isLeagueManager);
+    if (!Array.isArray(members) || !normalizeSwid(swid)) return false;
+    return members.some(m => (
+        espnSwidMatches(m?.id, swid)
+        // ESPN calls the commissioner a "League Manager" in its own UI, and
+        // flags them on the member record. `isLeagueCreator` is accepted
+        // alongside it because the account that created the league is a
+        // manager of it by definition, and is the more likely of the two to
+        // be present on an older league's member record.
+        && (!!m?.isLeagueManager || !!m?.isLeagueCreator)
+    ));
 };
 
 // A team that hasn't uploaded a custom logo doesn't always get a usable
@@ -387,7 +418,7 @@ export const espnTeamLogoUrl = (rawLogo) => {
  * this fetches it server-side with the same stored cookies the league/roster
  * data itself already uses. Safe to apply unconditionally: a public league's
  * logo loads through here exactly as well as it would directly, just with
- * one extra (cached) hop, and a local fallback path like '/brand.png' is left
+ * one extra (cached) hop, and a local fallback path like '/fallback.png' is left
  * untouched since it was never a hotlink to begin with.
  */
 export const isEspnCdnUrl = (rawUrl) => {
@@ -507,16 +538,17 @@ export const parseEspnTeamRoster = (team, { week = null, resolvedSwid = null } =
 
     const owners = Array.isArray(team?.owners) ? team.owners : [];
     const record = team?.record?.overall || {};
-    const isOwnedByCurrentLogin = !!resolvedSwid && owners.some(
-        o => String(o).toUpperCase() === String(resolvedSwid).toUpperCase()
-    );
+    // Brace/encoding-tolerant on purpose -- see normalizeSwid. A stored SWID
+    // that merely lost its braces used to match no owner at all, silently
+    // leaving "my team" unresolved on every ESPN page.
+    const isOwnedByCurrentLogin = owners.some(o => espnSwidMatches(o, resolvedSwid));
 
     const roster = {
         roster_id: team?.id,
         owner_id: owners[0] || `team-${team?.id}`,
         co_owners: owners.slice(1),
         team_name: espnTeamDisplayName(team),
-        avatar: espnTeamLogoUrl(team?.logo) || '/brand.png',
+        avatar: espnTeamLogoUrl(team?.logo) || '/fallback.png',
         manager_name: espnTeamDisplayName(team),
         players,
         starters,

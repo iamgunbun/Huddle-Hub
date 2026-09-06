@@ -204,7 +204,7 @@ export default function Standings() {
                                         <td className={`${styles.rank} ${idx < 4 ? styles.playoffs : ''}`}>{idx + 1}</td>
                                         <td>
                                             <div className={styles.teamCell}>
-                                                <img src={resolveImageSrc(team.avatar, '/brand.png')} alt="" className={styles.avatar} referrerPolicy="no-referrer" onError={onImageError(team.avatar, '/brand.png')} />
+                                                <img src={resolveImageSrc(team.avatar, '/fallback.png')} alt="" className={styles.avatar} referrerPolicy="no-referrer" onError={onImageError(team.avatar, '/fallback.png')} />
                                                 <span className={styles.teamName}>{team.teamName}</span>
                                             </div>
                                         </td>

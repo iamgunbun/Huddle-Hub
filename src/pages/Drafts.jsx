@@ -242,7 +242,7 @@ export default function Drafts() {
                         <div className={styles.roundLabelPlaceholder}></div>
                         {headerOwners.map((owner, idx) => (
                             <div key={`header-${idx}`} className={styles.headerCard}>
-                                <img src={resolveImageSrc(owner.team.avatar, '/brand.png')} alt="Owner" className={styles.ownerAvatar} referrerPolicy="no-referrer" onError={onImageError(owner.team.avatar, '/brand.png')} />
+                                <img src={resolveImageSrc(owner.team.avatar, '/fallback.png')} alt="Owner" className={styles.ownerAvatar} referrerPolicy="no-referrer" onError={onImageError(owner.team.avatar, '/fallback.png')} />
                                 <span className={styles.ownerName}>{owner.team.name}</span>
                             </div>
                         ))}
