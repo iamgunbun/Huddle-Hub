@@ -23,6 +23,20 @@
 export const playerNameKey = (fn, ln) =>
     `${fn || ''} ${ln || ''}`.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
 
+// Sleeper's own espn_id/yahoo_id crosswalk isn't guaranteed unique -- a stale
+// or duplicate mapping can give two different Sleeper players the same
+// platform id. Without this check, whichever the shared dictionary builder
+// (helperFunctions/players.js) processes second would silently overwrite the
+// first with no signal anything went wrong -- which is how an actual active
+// starter can vanish from every page's player search because an unrelated
+// retired/duplicate entry happened to share their platform id and be
+// processed later. Keeping the more prominent (lower searchRank) of the two
+// is the same tie-break that dictionary builder's own name index already
+// uses for name collisions. Defined here (not there) so it stays testable
+// without that module's svelte-store/network dependencies.
+export const isLessProminentDuplicate = (existing, incoming) =>
+    !!existing && (existing.searchRank ?? 999999) <= (incoming?.searchRank ?? 999999);
+
 // Generational suffixes are inconsistent between platforms -- Yahoo tends to
 // carry "Michael Pittman Jr." in the full name while Sleeper's last_name is
 // just "Pittman" -- so a suffix-free key is tried as a second pass.

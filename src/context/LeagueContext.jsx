@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
-import { fetchAndNormalizeESPNLeague } from '../utils/espnService';
+import { fetchAndNormalizeESPNLeague, fetchESPNCommissionerStatus } from '../utils/espnService';
 import { fetchAndNormalizeYahooLeague, fetchYahooOwnTeams } from '../utils/yahooService';
 import { findSleeperLeagueUser, isSleeperCommissioner } from '../utils/leagueMembership';
 import { toEspnLeagueId } from '../utils/platformIds';
@@ -97,12 +97,29 @@ const syncSleeperCommissionerFlag = async (userId, selected, setActiveLeague) =>
     await applyCommissionerFlag(userId, selected, true, selected, setActiveLeague);
 };
 
+// ESPN has no per-league "list every commissioner flag at once" endpoint the
+// way Yahoo does, so -- like Sleeper -- only the league actually in view is
+// reconciled, and only ever grants the flag, never revokes it (see the
+// module-level note above for why that direction is the safe one). Unlike
+// Sleeper's team-name heuristic, this checks the connecting account's own
+// ESPN identity (its SWID) against the league's member list directly.
+const syncEspnCommissionerFlag = async (userId, selected, setActiveLeague) => {
+    if (!selected || selected.platform !== 'espn' || !selected.sleeper_league_id) return;
+    if (selected.is_commissioner) return;
+
+    const isManager = await fetchESPNCommissionerStatus(selected.sleeper_league_id, userId).catch(() => false);
+    if (!isManager) return;
+
+    await applyCommissionerFlag(userId, selected, true, selected, setActiveLeague);
+};
+
 const syncCommissionerFlags = async (userId, leagues, selected, setActiveLeague) => {
     if (!userId) return;
     try {
         await Promise.all([
             syncYahooCommissionerFlags(userId, leagues, selected, setActiveLeague),
             syncSleeperCommissionerFlag(userId, selected, setActiveLeague),
+            syncEspnCommissionerFlag(userId, selected, setActiveLeague),
         ]);
     } catch (err) {
         console.warn("Couldn't reconcile commissioner status:", err);

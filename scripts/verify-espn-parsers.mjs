@@ -19,6 +19,8 @@ import {
     buildEspnRosterPositions,
     espnTeamLogoUrl,
     parseEspnAthleteResponse,
+    isEspnLeagueManager,
+    toProxiedEspnImageUrl,
 } from '../src/utils/espnParsers.js';
 import { scoreStatLine } from '../src/utils/yahooScoring.js';
 
@@ -66,6 +68,17 @@ check('an empty string -> null, not a broken image', espnTeamLogoUrl(''), null);
 check('null -> null', espnTeamLogoUrl(null), null);
 check('a bare filename with no scheme -> null', espnTeamLogoUrl('logo_default_1.svg'), null);
 check('a plain http url gets upgraded to https', espnTeamLogoUrl('http://a.espncdn.com/logo.png'), 'https://a.espncdn.com/logo.png');
+
+// --- toProxiedEspnImageUrl ---
+check(
+    'an https url is routed through the image proxy with both params',
+    toProxiedEspnImageUrl('https://a.espncdn.com/logo.png', 'user-1'),
+    '/api/espn-image-proxy?url=https%3A%2F%2Fa.espncdn.com%2Flogo.png&userId=user-1'
+);
+check('no userId -> the url is left alone (nothing to attach cookies for)',
+    toProxiedEspnImageUrl('https://a.espncdn.com/logo.png', null), 'https://a.espncdn.com/logo.png');
+check('a local fallback path is never proxied', toProxiedEspnImageUrl('/brand.png', 'user-1'), '/brand.png');
+check('null url stays null', toProxiedEspnImageUrl(null, 'user-1'), null);
 
 // --- espnLineupSlotName / buildEspnRosterPositions ---
 check('slot 0 is QB', espnLineupSlotName(0), 'QB');
@@ -435,5 +448,17 @@ check('missing position/team fall back to BN/FA like everywhere else', [athleteN
 check('no athlete in the response -> null', parseEspnAthleteResponse({}), null);
 check('no response at all -> null', parseEspnAthleteResponse(null), null);
 check('an athlete with no id at all -> null, not a garbage entry', parseEspnAthleteResponse({ athlete: { displayName: 'Ghost' } }), null);
+
+// --- isEspnLeagueManager ---
+const members = [
+    { id: '{ABC-123}', isLeagueManager: false },
+    { id: '{DEF-456}', isLeagueManager: true },
+];
+check('the member flagged isLeagueManager is the commissioner', isEspnLeagueManager(members, '{DEF-456}'), true);
+check('matching is case-insensitive (SWIDs can come back either case)', isEspnLeagueManager(members, '{def-456}'), true);
+check('a non-manager member is not the commissioner', isEspnLeagueManager(members, '{ABC-123}'), false);
+check('a swid with no matching member is not the commissioner', isEspnLeagueManager(members, '{ZZZ-999}'), false);
+check('no members array -> false, not a throw', isEspnLeagueManager(null, '{DEF-456}'), false);
+check('no swid -> false', isEspnLeagueManager(members, null), false);
 
 console.log(`OK: ${checks} ESPN parser checks passed`);

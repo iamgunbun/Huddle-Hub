@@ -278,6 +278,30 @@ export const parseEspnAthleteResponse = (data) => {
     };
 };
 
+/**
+ * True when `swid` (this account's ESPN identity, the same cookie value
+ * fetchAndNormalizeESPNRosters already resolves to flag "my team") belongs to
+ * a member the league's own `members[]` list flags as its manager -- ESPN's
+ * equivalent of Yahoo's per-team commissioner flag, which the app already
+ * syncs for Yahoo/Sleeper leagues in LeagueContext.jsx but never had an ESPN
+ * counterpart for, leaving Commissioner Tools permanently hidden for an ESPN
+ * league's actual commissioner.
+ *
+ * `members[]` and each member's own id (its SWID) are fields the community's
+ * read of ESPN's own (unofficial, undocumented) API already relies on for
+ * matching a team to its owner (see parseEspnTeamRoster's `owners` handling);
+ * `isLeagueManager` is this app's own best read of which field marks the
+ * commissioner specifically, and hasn't been verifiable against a live league
+ * from this sandbox (every espn.com host is network-blocked here). Written
+ * defensively so a wrong or renamed field degrades to "not the commissioner"
+ * rather than granting Commissioner Tools to the wrong account.
+ */
+export const isEspnLeagueManager = (members, swid) => {
+    if (!Array.isArray(members) || !swid) return false;
+    const target = String(swid).toUpperCase();
+    return members.some(m => String(m?.id || '').toUpperCase() === target && !!m?.isLeagueManager);
+};
+
 // A team that hasn't uploaded a custom logo doesn't always get a usable
 // absolute URL back in `logo` -- sometimes it's empty, sometimes ESPN's own
 // default-logo placeholder comes back protocol-relative ("//g.espncdn.com/...")
@@ -300,6 +324,22 @@ export const espnTeamLogoUrl = (rawLogo) => {
     if (/^http:\/\//i.test(logo)) return `https://${logo.slice(7)}`;
     if (/^https:\/\//i.test(logo)) return logo;
     return null;
+};
+
+/**
+ * Routes an ESPN-hosted logo through this app's own image proxy
+ * (api/espn-image-proxy.js) instead of hotlinking it directly. A private
+ * league's custom team logos can require the viewer's own ESPN session to
+ * load, which a plain cross-origin <img> request has no way to provide --
+ * this fetches it server-side with the same stored cookies the league/roster
+ * data itself already uses. Safe to apply unconditionally: a public league's
+ * logo loads through here exactly as well as it would directly, just with
+ * one extra (cached) hop, and a local fallback path like '/brand.png' is left
+ * untouched since it was never a hotlink to begin with.
+ */
+export const toProxiedEspnImageUrl = (rawUrl, userId) => {
+    if (!rawUrl || !userId || !/^https:\/\//i.test(rawUrl)) return rawUrl;
+    return `/api/espn-image-proxy?url=${encodeURIComponent(rawUrl)}&userId=${encodeURIComponent(userId)}`;
 };
 
 /**
