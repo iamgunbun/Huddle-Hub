@@ -6,6 +6,7 @@ import { fetchESPNDraft } from '../utils/espnService';
 import { isSameLeagueChain } from '../utils/yahooHistory';
 import { resolvePlayerFromMeta } from '../utils/playerPool';
 import styles from './Drafts.module.css';
+import { resolveImageSrc, onImageError } from '../utils/imageFallback';
 import { isYahooLeagueId, isEspnLeagueId } from '../utils/platformIds';
 
 const DEFAULT_PLAYER_IMG = 'https://sleepercdn.com/images/v2/icons/player_default.webp';
@@ -241,7 +242,7 @@ export default function Drafts() {
                         <div className={styles.roundLabelPlaceholder}></div>
                         {headerOwners.map((owner, idx) => (
                             <div key={`header-${idx}`} className={styles.headerCard}>
-                                <img src={owner.team.avatar} alt="Owner" className={styles.ownerAvatar} />
+                                <img src={resolveImageSrc(owner.team.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} alt="Owner" className={styles.ownerAvatar} onError={onImageError(owner.team.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} />
                                 <span className={styles.ownerName}>{owner.team.name}</span>
                             </div>
                         ))}

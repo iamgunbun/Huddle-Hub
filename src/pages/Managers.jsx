@@ -7,6 +7,7 @@ import { isSameLeagueChain } from '../utils/yahooHistory';
 import { sleeperLeagueFormat, estimateLeagueFormatFromRosterSets, formatLabel } from '../utils/leagueFormat';
 import { syncActiveLeague } from '../utils/leagueInfo';
 import styles from './Managers.module.css';
+import { resolveImageSrc, onImageError } from '../utils/imageFallback';
 import { isYahooLeagueId } from '../utils/platformIds';
 
 // The same season-by-season wins/losses walk the AI eval used to do inside
@@ -87,6 +88,10 @@ export default function Managers() {
     const [loading, setLoading] = useState(true);
     const [mergedManagers, setMergedManagers] = useState([]);
     const [myManagerId, setMyManagerId] = useState(null);
+    // How many seasons this league's own history actually covers -- a brand
+    // new Sleeper or Yahoo league looks exactly like this the first time
+    // through too, not just a first-season ESPN one.
+    const [seasonsTracked, setSeasonsTracked] = useState(0);
     
     // Engine State
     const [evaluations, setEvaluations] = useState({});
@@ -113,6 +118,8 @@ export default function Managers() {
                     getAwards(true, activeLeague.sleeper_league_id),
                     getLeagueRecords(true, activeLeague.sleeper_league_id)
                 ]);
+
+                setSeasonsTracked(Object.keys(tmData?.teamManagersMap || {}).length);
 
                 let foundMyManagerId = null;
                 const { data: sessionData } = await supabase.auth.getSession();
@@ -487,6 +494,17 @@ export default function Managers() {
                 <h2 className={styles.title}>League Managers</h2>
             </div>
 
+            {seasonsTracked <= 1 && (
+                <div style={{ textAlign: 'center', color: '#94a3b8', background: 'rgba(255, 255, 255, 0.02)', border: '1px dashed rgba(255, 255, 255, 0.1)', borderRadius: '12px', padding: '24px 20px', marginBottom: '20px' }}>
+                    <h3 style={{ color: '#f8fafc', margin: '0 0 8px 0' }}>Just Getting Started</h3>
+                    <p style={{ margin: 0 }}>
+                        This is your league's first tracked season, so there's no career history behind these
+                        managers yet -- championships, runner-ups, and multi-year records will start building here
+                        once your league carries over into a new season.
+                    </p>
+                </div>
+            )}
+
             <div className={styles.managersGrid}>
                 {mergedManagers.map(manager => (
                     <div 
@@ -495,7 +513,7 @@ export default function Managers() {
                         onClick={() => setSearchParams({ manager: manager.managerId })}
                     >
                         <div className={styles.cardHeader}>
-                            <img src={manager.teamAvatar} alt="Avatar" className={styles.avatar} />
+                            <img src={resolveImageSrc(manager.teamAvatar, '/brand.png')} alt="Avatar" className={styles.avatar} onError={onImageError(manager.teamAvatar, '/brand.png')} />
                             <div className={styles.headerText}>
                                 <h3 className={styles.teamName}>{manager.teamName}</h3>
                                 <div className={styles.userName}>@{manager.username}</div>

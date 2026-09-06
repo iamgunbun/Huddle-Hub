@@ -5,6 +5,7 @@ import { useLeague } from '../context/LeagueContext';
 import { getLeagueTeamManagers, getLeagueData, loadPlayers, getAwards, getLeagueRosters } from '../utils/helper';
 import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
 import styles from './Home.module.css';
+import { resolveImageSrc, onImageError } from '../utils/imageFallback';
 import ProjectionsPanel from '../components/Projections/ProjectionsPanel';
 
 export default function Home() {
@@ -496,11 +497,11 @@ export default function Home() {
                                     <span>{recentChamp.year} Champion</span>
                                 </h3>
                                 <div style={{ position: 'relative', width: '80px', height: '80px', margin: '15px auto' }}>
-                                    <img 
-                                         src={formatChampAvatar(champTeam.avatar)} 
-                                         alt="Champ" 
-                                         style={{ width: '80px', height: '80px', borderRadius: '50%', border: '3px solid #eebf1c', display: 'block', objectFit: 'cover' }} 
-                                         onError={(e) => { e.target.src = '/brand.png'; }}
+                                    <img
+                                         src={resolveImageSrc(formatChampAvatar(champTeam.avatar), '/brand.png')}
+                                         alt="Champ"
+                                         style={{ width: '80px', height: '80px', borderRadius: '50%', border: '3px solid #eebf1c', display: 'block', objectFit: 'cover' }}
+                                         onError={onImageError(formatChampAvatar(champTeam.avatar), '/brand.png')}
                                      />
                                     <span style={{ position: 'absolute', bottom: '-4px', right: '-4px', background: '#eebf1c', borderRadius: '50%', width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.5)' }}>
                                         <i className="material-icons" style={{ fontSize: '16px', color: '#000' }}>emoji_events</i>
@@ -613,11 +614,11 @@ export default function Home() {
                                                 <i className="material-icons" style={{ color: '#eebf1c', fontSize: '24px' }}>emoji_events</i>
                                                 <div style={{ color: '#eebf1c', fontSize: '1.2em', fontWeight: 800, textTransform: 'uppercase', textAlign: 'left' }}>{champTeam.name}</div>
                                             </div>
-                                            <img 
-                                                src={formatChampAvatar(champTeam.avatar)} 
-                                                alt="Champ" 
-                                                style={{ width: '60px', height: '60px', borderRadius: '50%', border: '2px solid #eebf1c', objectFit: 'cover' }} 
-                                                onError={(e) => { e.target.src = '/brand.png'; }}
+                                            <img
+                                                src={resolveImageSrc(formatChampAvatar(champTeam.avatar), '/brand.png')}
+                                                alt="Champ"
+                                                style={{ width: '60px', height: '60px', borderRadius: '50%', border: '2px solid #eebf1c', objectFit: 'cover' }}
+                                                onError={onImageError(formatChampAvatar(champTeam.avatar), '/brand.png')}
                                             />
                                         </div>
                                     </div>
