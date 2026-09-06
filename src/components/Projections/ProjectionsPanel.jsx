@@ -160,6 +160,7 @@ export default function ProjectionsPanel() {
                     // What this roster would score in a typical week if the
                     // manager started their best available lineup.
                     let rosterStrength = 0;
+                    let rosterCoverage = 1;
                     if (roster?.players?.length) {
                         totalPlayersFound += roster.players.length;
                         // A plain id lookup silently drops every player the
@@ -169,6 +170,7 @@ export default function ProjectionsPanel() {
                         const { players: rosterPlayers, coverage } = resolveRosterPlayers(
                             roster.players, playersInfo, playersByName, platformMeta
                         );
+                        rosterCoverage = coverage;
                         worstCoverage = Math.min(worstCoverage, coverage);
                         const raw = predictScores(rosterPlayers, week, currentLeagueData);
                         rosterStrength = Number.isFinite(raw) ? raw : 0;
@@ -181,8 +183,6 @@ export default function ProjectionsPanel() {
                     const weeksPlayed = wins + losses + ties;
                     weeksCompleted = Math.max(weeksCompleted, weeksPlayed);
 
-                    const mean = blendedScoringMean({ pointsFor, weeksPlayed, rosterStrength });
-
                     teams.push({
                         rosterId: String(rosterID),
                         name: teamMeta?.name || 'Unknown Team',
@@ -191,10 +191,37 @@ export default function ProjectionsPanel() {
                         losses,
                         ties,
                         pointsFor,
-                        mean,
-                        stdDev: Math.max(1, mean * DEFAULT_SCORE_VOLATILITY),
+                        weeksPlayed,
+                        rosterStrength,
+                        rosterCoverage,
                     });
                 }
+
+                // An under-identified roster scores its optimal lineup out of
+                // whatever could be looked up, so an unfilled starting slot
+                // reads as a team that simply has nobody there -- indistinguishable
+                // from a genuinely terrible team, and it drags that team's odds
+                // toward zero for a reason that has nothing to do with the league.
+                // Lift the shortfall back toward what the rest of the roster
+                // implies, capped at the league's median strength so a gap can
+                // never manufacture a contender either.
+                const strengths = teams.map(t => t.rosterStrength).filter(s => s > 0).sort((a, b) => a - b);
+                const medianStrength = strengths.length
+                    ? strengths[Math.floor(strengths.length / 2)]
+                    : 0;
+
+                teams.forEach(t => {
+                    const coverage = t.rosterCoverage;
+                    if (coverage > 0 && coverage < 1 && t.rosterStrength > 0 && medianStrength > 0) {
+                        t.rosterStrength = Math.min(t.rosterStrength / coverage, medianStrength);
+                    }
+                    t.mean = blendedScoringMean({
+                        pointsFor: t.pointsFor,
+                        weeksPlayed: t.weeksPlayed,
+                        rosterStrength: t.rosterStrength,
+                    });
+                    t.stdDev = Math.max(1, t.mean * DEFAULT_SCORE_VOLATILITY);
+                });
 
                 if (!teams.length) {
                     setPowerRankings([]);
@@ -278,6 +305,16 @@ export default function ProjectionsPanel() {
         load();
     }, [activeLeague]);
 
+    // A team that still has a real (if small) chance shouldn't be shown as a
+    // flat 0% -- that reads as "mathematically eliminated", which nobody is in
+    // September. The whole-percent columns are rounded to sum correctly, so
+    // anything under half a point lands on zero; fall back to the unrounded
+    // odds to tell "too small to round to 1%" apart from "actually none".
+    const formatOdds = (whole, raw) => {
+        if (whole > 0) return `${whole}%`;
+        return raw > 0 ? '<1%' : '0%';
+    };
+
     const movementTitle = (movement) => {
         if (movement === null || movement === undefined) return 'Newly ranked';
         if (movement > 0) return `Up ${movement} since last week`;
@@ -356,12 +393,12 @@ export default function ProjectionsPanel() {
                     
                     <div className={styles.oddsInfo}>
                         <div className={styles.oddsRow}>
-                            <span className={styles.oddsLabel}>PO:</span> 
-                            <span className={styles.oddsValue}>{team.po}%</span>
+                            <span className={styles.oddsLabel}>PO:</span>
+                            <span className={styles.oddsValue}>{formatOdds(team.po, team.playoffOdds)}</span>
                         </div>
                         <div className={styles.oddsRow}>
-                            <span className={styles.oddsLabel}>Champ:</span> 
-                            <span className={styles.oddsValue}>{team.champ}%</span>
+                            <span className={styles.oddsLabel}>Champ:</span>
+                            <span className={styles.oddsValue}>{formatOdds(team.champ, team.titleOdds)}</span>
                         </div>
                     </div>
                 </div>

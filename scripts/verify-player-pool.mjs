@@ -270,5 +270,20 @@ eq('a roster id landing on a stand-in resolves by name instead',
 eq('and does not credit the roster with the stranger\'s projection',
     espnResolved.players[0].wi[1].p, 18);
 
+// --- Defenses on a platform-keyed dictionary ------------------------------
+// On Yahoo/ESPN the dictionary is re-keyed by that platform's player id, so a
+// defense carrying one is no longer filed under its team abbreviation -- and
+// the abbreviation is the ONLY thing the platforms agree on for a defense.
+// The name index carries the alias for exactly this case; without it every
+// roster that owns a defense has a hole in it, which understates that team.
+const espnKeyedDict = {
+    '-16025': { fn: 'San Francisco', ln: '49ers', pos: 'DEF', t: 'SF', sleeper_id: 'SF', ownsPlatformId: true },
+};
+const espnKeyedByName = { 'san francisco 49ers': espnKeyedDict['-16025'], SF: espnKeyedDict['-16025'] };
+eq('a defense still resolves by team when the dictionary is keyed by a platform id',
+    resolvePlayerFromMeta({ fn: 'SF', ln: 'D/ST', pos: 'DEF', t: 'SF' }, espnKeyedDict, espnKeyedByName)?.sleeper_id, 'SF');
+eq('a defense whose team is not in either index still resolves to null',
+    resolvePlayerFromMeta({ fn: 'KC', ln: 'D/ST', pos: 'DEF', t: 'KC' }, espnKeyedDict, espnKeyedByName), null);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

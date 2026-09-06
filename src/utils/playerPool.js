@@ -90,7 +90,11 @@ export const resolvePlayerFromMeta = (meta, playersInfo = {}, playersByName = {}
     const team = String(meta.t || meta.team || '').toUpperCase().trim();
 
     if (pos.includes('DEF') || pos === 'DST') {
-        const byTeam = playersInfo[team];
+        // `playersInfo[team]` only works while the dictionary is keyed by
+        // Sleeper ids. On a Yahoo/ESPN league it's re-keyed by that platform's
+        // player id, so a defense that has one is no longer under its team
+        // key -- the name index carries the same alias for exactly that case.
+        const byTeam = playersInfo[team] || playersByName[team];
         if (byTeam) return byTeam;
     }
 
