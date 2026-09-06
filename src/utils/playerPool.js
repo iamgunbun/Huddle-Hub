@@ -141,8 +141,20 @@ export const buildOwnedIndex = (rosters, { matchNames = false, nameSources = [] 
                         }
 
                         if (!nameFound) {
-                            const nameKey = playerNameKey(meta.fn ?? meta.first_name, meta.ln ?? meta.last_name);
-                            if (nameKey) { names.add(nameKey); nameFound = true; }
+                            const fn = meta.fn ?? meta.first_name;
+                            const ln = meta.ln ?? meta.last_name;
+                            const nameKey = playerNameKey(fn, ln);
+                            if (nameKey) {
+                                names.add(nameKey);
+                                // Suffix-free too -- a rostered "Michael Pittman Jr."
+                                // must still match a dictionary entry whose last_name
+                                // is bare "Pittman" (see the module note up top), or
+                                // this index silently fails to cover that player at
+                                // all and they leak through as available.
+                                const noSuffix = playerNameKeyNoSuffix(fn, ln);
+                                if (noSuffix) names.add(noSuffix);
+                                nameFound = true;
+                            }
                         }
                     }
                 });
@@ -175,8 +187,12 @@ export const isPlayerOwned = (player, ownedIndex) => {
     }
 
     if (!ownedIndex.names.size) return false;
-    const nameKey = playerNameKey(player.fn ?? player.first_name, player.ln ?? player.last_name);
-    return nameKey ? ownedIndex.names.has(nameKey) : false;
+    const fn = player.fn ?? player.first_name;
+    const ln = player.ln ?? player.last_name;
+    const nameKey = playerNameKey(fn, ln);
+    if (nameKey && ownedIndex.names.has(nameKey)) return true;
+    const noSuffix = playerNameKeyNoSuffix(fn, ln);
+    return noSuffix ? ownedIndex.names.has(noSuffix) : false;
 };
 
 /**

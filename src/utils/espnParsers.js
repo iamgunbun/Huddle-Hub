@@ -290,7 +290,15 @@ export const espnTeamLogoUrl = (rawLogo) => {
     const logo = String(rawLogo || '').trim();
     if (!logo) return null;
     if (logo.startsWith('//')) return `https:${logo}`;
-    if (/^https?:\/\//i.test(logo)) return logo;
+    // A plain "http://" logo (some older custom-uploaded team logos predate
+    // ESPN serving these over https) gets silently blocked as mixed content
+    // on this app's https-only deployment -- the <img> tag never even gets a
+    // chance to fail gracefully to the fallback avatar the normal way, it's
+    // blocked before the request goes out. Upgrading unconditionally is safe:
+    // every image host this field can point to (ESPN's own CDN) also serves
+    // https.
+    if (/^http:\/\//i.test(logo)) return `https://${logo.slice(7)}`;
+    if (/^https:\/\//i.test(logo)) return logo;
     return null;
 };
 

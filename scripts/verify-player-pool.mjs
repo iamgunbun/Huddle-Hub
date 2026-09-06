@@ -46,6 +46,24 @@ eq('yahoo: unrostered player is not owned',
 eq('matched through a crosswalked sleeper_id',
     isPlayerOwned({ player_id: 'yahoo-only', sleeper_id: '4046', fn: 'X', ln: 'Y' }, idx), true);
 
+// --- Name matching must tolerate a generational suffix on only one side ---
+// The platform (Yahoo/ESPN) roster spells it "Jr."; the shared dictionary's
+// entry for the same player doesn't. buildOwnedIndex/isPlayerOwned used to
+// have no suffix-tolerant fallback of their own (unlike resolvePlayerFromMeta
+// below, which already handled this), so a real rostered player like this
+// silently failed to match and leaked through as "available".
+const suffixRosters = { 6: { roster_id: 6, players: ['40877'] } };
+const suffixMeta = { '40877': { fn: 'Michael', ln: 'Pittman Jr.', pos: 'WR', t: 'IND' } };
+const suffixIdx = buildOwnedIndex(suffixRosters, { matchNames: true, nameSources: [suffixMeta, dict] });
+eq('rostered player with a suffix on the platform side is still owned (dictionary has none)',
+    isPlayerOwned({ player_id: 'dict-only', fn: 'Michael', ln: 'Pittman' }, suffixIdx), true);
+
+const suffixRostersReversed = { 6: { roster_id: 6, players: ['55'] } };
+const suffixMetaReversed = { '55': { fn: 'Michael', ln: 'Pittman', pos: 'WR', t: 'IND' } };
+const suffixIdxReversed = buildOwnedIndex(suffixRostersReversed, { matchNames: true, nameSources: [suffixMetaReversed, dict] });
+eq('rostered player with a suffix on the dictionary side is still owned (platform has none)',
+    isPlayerOwned({ player_id: 'dict-only', fn: 'Michael', ln: 'Pittman Jr.' }, suffixIdxReversed), true);
+
 // --- Dynasty: IR and taxi players are rostered too ---
 const dynasty = { 5: { roster_id: 5, players: null, starters: [], reserve: ['4046'], taxi: ['6794'] } };
 const dIdx = buildOwnedIndex(dynasty, { nameSources: [dict] });

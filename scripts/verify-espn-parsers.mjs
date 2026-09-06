@@ -65,6 +65,7 @@ check('a protocol-relative url gets https: prepended', espnTeamLogoUrl('//g.espn
 check('an empty string -> null, not a broken image', espnTeamLogoUrl(''), null);
 check('null -> null', espnTeamLogoUrl(null), null);
 check('a bare filename with no scheme -> null', espnTeamLogoUrl('logo_default_1.svg'), null);
+check('a plain http url gets upgraded to https', espnTeamLogoUrl('http://a.espncdn.com/logo.png'), 'https://a.espncdn.com/logo.png');
 
 // --- espnLineupSlotName / buildEspnRosterPositions ---
 check('slot 0 is QB', espnLineupSlotName(0), 'QB');
