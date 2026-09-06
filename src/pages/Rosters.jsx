@@ -9,6 +9,7 @@ import { fetchAndNormalizeYahooMatchups } from '../utils/yahooService';
 import { fetchAndNormalizeESPNMatchups } from '../utils/espnService';
 import { isViewingLiveWeek, LIVE_SCORE_POLL_MS } from '../utils/liveScores';
 import { isYahooLeagueId, isEspnLeagueId } from '../utils/platformIds';
+import { resolveImageSrc, onImageError } from '../utils/imageFallback';
 import PlayerModal from '../components/PlayerModal';
 import styles from './Rosters.module.css';
 
@@ -439,7 +440,7 @@ export default function Rosters() {
                     className={`${styles.teamHeader} ${viewMode === 'all' ? styles.clickable : ''}`} 
                     onClick={() => viewMode === 'all' && toggleTeamExpand(rosterId)}
                 >
-                    <img src={teamMeta.avatar} alt="Avatar" className={styles.teamAvatar} onError={(e) => { e.target.onerror = null; e.target.src = '/brand.png'; }} />
+                    <img src={resolveImageSrc(teamMeta.avatar, '/brand.png')} alt="Avatar" className={styles.teamAvatar} onError={onImageError(teamMeta.avatar, '/brand.png')} />
                     <div className={styles.teamDetails}>
                         <h3 className={styles.teamName}>{teamMeta.name}</h3>
                         <div className={styles.teamStats}>

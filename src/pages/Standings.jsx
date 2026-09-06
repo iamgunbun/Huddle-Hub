@@ -3,6 +3,7 @@ import { useLeague } from '../context/LeagueContext';
 import { getLeagueTeamManagers, getAwards, getLeagueData, getLeagueRosters } from '../utils/helper';
 import { syncActiveLeague } from '../utils/leagueInfo';
 import styles from './Standings.module.css';
+import { resolveImageSrc, onImageError } from '../utils/imageFallback';
 
 export default function Standings() {
     const { activeLeague } = useLeague();
@@ -203,7 +204,7 @@ export default function Standings() {
                                         <td className={`${styles.rank} ${idx < 4 ? styles.playoffs : ''}`}>{idx + 1}</td>
                                         <td>
                                             <div className={styles.teamCell}>
-                                                <img src={team.avatar} alt="" className={styles.avatar} onError={(e) => { e.target.onerror = null; e.target.src = '/brand.png'; }} />
+                                                <img src={resolveImageSrc(team.avatar, '/brand.png')} alt="" className={styles.avatar} onError={onImageError(team.avatar, '/brand.png')} />
                                                 <span className={styles.teamName}>{team.teamName}</span>
                                             </div>
                                         </td>

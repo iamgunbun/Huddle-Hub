@@ -11,6 +11,7 @@ import {
     buildEspnScoringSettings,
     buildEspnRosterPositions,
     espnTeamLogoUrl,
+    parseEspnAthleteResponse,
 } from './espnParsers';
 
 // Most callers (every page's own `getLeagueData(id)`, with no explicit user)
@@ -246,6 +247,49 @@ export const fetchAndNormalizeESPNMatchups = async (leagueId, week = 1, passedUs
     return { matchups, week: safeWeek };
 };
 
+// ESPN's public (no cookies, no fantasy-league scoping) athlete lookup --
+// the last-resort name/position/team source for a transaction naming a
+// player who is on no CURRENT roster (so the roster-meta fallback below
+// never sees them) and whom Sleeper's espn_id crosswalk also misses.
+// Cached in-process since the same dropped player can show up across many
+// transactions on the same page. Best-effort: this app cannot verify ESPN's
+// public site API from its own network, so a failed or unexpected response
+// here just leaves that player unresolved -- the same graceful degradation
+// as before this existed, not a regression if the endpoint is ever wrong.
+const athleteMetaCache = new Map();
+
+const fetchESPNAthleteMeta = async (espnPlayerId) => {
+    const id = String(espnPlayerId);
+    if (athleteMetaCache.has(id)) return athleteMetaCache.get(id);
+
+    try {
+        const res = await fetch(`https://site.api.espn.com/apis/common/v3/sports/football/nfl/athletes/${id}`);
+        const meta = res.ok ? parseEspnAthleteResponse(await res.json()) : null;
+        athleteMetaCache.set(id, meta);
+        return meta;
+    } catch (err) {
+        console.warn(`ESPN athlete lookup failed for player ${id}:`, err);
+        athleteMetaCache.set(id, null);
+        return null;
+    }
+};
+
+// Resolves whichever of `ids` aren't already covered by `knownMeta`, run a
+// few at a time rather than one huge burst.
+const ATHLETE_LOOKUP_CONCURRENCY = 4;
+const fetchMissingEspnAthletes = async (ids, knownMeta) => {
+    const missing = [...new Set((ids || []).map(String))].filter(id => !knownMeta[id]);
+    const resolved = {};
+
+    for (let i = 0; i < missing.length; i += ATHLETE_LOOKUP_CONCURRENCY) {
+        const batch = missing.slice(i, i + ATHLETE_LOOKUP_CONCURRENCY);
+        const metas = await Promise.all(batch.map(id => fetchESPNAthleteMeta(id)));
+        metas.forEach((meta, idx) => { if (meta) resolved[batch[idx]] = meta; });
+    }
+
+    return resolved;
+};
+
 export const fetchESPNTransactions = async (leagueId, passedUserId = null) => {
     const userId = await getUserId(passedUserId);
     if (!userId) return { transactions: [], playerMeta: {} };
@@ -254,16 +298,24 @@ export const fetchESPNTransactions = async (leagueId, passedUserId = null) => {
         const data = await espnProxyRequest(leagueId, { views: ['mTransactions2'] }, userId);
         if (!data) return { transactions: [], playerMeta: {} };
 
-        // ESPN's transaction feed carries no player name -- only a bare id --
-        // so the current rosters' own player details are the best fallback for
-        // whichever of them the shared dictionary's espn_id crosswalk misses.
-        // A player who was dropped and is on no current roster stays
-        // unresolved, the same graceful-degradation the Yahoo crosswalk gaps
-        // already fall back to elsewhere in the app.
-        const rostersData = await fetchAndNormalizeESPNRosters(leagueId, { passedUserId: userId }).catch(() => null);
-        const playerMeta = rostersData?.yahooPlayersMeta || {};
+        const transactions = parseEspnTransactions(data.transactions);
 
-        return { transactions: parseEspnTransactions(data.transactions), playerMeta };
+        // ESPN's transaction feed carries no player name -- only a bare id --
+        // so the current rosters' own player details are the first fallback
+        // for whichever of them the shared dictionary's espn_id crosswalk
+        // misses. A player who was dropped and is on no current roster still
+        // needs a name from somewhere, so anyone that leaves unresolved is
+        // looked up individually via ESPN's public athlete API.
+        const rostersData = await fetchAndNormalizeESPNRosters(leagueId, { passedUserId: userId }).catch(() => null);
+        const playerMeta = { ...(rostersData?.yahooPlayersMeta || {}) };
+
+        const involvedIds = transactions.flatMap(t => [
+            ...Object.keys(t.adds || {}),
+            ...Object.keys(t.drops || {}),
+        ]);
+        Object.assign(playerMeta, await fetchMissingEspnAthletes(involvedIds, playerMeta));
+
+        return { transactions, playerMeta };
     } catch (err) {
         console.error("ESPN Transactions Adapter Error:", err);
         return { transactions: [], playerMeta: {} };
@@ -288,7 +340,12 @@ export const fetchESPNDraft = async (leagueId, { season = null, passedUserId = n
         const board = parseEspnDraftDetail(data.draftDetail, { season: season || data.seasonId, isAuction });
         if (!board) return null;
 
-        board.playerMeta = rostersData?.yahooPlayersMeta || {};
+        // Same gap as transactions: draftDetail.picks names players only by
+        // id, so anyone drafted and later dropped -- on no current roster --
+        // needs the same public-athlete-lookup fallback to get a name at all.
+        const playerMeta = { ...(rostersData?.yahooPlayersMeta || {}) };
+        Object.assign(playerMeta, await fetchMissingEspnAthletes(board.picks.map(p => p.player_id), playerMeta));
+        board.playerMeta = playerMeta;
         return board;
     } catch (err) {
         console.error("ESPN Draft Adapter Error:", err);

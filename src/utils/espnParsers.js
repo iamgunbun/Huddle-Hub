@@ -24,27 +24,45 @@ export const espnProTeamAbbr = (proTeamId) => ESPN_PRO_TEAM_MAP[proTeamId] || 'F
 // in yahooScoring.js, produces). Unlike Yahoo, ESPN's scoring settings carry no
 // human-readable stat name at all -- only this numeric id -- so there's no way
 // to resolve it dynamically the way Yahoo's stat_categories allows; it has to
-// be a hardcoded table.
-//
-// Deliberately limited to the core offense categories (passing/rushing/
-// receiving/fumbles), which is where the overwhelming majority of a skill
-// player's fantasy value comes from. Kicker field-goal-distance tiers and
-// defense scoring use ESPN statIds this table doesn't confidently cover --
-// mapping those wrong would silently produce a wrong number, which is worse
-// than the honest gap of falling back to generic scoring for a K/DEF specifically.
-const ESPN_OFFENSE_STAT_MAP = {
-    3: 'pass_yd',
-    4: 'pass_td',
-    19: 'pass_2pt',
-    20: 'pass_int',
-    24: 'rush_yd',
-    25: 'rush_td',
-    26: 'rush_2pt',
-    42: 'rec_yd',
-    43: 'rec_td',
-    44: 'rec_2pt',
-    53: 'rec',
+// be a hardcoded table. Sourced from cwendt94/espn-api's PLAYER_STATS_MAP (the
+// community-maintained reference every third-party ESPN Fantasy client is
+// built against), not guessed from memory.
+const ESPN_STAT_MAP = {
+    // Offense -- a straight per-unit/per-event copy, same as Yahoo's.
+    3: 'pass_yd', 4: 'pass_td', 19: 'pass_2pt', 20: 'pass_int',
+    24: 'rush_yd', 25: 'rush_td', 26: 'rush_2pt',
+    42: 'rec_yd', 43: 'rec_td', 44: 'rec_2pt', 53: 'rec',
     72: 'fum_lost',
+    // Extra points -- these map 1:1, unlike field goals (see below).
+    86: 'xpm', 88: 'xpmiss',
+    // Defense -- these six also map 1:1; only the points-allowed tiers and
+    // field-goal distances (below) need special handling.
+    99: 'sack', 95: 'int', 96: 'fum_rec', 94: 'def_td', 98: 'safe', 97: 'blk_kick',
+};
+
+// ESPN splits made/missed field goals into three distance bands; Sleeper's
+// own feed (and scoreStatLine's FG_BUCKET_KEYS) expects five narrower ones.
+// Rather than leave a whole position's scoring unmapped over a granularity
+// mismatch, the one ESPN band covering 0-39 yards is copied into all three of
+// Sleeper's sub-40 buckets -- scoreStatLine only ever uses these as fallback
+// averages when a stat line lacks its own per-distance breakdown, so a flat
+// value across that range is a reasonable stand-in, not a source of error.
+const ESPN_FG_MADE_UNDER_40 = 80, ESPN_FG_MADE_40_49 = 77, ESPN_FG_MADE_50P = 74;
+const ESPN_FG_MISS_UNDER_40 = 82, ESPN_FG_MISS_40_49 = 79, ESPN_FG_MISS_50P = 76;
+
+// ESPN scores points-allowed in nine tiers; Sleeper's scoreStatLine only
+// recognizes seven, split at different boundaries (14-20/21-27 vs ESPN's
+// 14-17/18-21/22-27). Where a boundary doesn't land evenly, the Sleeper
+// bucket takes the ESPN tier with the larger overlap (14-17 for 14-20, 22-27
+// for 21-27) or an average of the two ESPN tiers spanning it (35-45 and 45+
+// for Sleeper's single 35+). This is an approximation of the league's real
+// curve, not a source id ambiguity -- the two schemes' tier boundaries simply
+// don't coincide.
+const ESPN_PTS_ALLOW = {
+    0: 89, oneToSix: 90, sevenToThirteen: 91,
+    fourteenToSeventeen: 92, eighteenToTwentyOne: 121,
+    twentyTwoToTwentySeven: 122, twentyEightToThirtyFour: 123,
+    thirtyFiveToFortyFive: 124, fortyFivePlus: 125,
 };
 
 /**
@@ -59,15 +77,46 @@ const ESPN_OFFENSE_STAT_MAP = {
  */
 export const buildEspnScoringSettings = (scoringSettingsRaw) => {
     const items = Array.isArray(scoringSettingsRaw?.scoringItems) ? scoringSettingsRaw.scoringItems : [];
+    const byStatId = {};
     const scoring = {};
 
     items.forEach(item => {
-        const key = ESPN_OFFENSE_STAT_MAP[item?.statId];
-        if (!key) return;
-        const raw = parseFloat(item.points);
-        if (Number.isNaN(raw)) return;
-        scoring[key] = item.isReverseItem ? -Math.abs(raw) : raw;
+        const statId = item?.statId;
+        const raw = parseFloat(item?.points);
+        if (statId === undefined || Number.isNaN(raw)) return;
+        const signed = item.isReverseItem ? -Math.abs(raw) : raw;
+        byStatId[statId] = signed;
+
+        const key = ESPN_STAT_MAP[statId];
+        if (key) scoring[key] = signed;
     });
+
+    const under40 = byStatId[ESPN_FG_MADE_UNDER_40];
+    if (under40 !== undefined) scoring.fgm_0_19 = scoring.fgm_20_29 = scoring.fgm_30_39 = under40;
+    if (byStatId[ESPN_FG_MADE_40_49] !== undefined) scoring.fgm_40_49 = byStatId[ESPN_FG_MADE_40_49];
+    if (byStatId[ESPN_FG_MADE_50P] !== undefined) scoring.fgm_50p = byStatId[ESPN_FG_MADE_50P];
+
+    const missUnder40 = byStatId[ESPN_FG_MISS_UNDER_40];
+    if (missUnder40 !== undefined) scoring.fgmiss_0_19 = scoring.fgmiss_20_29 = scoring.fgmiss_30_39 = missUnder40;
+    if (byStatId[ESPN_FG_MISS_40_49] !== undefined) scoring.fgmiss_40_49 = byStatId[ESPN_FG_MISS_40_49];
+    if (byStatId[ESPN_FG_MISS_50P] !== undefined) scoring.fgmiss_50p = byStatId[ESPN_FG_MISS_50P];
+
+    if (byStatId[ESPN_PTS_ALLOW[0]] !== undefined) scoring.pts_allow_0 = byStatId[ESPN_PTS_ALLOW[0]];
+    if (byStatId[ESPN_PTS_ALLOW.oneToSix] !== undefined) scoring.pts_allow_1_6 = byStatId[ESPN_PTS_ALLOW.oneToSix];
+    if (byStatId[ESPN_PTS_ALLOW.sevenToThirteen] !== undefined) scoring.pts_allow_7_13 = byStatId[ESPN_PTS_ALLOW.sevenToThirteen];
+    if (byStatId[ESPN_PTS_ALLOW.fourteenToSeventeen] !== undefined) scoring.pts_allow_14_20 = byStatId[ESPN_PTS_ALLOW.fourteenToSeventeen];
+    if (byStatId[ESPN_PTS_ALLOW.twentyTwoToTwentySeven] !== undefined) scoring.pts_allow_21_27 = byStatId[ESPN_PTS_ALLOW.twentyTwoToTwentySeven];
+    if (byStatId[ESPN_PTS_ALLOW.twentyEightToThirtyFour] !== undefined) scoring.pts_allow_28_34 = byStatId[ESPN_PTS_ALLOW.twentyEightToThirtyFour];
+
+    const thirtyFiveToFortyFive = byStatId[ESPN_PTS_ALLOW.thirtyFiveToFortyFive];
+    const fortyFivePlus = byStatId[ESPN_PTS_ALLOW.fortyFivePlus];
+    if (thirtyFiveToFortyFive !== undefined && fortyFivePlus !== undefined) {
+        scoring.pts_allow_35p = (thirtyFiveToFortyFive + fortyFivePlus) / 2;
+    } else if (thirtyFiveToFortyFive !== undefined) {
+        scoring.pts_allow_35p = thirtyFiveToFortyFive;
+    } else if (fortyFivePlus !== undefined) {
+        scoring.pts_allow_35p = fortyFivePlus;
+    }
 
     return scoring;
 };
@@ -192,6 +241,35 @@ export const espnHeadshotUrl = (espnPlayerId) =>
 
 export const espnTeamDisplayName = (team) =>
     team?.name || [team?.location, team?.nickname].filter(Boolean).join(' ').trim() || `Team ${team?.id ?? ''}`.trim();
+
+/**
+ * One player, out of ESPN's public (no cookies needed) athlete-lookup
+ * response -- the last-resort fallback for a transaction naming a player who
+ * isn't on any current roster (fetchESPNTransactions' own roster-meta
+ * fallback only ever covers currently-rostered players) and whom Sleeper's
+ * espn_id crosswalk also doesn't cover. Same target metadata shape as
+ * parseEspnRosterEntry, so it drops into the same yahooPlayersMeta-style
+ * dictionary this app already knows how to fall back to for a crosswalk miss.
+ */
+export const parseEspnAthleteResponse = (data) => {
+    const athlete = data?.athlete;
+    if (!athlete?.id) return null;
+
+    const fullName = athlete.displayName || athlete.fullName || '';
+    const [firstName, ...lastParts] = fullName.split(' ');
+    const id = String(athlete.id);
+
+    return {
+        id,
+        fn: athlete.firstName || firstName || fullName,
+        ln: athlete.lastName || lastParts.join(' '),
+        pos: athlete.position?.abbreviation || 'BN',
+        t: athlete.team?.abbreviation?.toUpperCase() || 'FA',
+        headshot: athlete.headshot?.href || espnHeadshotUrl(id),
+        injStatus: null,
+        wi: {},
+    };
+};
 
 // A team that hasn't uploaded a custom logo doesn't always get a usable
 // absolute URL back in `logo` -- sometimes it's empty, sometimes ESPN's own

@@ -19,7 +19,8 @@
     "verify:draftcontext": "node scripts/verify-draft-context.mjs",
     "verify:platformids": "node scripts/verify-platform-ids.mjs",
     "verify:espn": "node scripts/verify-espn-parsers.mjs",
-    "verify": "npm run verify:scoring && npm run verify:pool && npm run verify:history && npm run verify:projections && npm run verify:concurrency && npm run verify:format && npm run verify:statline && npm run verify:livescores && npm run verify:draftcontext && npm run verify:platformids && npm run verify:espn"
+    "verify:imagefallback": "node scripts/verify-image-fallback.mjs",
+    "verify": "npm run verify:scoring && npm run verify:pool && npm run verify:history && npm run verify:projections && npm run verify:concurrency && npm run verify:format && npm run verify:statline && npm run verify:livescores && npm run verify:draftcontext && npm run verify:platformids && npm run verify:espn && npm run verify:imagefallback"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",
