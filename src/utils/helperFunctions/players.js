@@ -13,6 +13,21 @@ const buildNameIndex = (data) => {
     const byName = {};
     Object.values(data || {}).forEach(p => {
         if (!p) return;
+
+        // Team defenses are also indexed under their team abbreviation.
+        //
+        // Sleeper keys a defense by its team ("SF"), and every cross-platform
+        // lookup for one joins on that abbreviation -- it's the only thing the
+        // platforms agree on, since a defense shares no player id and the
+        // naming never lines up. But on a Yahoo/ESPN league the dictionary is
+        // re-keyed by that platform's id, so a defense carrying one moves out
+        // from under its team key and those lookups quietly stop finding it,
+        // leaving a hole in every roster that owns one. This index is
+        // lookup-only (never enumerated as a player list), so it's the safe
+        // place to put the alias.
+        const defenseTeam = p.pos === 'DEF' ? String(p.t || '').toUpperCase() : '';
+        if (defenseTeam && !byName[defenseTeam]) byName[defenseTeam] = p;
+
         const rank = p.searchRank || 999999;
         // Indexed under both the exact name and a suffix-free variant, since the
         // platforms disagree about whether "Jr."/"III" is part of the name.
@@ -225,6 +240,7 @@ export const loadPlayers = async (activeLeagueId) => {
                 data[p.id].posRank = idx + 1;
             });
         });
+
         
         // NEVER localStorage.clear() here. Supabase keeps the auth session in
         // localStorage alongside this cache, so clearing it silently signs the

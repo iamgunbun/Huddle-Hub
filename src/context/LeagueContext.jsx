@@ -322,6 +322,17 @@ export function LeagueProvider({ children }) {
                 };
                 setActiveLeague(updated);
                 localStorage.setItem('huddle_active_league_id', target.id);
+
+                // Reconcile for the league being switched TO. Sleeper and ESPN
+                // can only answer for one league at a time, so both are checked
+                // against whichever is in view -- which meant that switching to
+                // a league instead of landing on it at load never checked it at
+                // all, and its commissioner tools stayed hidden for the whole
+                // session.
+                const { data: { session: switchSession } } = await supabase.auth.getSession();
+                if (switchSession?.user) {
+                    syncCommissionerFlags(switchSession.user.id, userLeagues, updated, setActiveLeague);
+                }
                 return;
             }
 
