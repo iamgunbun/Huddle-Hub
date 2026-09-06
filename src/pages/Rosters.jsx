@@ -8,13 +8,16 @@ import { scoreStatLine } from '../utils/yahooScoring';
 import { fetchAndNormalizeYahooMatchups } from '../utils/yahooService';
 import { fetchAndNormalizeESPNMatchups, fetchAndNormalizeESPNRosters } from '../utils/espnService';
 import { isViewingLiveWeek, LIVE_SCORE_POLL_MS } from '../utils/liveScores';
-import { isYahooLeagueId, isEspnLeagueId } from '../utils/platformIds';
+import { isYahooLeagueId, isEspnLeagueId, isForeignPlatformLeague, sleeperFeedKey } from '../utils/platformIds';
 import { resolveImageSrc, onImageError } from '../utils/imageFallback';
 import PlayerModal from '../components/PlayerModal';
 import styles from './Rosters.module.css';
 
 export default function Rosters() {
     const { activeLeague } = useLeague();
+    // On Yahoo/ESPN the dictionary is keyed by that platform's player ids, which
+    // must never be used against Sleeper's own stat feeds (see sleeperFeedKey).
+    const foreignPlatform = isForeignPlatformLeague(activeLeague?.sleeper_league_id);
     const [loading, setLoading] = useState(true);
     const [rosters, setRosters] = useState({});
     const [teamManagers, setTeamManagers] = useState(null);
@@ -301,13 +304,12 @@ export default function Rosters() {
         // fixes: a DEF's projection reading 0 even mid-week).
         if (Number.isFinite(playerObj?.projectedPoints)) return playerObj.projectedPoints.toFixed(1);
 
-        // Sleeper's projections/stats feeds are keyed by Sleeper player ids. In a
-        // Yahoo league the roster ids are Yahoo's, so look the player up by their
-        // crosswalked sleeper_id as well -- otherwise every lookup misses and the
-        // player falls through to a 0.
-        const sleeperKey = playerObj?.sleeper_id;
-        const proj = weeklyProjections[playerId] || weeklyStats[playerId]
-            || (sleeperKey ? (weeklyProjections[sleeperKey] || weeklyStats[sleeperKey]) : null);
+        // Sleeper's projections/stats feeds are keyed by Sleeper player ids, and
+        // a Yahoo/ESPN roster id looked up in them doesn't harmlessly miss -- the
+        // id spaces overlap, so it returns an unrelated player's stat line. Only
+        // the crosswalked sleeper_id may be used here (see sleeperFeedKey).
+        const feedKey = sleeperFeedKey(playerObj, playerId, foreignPlatform);
+        const proj = feedKey ? (weeklyProjections[feedKey] || weeklyStats[feedKey]) : null;
         const scoringSettings = leagueData?.scoring_settings || {};
 
         if (proj) {
@@ -334,9 +336,9 @@ export default function Rosters() {
 
     const getMatchupText = (playerId) => {
         const playerObj = getPlayerObj(playerId);
-        const sleeperKey = playerObj?.sleeper_id;
-        const proj = weeklyProjections[playerId] || (sleeperKey ? weeklyProjections[sleeperKey] : null);
-        const stats = weeklyStats[playerId] || (sleeperKey ? weeklyStats[sleeperKey] : null);
+        const feedKey = sleeperFeedKey(playerObj, playerId, foreignPlatform);
+        const proj = feedKey ? weeklyProjections[feedKey] : null;
+        const stats = feedKey ? weeklyStats[feedKey] : null;
 
         if (!playerObj && !proj && !stats) return '';
 
