@@ -9,6 +9,7 @@ import { fetchAndNormalizeYahooMatchups } from '../utils/yahooService';
 import { fetchAndNormalizeESPNMatchups } from '../utils/espnService';
 import { isViewingLiveWeek, LIVE_SCORE_POLL_MS } from '../utils/liveScores';
 import { isYahooLeagueId, isEspnLeagueId } from '../utils/platformIds';
+import { resolveImageSrc, onImageError } from '../utils/imageFallback';
 import PlayerModal from '../components/PlayerModal';
 import styles from './Matchups.module.css';
 
@@ -394,7 +395,7 @@ export default function Matchups() {
                 >
                     <div className={styles.bannerTeam}>
                         <div className={styles.avatarRow}>
-                            <img src={leftTeamMeta?.avatar || 'https://sleepercdn.com/images/v2/icons/league_default.webp'} alt="" className={styles.bannerAvatar} onError={(e) => { e.target.onerror = null; e.target.src = 'https://sleepercdn.com/images/v2/icons/league_default.webp'; }} />
+                            <img src={resolveImageSrc(leftTeamMeta?.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} alt="" className={styles.bannerAvatar} onError={onImageError(leftTeamMeta?.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} />
                             <span className={`${styles.winBadge} ${leftOddStyle}`}>{leftWinProb}% WIN</span>
                         </div>
                         <div className={styles.scoreGroup}>
@@ -410,7 +411,7 @@ export default function Matchups() {
 
                     <div className={styles.bannerTeam} style={{ alignItems: 'flex-end', textAlign: 'right' }}>
                         <div className={styles.avatarRow} style={{ flexDirection: 'row-reverse' }}>
-                            <img src={rightTeamMeta?.avatar || 'https://sleepercdn.com/images/v2/icons/league_default.webp'} alt="" className={styles.bannerAvatar} onError={(e) => { e.target.onerror = null; e.target.src = 'https://sleepercdn.com/images/v2/icons/league_default.webp'; }} />
+                            <img src={resolveImageSrc(rightTeamMeta?.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} alt="" className={styles.bannerAvatar} onError={onImageError(rightTeamMeta?.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} />
                             <span className={`${styles.winBadge} ${rightOddStyle}`}>{rightWinProb}% WIN</span>
                         </div>
                         <div className={styles.scoreGroup} style={{ alignItems: 'flex-end' }}>

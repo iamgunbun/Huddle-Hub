@@ -18,6 +18,7 @@ import {
     espnLineupSlotName,
     buildEspnRosterPositions,
     espnTeamLogoUrl,
+    parseEspnAthleteResponse,
 } from '../src/utils/espnParsers.js';
 import { scoreStatLine } from '../src/utils/yahooScoring.js';
 
@@ -318,6 +319,56 @@ check('an unmapped statId is silently ignored', Object.prototype.hasOwnProperty.
 check('no scoring settings at all -> an empty object, not a throw', buildEspnScoringSettings(null), {});
 check('no scoringItems array -> an empty object', buildEspnScoringSettings({}), {});
 
+// --- buildEspnScoringSettings: defense and kicker (verified statIds) ---
+const kdScoring = buildEspnScoringSettings({
+    scoringItems: [
+        { statId: 99, points: 1 },      // sack
+        { statId: 95, points: 2 },      // int
+        { statId: 96, points: 2 },      // fum_rec
+        { statId: 94, points: 6 },      // def_td
+        { statId: 98, points: 2 },      // safe
+        { statId: 97, points: 2 },      // blk_kick
+        { statId: 86, points: 1 },      // xpm
+        { statId: 88, points: -1 },     // xpmiss, already negative
+        { statId: 80, points: 3 },      // FG made under 40
+        { statId: 77, points: 4 },      // FG made 40-49
+        { statId: 74, points: 5 },      // FG made 50+
+        { statId: 82, points: -1 },     // FG missed under 40
+        { statId: 89, points: 10 },     // pts allowed 0
+        { statId: 90, points: 7 },      // pts allowed 1-6
+        { statId: 91, points: 4 },      // pts allowed 7-13
+        { statId: 92, points: 1 },      // pts allowed 14-17
+        { statId: 121, points: 0 },     // pts allowed 18-21
+        { statId: 122, points: -1 },    // pts allowed 22-27
+        { statId: 123, points: -3 },    // pts allowed 28-34
+        { statId: 124, points: -5 },    // pts allowed 35-45
+        { statId: 125, points: -7 },    // pts allowed 45+
+    ],
+});
+check('the six direct-mapped defensive categories all carry over', {
+    sack: kdScoring.sack, int: kdScoring.int, fum_rec: kdScoring.fum_rec,
+    def_td: kdScoring.def_td, safe: kdScoring.safe, blk_kick: kdScoring.blk_kick,
+}, { sack: 1, int: 2, fum_rec: 2, def_td: 6, safe: 2, blk_kick: 2 });
+check('extra point made/missed carry over', [kdScoring.xpm, kdScoring.xpmiss], [1, -1]);
+check(
+    'ESPN\'s single under-40 FG band fills all three of Sleeper\'s narrower buckets',
+    [kdScoring.fgm_0_19, kdScoring.fgm_20_29, kdScoring.fgm_30_39],
+    [3, 3, 3]
+);
+check('the 40-49 and 50+ FG bands map directly', [kdScoring.fgm_40_49, kdScoring.fgm_50p], [4, 5]);
+check('a missed FG band not provided for 40-49/50+ is simply absent, not zero', kdScoring.fgmiss_40_49, undefined);
+check(
+    'points-allowed tiers that line up exactly map directly',
+    [kdScoring.pts_allow_0, kdScoring.pts_allow_1_6, kdScoring.pts_allow_7_13, kdScoring.pts_allow_28_34],
+    [10, 7, 4, -3]
+);
+check('Sleeper\'s 14-20 bucket takes ESPN\'s larger-overlap 14-17 tier', kdScoring.pts_allow_14_20, 1);
+check('Sleeper\'s 21-27 bucket takes ESPN\'s larger-overlap 22-27 tier', kdScoring.pts_allow_21_27, -1);
+check('Sleeper\'s single 35+ bucket averages ESPN\'s 35-45 and 45+ tiers', kdScoring.pts_allow_35p, -6);
+
+const onlyOneHighTier = buildEspnScoringSettings({ scoringItems: [{ statId: 125, points: -8 }] });
+check('35+ falls back to whichever single high tier is present', onlyOneHighTier.pts_allow_35p, -8);
+
 // A scored projection under real ESPN-derived settings is the actual bug this
 // fixes: ESPN projections were silently using generic Sleeper standard/PPR
 // scoring regardless of the league's real rules, because scoring_settings was
@@ -326,5 +377,29 @@ const statLine = { pass_yd: 300, pass_td: 3, rush_yd: 20 };
 const scored = scoreStatLine(statLine, espnScoring, 'QB');
 // 300*0.04 + 3*4 + 20*0.1 = 12 + 12 + 2 = 26
 check('a QB stat line scores correctly under the league\'s real ESPN settings', scored, 26);
+
+// --- parseEspnAthleteResponse ---
+const athlete = parseEspnAthleteResponse({
+    athlete: {
+        id: 4362628,
+        displayName: 'Dropped Guy',
+        position: { abbreviation: 'WR' },
+        team: { abbreviation: 'sf' },
+        headshot: { href: 'https://a.espncdn.com/i/headshots/nfl/players/full/4362628.png' },
+    },
+});
+check('athlete lookup resolves an id, coerced to a string', athlete.id, '4362628');
+check('athlete lookup splits a display name', [athlete.fn, athlete.ln], ['Dropped', 'Guy']);
+check('athlete lookup resolves position', athlete.pos, 'WR');
+check('athlete lookup upper-cases the team abbreviation', athlete.t, 'SF');
+check('athlete lookup prefers the response\'s own headshot url', athlete.headshot, 'https://a.espncdn.com/i/headshots/nfl/players/full/4362628.png');
+
+const athleteNoHeadshot = parseEspnAthleteResponse({ athlete: { id: 1, displayName: 'No Photo Guy' } });
+check('missing headshot falls back to the standard CDN pattern', athleteNoHeadshot.headshot, 'https://a.espncdn.com/i/headshots/nfl/players/full/1.png');
+check('missing position/team fall back to BN/FA like everywhere else', [athleteNoHeadshot.pos, athleteNoHeadshot.t], ['BN', 'FA']);
+
+check('no athlete in the response -> null', parseEspnAthleteResponse({}), null);
+check('no response at all -> null', parseEspnAthleteResponse(null), null);
+check('an athlete with no id at all -> null, not a garbage entry', parseEspnAthleteResponse({ athlete: { displayName: 'Ghost' } }), null);
 
 console.log(`OK: ${checks} ESPN parser checks passed`);
