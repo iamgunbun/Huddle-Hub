@@ -12,6 +12,8 @@ import {
     buildEspnRosterPositions,
     espnTeamLogoUrl,
     parseEspnAthleteResponse,
+    isEspnLeagueManager,
+    toProxiedEspnImageUrl,
 } from './espnParsers';
 
 // Most callers (every page's own `getLeagueData(id)`, with no explicit user)
@@ -91,12 +93,13 @@ const espnProxyRequest = async (leagueId, { views, scoringPeriodId, year } = {},
 export const fetchAndNormalizeESPNLeague = async (leagueId, cookies = {}, userId = null) => {
     if (!leagueId) return null;
     const cleanId = fromEspnLeagueId(leagueId).trim();
+    const resolvedUserId = await getUserId(userId);
 
     try {
         const data = await espnProxyRequest(
             leagueId,
             { views: ['mSettings', 'mTeam'] },
-            userId,
+            resolvedUserId,
             cookies
         );
 
@@ -116,7 +119,7 @@ export const fetchAndNormalizeESPNLeague = async (leagueId, cookies = {}, userId
         // always carry a usable absolute URL, so this skips those instead of
         // handing the UI something that renders as a broken image.
         const firstTeamWithLogo = data.teams?.find(t => espnTeamLogoUrl(t.logo));
-        const avatar = espnTeamLogoUrl(firstTeamWithLogo?.logo) || '/brand.png';
+        const avatar = toProxiedEspnImageUrl(espnTeamLogoUrl(firstTeamWithLogo?.logo), resolvedUserId) || '/brand.png';
 
         const playoffWeekStart = (data.settings.scheduleSettings?.matchupPeriodCount || 14) + 1;
         const isAuctionDraft = String(data.settings.draftSettings?.type || '').toUpperCase() === 'OFFLINE'
@@ -217,10 +220,37 @@ export const fetchAndNormalizeESPNRosters = async (leagueId, { week = null, pass
         if (!data) return { rosters: {}, startersAndReserve: [], yahooPlayersMeta: {} };
 
         const resolvedSwid = await fetchResolvedSwid(userId).catch(() => null);
-        return parseEspnLeagueRosters(data, { week, resolvedSwid });
+        const result = parseEspnLeagueRosters(data, { week, resolvedSwid });
+        Object.values(result.rosters).forEach(roster => {
+            roster.avatar = toProxiedEspnImageUrl(roster.avatar, userId);
+        });
+        return result;
     } catch (err) {
         console.error("ESPN Rosters Adapter Error:", err);
         return { rosters: {}, startersAndReserve: [], yahooPlayersMeta: {} };
+    }
+};
+
+// Whether this account is the connected ESPN league's commissioner -- ESPN's
+// counterpart to LeagueContext.jsx's Yahoo/Sleeper commissioner sync, which
+// had no ESPN path at all, leaving Commissioner Tools hidden even for an
+// ESPN league's actual commissioner. `mSettings` is what the reference
+// ESPN-API clients read `members[]` off of, so that's the view asked for
+// here rather than the fuller mTeam/mRoster fetch this doesn't need.
+export const fetchESPNCommissionerStatus = async (leagueId, passedUserId = null) => {
+    const userId = await getUserId(passedUserId);
+    if (!userId) return false;
+
+    try {
+        const [data, resolvedSwid] = await Promise.all([
+            espnProxyRequest(leagueId, { views: ['mSettings'] }, userId),
+            fetchResolvedSwid(userId).catch(() => null),
+        ]);
+        if (!data || !resolvedSwid) return false;
+        return isEspnLeagueManager(data.members, resolvedSwid);
+    } catch (err) {
+        console.warn("ESPN commissioner status check failed:", err);
+        return false;
     }
 };
 

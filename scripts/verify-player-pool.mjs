@@ -5,7 +5,7 @@
 // incomplete, rostered players are presented as free agents and nothing
 // about the page looks broken.
 
-import { buildOwnedIndex, isPlayerOwned, isRosterableNflPlayer, resolvePlayerFromMeta, playerNameKeyNoSuffix, withResolvedPlayerMeta, resolveRosterPlayers } from '../src/utils/playerPool.js';
+import { buildOwnedIndex, isPlayerOwned, isRosterableNflPlayer, resolvePlayerFromMeta, playerNameKeyNoSuffix, withResolvedPlayerMeta, resolveRosterPlayers, isLessProminentDuplicate } from '../src/utils/playerPool.js';
 import { findSuccessorLeagueId, pickOwnerId } from '../src/utils/leagueSeason.js';
 
 let pass = 0;
@@ -219,6 +219,23 @@ eq('and coverage says so', halfKnown.coverage, 0.5);
 eq('direct ids still resolve', resolveRosterPlayers(['99', '77'], projDict, projByName).players.length, 2);
 eq('empty slots are skipped', resolveRosterPlayers(['0', null, undefined], projDict, projByName).players.length, 0);
 eq('an empty roster reports full coverage', resolveRosterPlayers([], projDict, projByName).coverage, 1);
+
+// --- Platform-id collisions in the shared dictionary builder ---------------
+// A stale/duplicate espn_id or yahoo_id in Sleeper's own crosswalk can give
+// two different Sleeper players the same platform id; without a tie-break the
+// second one processed silently clobbers the first, which is how an active
+// starter can vanish from every page's player search.
+eq('nothing there yet -> never a duplicate', isLessProminentDuplicate(undefined, { searchRank: 5 }), false);
+eq('a less prominent existing entry loses to a new, more prominent one',
+    isLessProminentDuplicate({ searchRank: 5000 }, { searchRank: 12 }), false);
+eq('a more prominent existing entry is kept over a less prominent incoming one',
+    isLessProminentDuplicate({ searchRank: 12 }, { searchRank: 5000 }), true);
+eq('a tie keeps whichever arrived first (the existing one)',
+    isLessProminentDuplicate({ searchRank: 500 }, { searchRank: 500 }), true);
+eq('missing searchRank on the existing entry treats it as unranked (loses to any real rank)',
+    isLessProminentDuplicate({}, { searchRank: 12 }), false);
+eq('missing searchRank on the incoming entry treats it as unranked (existing wins)',
+    isLessProminentDuplicate({ searchRank: 12 }, {}), true);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

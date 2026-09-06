@@ -6,8 +6,8 @@ import { isYahooLeagueId, isEspnLeagueId } from '../platformIds';
 // Single definition lives in playerPool.js (dependency-free so it stays
 // testable); re-exported here for the callers that already import it from this
 // module.
-export { playerNameKey } from '../playerPool';
-import { playerNameKey, playerNameKeyNoSuffix } from '../playerPool';
+export { playerNameKey, isLessProminentDuplicate } from '../playerPool';
+import { playerNameKey, playerNameKeyNoSuffix, isLessProminentDuplicate } from '../playerPool';
 
 const buildNameIndex = (data) => {
     const byName = {};
@@ -198,6 +198,8 @@ export const loadPlayers = async (activeLeagueId) => {
                     date: projMap[p.player_id].date
                 };
             }
+
+            if (isLessProminentDuplicate(data[primaryId], playerObj)) continue;
 
             data[primaryId] = playerObj;
 
