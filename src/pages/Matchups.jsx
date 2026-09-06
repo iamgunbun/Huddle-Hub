@@ -6,7 +6,7 @@ import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunct
 import { resolvePlayerFromMeta } from '../utils/playerPool';
 import { scoreStatLine } from '../utils/yahooScoring';
 import { fetchAndNormalizeYahooMatchups } from '../utils/yahooService';
-import { fetchAndNormalizeESPNMatchups } from '../utils/espnService';
+import { fetchAndNormalizeESPNMatchups, fetchAndNormalizeESPNRosters } from '../utils/espnService';
 import { isViewingLiveWeek, LIVE_SCORE_POLL_MS } from '../utils/liveScores';
 import { isYahooLeagueId, isEspnLeagueId } from '../utils/platformIds';
 import { resolveImageSrc, onImageError } from '../utils/imageFallback';
@@ -54,9 +54,15 @@ export default function Matchups() {
         if (!pId || pId === "0") return null;
 
         const direct = playersInfo[pId] || playersInfo[String(pId)] || playersInfo[Number(pId)];
-        if (direct) return direct;
-
         const yahooMeta = yahooPlayersMeta[String(pId)];
+        // ESPN's own pre-computed points (already scored under the league's
+        // real rules) beat rebuilding them from Sleeper's generic feed --
+        // carried over regardless of which path below resolves the rest of
+        // the player's identity, since only yahooMeta (this platform's own
+        // roster metadata) ever carries these.
+        const espnPoints = yahooMeta ? { actualPoints: yahooMeta.actualPoints, projectedPoints: yahooMeta.projectedPoints } : null;
+
+        if (direct) return espnPoints ? { ...direct, ...espnPoints } : direct;
         if (!yahooMeta) return null;
 
         // Yahoo gave us this player but Sleeper's yahoo_id crosswalk didn't map
@@ -64,7 +70,7 @@ export default function Matchups() {
         // abbreviation for defenses -- Sleeper keys those by team and gives them
         // no yahoo_id -- and by name, suffix-tolerantly, for everyone else.
         const matched = resolvePlayerFromMeta(yahooMeta, playersInfo, playersByName);
-        if (matched) return { ...matched, headshot: yahooMeta.headshot || null };
+        if (matched) return { ...matched, headshot: yahooMeta.headshot || null, ...espnPoints };
 
         return yahooMeta;
     };
@@ -179,6 +185,17 @@ export default function Matchups() {
                         applyMatchupData(flat);
                     })
                     .catch(err => console.error("ESPN matchups fetch err:", err));
+
+                // ESPN pre-computes each player's real, week-specific projected and
+                // actual points under the league's own rules -- far more reliable
+                // than reconstructing them from Sleeper's generic feed, especially
+                // for defenses, which that feed barely covers.
+                fetchAndNormalizeESPNRosters(activeLeague.sleeper_league_id, { week: activeWeek })
+                    .then(({ yahooPlayersMeta: weekMeta }) => {
+                        if (!isMounted || !weekMeta) return;
+                        setYahooPlayersMeta(prev => ({ ...prev, ...weekMeta }));
+                    })
+                    .catch(err => console.error("ESPN weekly player points fetch err:", err));
             } else {
                 fetch(`https://api.sleeper.app/v1/league/${activeLeague.sleeper_league_id}/matchups/${activeWeek}`)
                     .then(res => res.json())
@@ -265,12 +282,15 @@ export default function Matchups() {
         if (matchupObj?.players_points && matchupObj.players_points[pId] !== undefined) {
             return parseFloat(matchupObj.players_points[pId]).toFixed(2);
         }
+        const actual = getPlayerObj(pId)?.actualPoints;
+        if (Number.isFinite(actual)) return actual.toFixed(2);
         return '0.00';
     };
 
     const getPlayerProjPts = (pId) => {
         if (!pId || pId === "0") return '0.00';
         const playerObj = getPlayerObj(pId);
+        if (Number.isFinite(playerObj?.projectedPoints)) return playerObj.projectedPoints.toFixed(1);
         // Sleeper's projections/stats feeds are keyed by Sleeper player ids. In a
         // Yahoo league the roster ids are Yahoo's, so look the player up by their
         // crosswalked sleeper_id as well -- otherwise every lookup misses and the
@@ -395,7 +415,7 @@ export default function Matchups() {
                 >
                     <div className={styles.bannerTeam}>
                         <div className={styles.avatarRow}>
-                            <img src={resolveImageSrc(leftTeamMeta?.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} alt="" className={styles.bannerAvatar} onError={onImageError(leftTeamMeta?.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} />
+                            <img src={resolveImageSrc(leftTeamMeta?.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} alt="" className={styles.bannerAvatar} referrerPolicy="no-referrer" onError={onImageError(leftTeamMeta?.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} />
                             <span className={`${styles.winBadge} ${leftOddStyle}`}>{leftWinProb}% WIN</span>
                         </div>
                         <div className={styles.scoreGroup}>
@@ -411,7 +431,7 @@ export default function Matchups() {
 
                     <div className={styles.bannerTeam} style={{ alignItems: 'flex-end', textAlign: 'right' }}>
                         <div className={styles.avatarRow} style={{ flexDirection: 'row-reverse' }}>
-                            <img src={resolveImageSrc(rightTeamMeta?.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} alt="" className={styles.bannerAvatar} onError={onImageError(rightTeamMeta?.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} />
+                            <img src={resolveImageSrc(rightTeamMeta?.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} alt="" className={styles.bannerAvatar} referrerPolicy="no-referrer" onError={onImageError(rightTeamMeta?.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} />
                             <span className={`${styles.winBadge} ${rightOddStyle}`}>{rightWinProb}% WIN</span>
                         </div>
                         <div className={styles.scoreGroup} style={{ alignItems: 'flex-end' }}>

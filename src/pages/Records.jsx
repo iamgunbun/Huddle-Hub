@@ -186,7 +186,7 @@ export default function RecordsPage() {
                                     <td className={styles.rankNum}>{idx + 1}</td>
                                     <td className={styles.managerNameCell}>
                                         <div className={styles.managerCellLayout}>
-                                            <img src={resolveImageSrc(row.avatar, '/brand.png')} alt="Avatar" className={styles.tableAvatar} onError={onImageError(row.avatar, '/brand.png')} />
+                                            <img src={resolveImageSrc(row.avatar, '/brand.png')} alt="Avatar" className={styles.tableAvatar} referrerPolicy="no-referrer" onError={onImageError(row.avatar, '/brand.png')} />
                                             <div className={styles.managerIdentityStack}>
                                                 <span className={styles.tableTeamName}>{row.name}</span>
                                                 {row.handle && <span className={styles.tableHandle}>{row.handle}</span>}
@@ -255,7 +255,7 @@ export default function RecordsPage() {
                                                     <td className={styles.rankNum} style={{ textAlign: 'center' }}>{i + 1}</td>
                                                     <td>
                                                         <div className={styles.managerCellLayout}>
-                                                            <img src={resolveImageSrc(team.avatar, '/brand.png')} alt="Avatar" className={styles.tableAvatar} onError={onImageError(team.avatar, '/brand.png')} />
+                                                            <img src={resolveImageSrc(team.avatar, '/brand.png')} alt="Avatar" className={styles.tableAvatar} referrerPolicy="no-referrer" onError={onImageError(team.avatar, '/brand.png')} />
                                                             <div className={styles.managerIdentityStack}>
                                                                 <span className={styles.tableTeamName}>{team.name}</span>
                                                                 {team.handle && <span className={styles.tableHandle}>{team.handle}</span>}
@@ -302,7 +302,7 @@ export default function RecordsPage() {
                                                     <td className={styles.rankNum} style={{ textAlign: 'center' }}>{i + 1}</td>
                                                     <td>
                                                         <div className={styles.managerCellLayout}>
-                                                            <img src={resolveImageSrc(team.avatar, '/brand.png')} alt="Avatar" className={styles.tableAvatar} onError={onImageError(team.avatar, '/brand.png')} />
+                                                            <img src={resolveImageSrc(team.avatar, '/brand.png')} alt="Avatar" className={styles.tableAvatar} referrerPolicy="no-referrer" onError={onImageError(team.avatar, '/brand.png')} />
                                                             <div className={styles.managerIdentityStack}>
                                                                 <span className={styles.tableTeamName}>{team.name}</span>
                                                                 {team.handle && <span className={styles.tableHandle}>{team.handle}</span>}

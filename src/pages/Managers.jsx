@@ -513,7 +513,7 @@ export default function Managers() {
                         onClick={() => setSearchParams({ manager: manager.managerId })}
                     >
                         <div className={styles.cardHeader}>
-                            <img src={resolveImageSrc(manager.teamAvatar, '/brand.png')} alt="Avatar" className={styles.avatar} onError={onImageError(manager.teamAvatar, '/brand.png')} />
+                            <img src={resolveImageSrc(manager.teamAvatar, '/brand.png')} alt="Avatar" className={styles.avatar} referrerPolicy="no-referrer" onError={onImageError(manager.teamAvatar, '/brand.png')} />
                             <div className={styles.headerText}>
                                 <h3 className={styles.teamName}>{manager.teamName}</h3>
                                 <div className={styles.userName}>@{manager.username}</div>

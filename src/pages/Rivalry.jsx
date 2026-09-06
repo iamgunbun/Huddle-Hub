@@ -194,7 +194,7 @@ export default function Rivalry() {
 
             <div className={styles.selectorWrapper}>
                 <div className={styles.teamSelector}>
-                    <img src={resolveImageSrc(metaA?.avatar, 'https://sleepercdn.com/images/v2/icons/player_default.webp')} alt="Team A" className={styles.teamAvatar} onError={onImageError(metaA?.avatar, 'https://sleepercdn.com/images/v2/icons/player_default.webp')} />
+                    <img src={resolveImageSrc(metaA?.avatar, 'https://sleepercdn.com/images/v2/icons/player_default.webp')} alt="Team A" className={styles.teamAvatar} referrerPolicy="no-referrer" onError={onImageError(metaA?.avatar, 'https://sleepercdn.com/images/v2/icons/player_default.webp')} />
                     <select 
                         className={styles.dropdown} 
                         value={managerA} 
@@ -211,7 +211,7 @@ export default function Rivalry() {
                 <div className={styles.vsBadge}>VS</div>
 
                 <div className={styles.teamSelector}>
-                    <img src={resolveImageSrc(metaB?.avatar, 'https://sleepercdn.com/images/v2/icons/player_default.webp')} alt="Team B" className={styles.teamAvatar} onError={onImageError(metaB?.avatar, 'https://sleepercdn.com/images/v2/icons/player_default.webp')} />
+                    <img src={resolveImageSrc(metaB?.avatar, 'https://sleepercdn.com/images/v2/icons/player_default.webp')} alt="Team B" className={styles.teamAvatar} referrerPolicy="no-referrer" onError={onImageError(metaB?.avatar, 'https://sleepercdn.com/images/v2/icons/player_default.webp')} />
                     <select 
                         className={styles.dropdown} 
                         value={managerB} 
@@ -351,7 +351,7 @@ export default function Rivalry() {
 
                                             <div className={styles.historyScores}>
                                                 <div className={`${styles.hScoreBlock} ${match.scoreA > match.scoreB ? styles.winnerBlock : styles.loserBlock}`}>
-                                                    <img src={resolveImageSrc(metaA.avatar, '/brand.png')} alt="A" className={styles.hAvatar} onError={onImageError(metaA.avatar, '/brand.png')} />
+                                                    <img src={resolveImageSrc(metaA.avatar, '/brand.png')} alt="A" className={styles.hAvatar} referrerPolicy="no-referrer" onError={onImageError(metaA.avatar, '/brand.png')} />
                                                     <span className={styles.hScore}>{match.scoreA.toFixed(2)}</span>
                                                 </div>
                                                 
@@ -359,7 +359,7 @@ export default function Rivalry() {
 
                                                 <div className={`${styles.hScoreBlock} ${match.scoreB > match.scoreA ? styles.winnerBlock : styles.loserBlock}`}>
                                                     <span className={styles.hScore}>{match.scoreB.toFixed(2)}</span>
-                                                    <img src={resolveImageSrc(metaB.avatar, '/brand.png')} alt="B" className={styles.hAvatar} onError={onImageError(metaB.avatar, '/brand.png')} />
+                                                    <img src={resolveImageSrc(metaB.avatar, '/brand.png')} alt="B" className={styles.hAvatar} referrerPolicy="no-referrer" onError={onImageError(metaB.avatar, '/brand.png')} />
                                                 </div>
                                             </div>
                                         </div>

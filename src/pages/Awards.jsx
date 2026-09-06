@@ -189,7 +189,7 @@ export default function Awards() {
                         return (
                             <div key={`champ-${p.year}`} className={`${styles.champCard} ${isReigning ? styles.latestChamp : ''}`}>
                                 <h2 className={styles.heroYear}>{p.year} {isReigning ? 'Champ' : ''}</h2>
-                                <img src={resolveImageSrc(champTeam.avatar, '/brand.png')} alt="Champ" className={styles.heroAvatar} onError={onImageError(champTeam.avatar, '/brand.png')} />
+                                <img src={resolveImageSrc(champTeam.avatar, '/brand.png')} alt="Champ" className={styles.heroAvatar} referrerPolicy="no-referrer" onError={onImageError(champTeam.avatar, '/brand.png')} />
                                 <div className={styles.heroName}>{champTeam.name}</div>
                             </div>
                         );
@@ -218,7 +218,7 @@ export default function Awards() {
                 <div className={styles.podiumContainer}>
                     {/* 2nd Place */}
                     <div className={`${styles.podiumBlock} ${styles.secondPlace}`}>
-                        <img src={resolveImageSrc(p2.avatar, '/brand.png')} alt="2nd" className={styles.podiumAvatar} onError={onImageError(p2.avatar, '/brand.png')} />
+                        <img src={resolveImageSrc(p2.avatar, '/brand.png')} alt="2nd" className={styles.podiumAvatar} referrerPolicy="no-referrer" onError={onImageError(p2.avatar, '/brand.png')} />
                         <div className={styles.podiumName}>{p2.name}</div>
                         <div className={styles.podiumPedestal}>
                             <span className={styles.medal}>🥈</span>
@@ -228,7 +228,7 @@ export default function Awards() {
                     
                     {/* 1st Place */}
                     <div className={`${styles.podiumBlock} ${styles.firstPlace}`}>
-                        <img src={resolveImageSrc(p1.avatar, '/brand.png')} alt="1st" className={styles.podiumAvatar} onError={onImageError(p1.avatar, '/brand.png')} />
+                        <img src={resolveImageSrc(p1.avatar, '/brand.png')} alt="1st" className={styles.podiumAvatar} referrerPolicy="no-referrer" onError={onImageError(p1.avatar, '/brand.png')} />
                         <div className={styles.podiumName}>{p1.name}</div>
                         <div className={styles.podiumPedestal}>
                             <span className={styles.medal}>🥇</span>
@@ -238,7 +238,7 @@ export default function Awards() {
 
                     {/* 3rd Place */}
                     <div className={`${styles.podiumBlock} ${styles.thirdPlace}`}>
-                        <img src={resolveImageSrc(p3.avatar, '/brand.png')} alt="3rd" className={styles.podiumAvatar} onError={onImageError(p3.avatar, '/brand.png')} />
+                        <img src={resolveImageSrc(p3.avatar, '/brand.png')} alt="3rd" className={styles.podiumAvatar} referrerPolicy="no-referrer" onError={onImageError(p3.avatar, '/brand.png')} />
                         <div className={styles.podiumName}>{p3.name}</div>
                         <div className={styles.podiumPedestal}>
                             <span className={styles.medal}>🥉</span>
@@ -262,7 +262,7 @@ export default function Awards() {
                         return (
                             <div key={`shame-${p.year}`} className={styles.shameCard}>
                                 <div className={styles.shameYear}>{p.year}</div>
-                                <img src={resolveImageSrc(toiletTeam.avatar, '/brand.png')} alt="Loser" className={styles.shameAvatar} onError={onImageError(toiletTeam.avatar, '/brand.png')} />
+                                <img src={resolveImageSrc(toiletTeam.avatar, '/brand.png')} alt="Loser" className={styles.shameAvatar} referrerPolicy="no-referrer" onError={onImageError(toiletTeam.avatar, '/brand.png')} />
                                 <div className={styles.shameName}>{toiletTeam.name}</div>
                             </div>
                         );
