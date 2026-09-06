@@ -278,6 +278,59 @@ export const parseEspnAthleteResponse = (data) => {
     };
 };
 
+// ESPN represents a team defense as a pseudo-player with a NEGATIVE id, in a
+// block based on the D/ST position code (16): the Titans D/ST is -16010, the
+// Raiders' -16013, and so on -- `-16000 - proTeamId`. Real athletes always
+// carry positive ids, so a negative one is a defense and nothing else.
+//
+// This matters because a defense is the one "player" ESPN's public athlete
+// lookup can never resolve (it only knows real athletes), so a defense that
+// was dropped -- and is therefore on no current roster to read metadata off
+// of -- had nothing left to identify it and rendered as a bare
+// "Player #-16013" in the transactions feed.
+const ESPN_DST_ID_OFFSET = 16000;
+
+/**
+ * The pro-team id a D/ST pseudo-player id refers to, or null if this isn't a
+ * defense id (or doesn't decode to a team ESPN actually has). Validating
+ * against the real team map is what keeps a wrong assumption about ESPN's
+ * numbering from confidently mislabeling one team's defense as another's --
+ * an unrecognized id degrades to "a defense, team unknown" instead.
+ */
+export const espnDefenseProTeamId = (playerId) => {
+    const id = Number(playerId);
+    if (!Number.isInteger(id) || id >= 0) return null;
+    const proTeamId = Math.abs(id) - ESPN_DST_ID_OFFSET;
+    return ESPN_PRO_TEAM_MAP[proTeamId] ? proTeamId : null;
+};
+
+/**
+ * Player metadata for a team defense, derived from its id alone -- the same
+ * shape parseEspnRosterEntry produces, so it drops straight into the
+ * platform-metadata fallback every page already consults. `pos: 'DEF'` plus
+ * the team abbreviation is what lets resolvePlayerFromMeta match it to
+ * Sleeper's own defense entry (which is keyed by team, not by any id either
+ * platform shares).
+ */
+export const espnDefenseMetaFromId = (playerId) => {
+    const proTeamId = espnDefenseProTeamId(playerId);
+    if (proTeamId === null && !(Number.isInteger(Number(playerId)) && Number(playerId) < 0)) return null;
+
+    const team = proTeamId === null ? 'FA' : espnProTeamAbbr(proTeamId);
+    return {
+        id: String(playerId),
+        fn: team === 'FA' ? 'Team' : team,
+        ln: 'D/ST',
+        pos: 'DEF',
+        t: team,
+        // A defense has no athlete headshot; the consuming pages fall through
+        // to their own team-logo image for a DEF entry.
+        headshot: null,
+        injStatus: null,
+        wi: {},
+    };
+};
+
 /**
  * True when `swid` (this account's ESPN identity, the same cookie value
  * fetchAndNormalizeESPNRosters already resolves to flag "my team") belongs to
@@ -337,8 +390,24 @@ export const espnTeamLogoUrl = (rawLogo) => {
  * one extra (cached) hop, and a local fallback path like '/brand.png' is left
  * untouched since it was never a hotlink to begin with.
  */
+export const isEspnCdnUrl = (rawUrl) => {
+    try {
+        const { hostname } = new URL(String(rawUrl));
+        return hostname === 'espncdn.com' || hostname.endsWith('.espncdn.com');
+    } catch {
+        return false;
+    }
+};
+
 export const toProxiedEspnImageUrl = (rawUrl, userId) => {
     if (!rawUrl || !userId || !/^https:\/\//i.test(rawUrl)) return rawUrl;
+    // ESPN lets a manager point their team logo at ANY image on the internet,
+    // not just one on ESPN's own CDN. Only an ESPN-hosted image can need this
+    // account's ESPN session to load, and the proxy only accepts that host
+    // anyway -- so routing an imgur/wikimedia/whatever logo through it would
+    // turn a perfectly good public image into a 400 and break a logo that was
+    // loading fine.
+    if (!isEspnCdnUrl(rawUrl)) return rawUrl;
     return `/api/espn-image-proxy?url=${encodeURIComponent(rawUrl)}&userId=${encodeURIComponent(userId)}`;
 };
 

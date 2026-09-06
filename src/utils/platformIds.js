@@ -68,3 +68,33 @@ export const detectPlatform = (id) => {
     if (isYahooLeagueId(id)) return 'yahoo';
     return 'sleeper';
 };
+
+/** True when this league's own player ids are NOT Sleeper ids. */
+export const isForeignPlatformLeague = (id) => isEspnLeagueId(id) || isYahooLeagueId(id);
+
+/**
+ * The id to look a player up by in Sleeper's own projections/stats feeds
+ * (api.sleeper.com/projections|stats), which are keyed by Sleeper player ids
+ * and nothing else.
+ *
+ * This needs its own rule because the two id spaces OVERLAP. On a Yahoo or
+ * ESPN league the shared player dictionary is deliberately re-keyed by that
+ * platform's own player id, so a roster entry's id there is a Yahoo/ESPN id --
+ * and an ESPN id like 12483 is also a perfectly real Sleeper id belonging to
+ * an unrelated player. Looking a foreign id up in a Sleeper-keyed feed
+ * therefore doesn't harmlessly miss, it HITS and returns a stranger's stat
+ * line: which is exactly how a quarterback ends up displaying receptions and
+ * receiving yards and no passing yards at all.
+ *
+ * So on a foreign platform only the crosswalked `sleeper_id` may be used, with
+ * no fallback to the raw id -- a player the crosswalk doesn't cover simply has
+ * no Sleeper projection, and showing nothing is correct where showing someone
+ * else's numbers is not. On a native Sleeper league the raw id IS the Sleeper
+ * id, so it stays usable.
+ */
+export const sleeperFeedKey = (playerObj, rawId, foreignPlatform) => {
+    const sleeperId = playerObj?.sleeper_id;
+    if (sleeperId !== null && sleeperId !== undefined && sleeperId !== '') return String(sleeperId);
+    if (foreignPlatform) return null;
+    return rawId === null || rawId === undefined || rawId === '' ? null : String(rawId);
+};

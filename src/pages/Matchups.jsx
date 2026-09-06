@@ -8,13 +8,16 @@ import { scoreStatLine } from '../utils/yahooScoring';
 import { fetchAndNormalizeYahooMatchups } from '../utils/yahooService';
 import { fetchAndNormalizeESPNMatchups, fetchAndNormalizeESPNRosters } from '../utils/espnService';
 import { isViewingLiveWeek, LIVE_SCORE_POLL_MS } from '../utils/liveScores';
-import { isYahooLeagueId, isEspnLeagueId } from '../utils/platformIds';
+import { isYahooLeagueId, isEspnLeagueId, isForeignPlatformLeague, sleeperFeedKey } from '../utils/platformIds';
 import { resolveImageSrc, onImageError } from '../utils/imageFallback';
 import PlayerModal from '../components/PlayerModal';
 import styles from './Matchups.module.css';
 
 export default function Matchups() {
     const { activeLeague } = useLeague();
+    // On Yahoo/ESPN the dictionary is keyed by that platform's player ids, which
+    // must never be used against Sleeper's own stat feeds (see sleeperFeedKey).
+    const foreignPlatform = isForeignPlatformLeague(activeLeague?.sleeper_league_id);
     const [loading, setLoading] = useState(true);
     const [rosters, setRosters] = useState({});
     const [teamManagers, setTeamManagers] = useState(null);
@@ -291,13 +294,12 @@ export default function Matchups() {
         if (!pId || pId === "0") return '0.00';
         const playerObj = getPlayerObj(pId);
         if (Number.isFinite(playerObj?.projectedPoints)) return playerObj.projectedPoints.toFixed(1);
-        // Sleeper's projections/stats feeds are keyed by Sleeper player ids. In a
-        // Yahoo league the roster ids are Yahoo's, so look the player up by their
-        // crosswalked sleeper_id as well -- otherwise every lookup misses and the
-        // player falls through to a 0.
-        const sleeperKey = playerObj?.sleeper_id;
-        const proj = weeklyProjections[pId] || weeklyStats[pId]
-            || (sleeperKey ? (weeklyProjections[sleeperKey] || weeklyStats[sleeperKey]) : null);
+        // Sleeper's projections/stats feeds are keyed by Sleeper player ids, and
+        // a Yahoo/ESPN roster id looked up in them doesn't harmlessly miss -- the
+        // id spaces overlap, so it returns an unrelated player's stat line. Only
+        // the crosswalked sleeper_id may be used here (see sleeperFeedKey).
+        const feedKey = sleeperFeedKey(playerObj, pId, foreignPlatform);
+        const proj = feedKey ? (weeklyProjections[feedKey] || weeklyStats[feedKey]) : null;
         const scoringSettings = leagueData?.scoring_settings || {};
 
         if (proj) {
@@ -320,9 +322,9 @@ export default function Matchups() {
 
     const getMatchupOpp = (pId) => {
         const playerObj = getPlayerObj(pId);
-        const sleeperKey = playerObj?.sleeper_id;
-        const proj = weeklyProjections[pId] || (sleeperKey ? weeklyProjections[sleeperKey] : null);
-        const stats = weeklyStats[pId] || (sleeperKey ? weeklyStats[sleeperKey] : null);
+        const feedKey = sleeperFeedKey(playerObj, pId, foreignPlatform);
+        const proj = feedKey ? weeklyProjections[feedKey] : null;
+        const stats = feedKey ? weeklyStats[feedKey] : null;
         
         if (!playerObj && !proj && !stats) return '';
 
@@ -415,7 +417,7 @@ export default function Matchups() {
                 >
                     <div className={styles.bannerTeam}>
                         <div className={styles.avatarRow}>
-                            <img src={resolveImageSrc(leftTeamMeta?.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} alt="" className={styles.bannerAvatar} referrerPolicy="no-referrer" onError={onImageError(leftTeamMeta?.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} />
+                            <img src={resolveImageSrc(leftTeamMeta?.avatar, '/brand.png')} alt="" className={styles.bannerAvatar} referrerPolicy="no-referrer" onError={onImageError(leftTeamMeta?.avatar, '/brand.png')} />
                             <span className={`${styles.winBadge} ${leftOddStyle}`}>{leftWinProb}% WIN</span>
                         </div>
                         <div className={styles.scoreGroup}>
@@ -431,7 +433,7 @@ export default function Matchups() {
 
                     <div className={styles.bannerTeam} style={{ alignItems: 'flex-end', textAlign: 'right' }}>
                         <div className={styles.avatarRow} style={{ flexDirection: 'row-reverse' }}>
-                            <img src={resolveImageSrc(rightTeamMeta?.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} alt="" className={styles.bannerAvatar} referrerPolicy="no-referrer" onError={onImageError(rightTeamMeta?.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} />
+                            <img src={resolveImageSrc(rightTeamMeta?.avatar, '/brand.png')} alt="" className={styles.bannerAvatar} referrerPolicy="no-referrer" onError={onImageError(rightTeamMeta?.avatar, '/brand.png')} />
                             <span className={`${styles.winBadge} ${rightOddStyle}`}>{rightWinProb}% WIN</span>
                         </div>
                         <div className={styles.scoreGroup} style={{ alignItems: 'flex-end' }}>

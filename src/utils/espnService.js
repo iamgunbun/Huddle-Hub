@@ -14,6 +14,7 @@ import {
     parseEspnAthleteResponse,
     isEspnLeagueManager,
     toProxiedEspnImageUrl,
+    espnDefenseMetaFromId,
 } from './espnParsers';
 
 // Most callers (every page's own `getLeagueData(id)`, with no explicit user)
@@ -321,8 +322,20 @@ const fetchESPNAthleteMeta = async (espnPlayerId) => {
 // few at a time rather than one huge burst.
 const ATHLETE_LOOKUP_CONCURRENCY = 4;
 const fetchMissingEspnAthletes = async (ids, knownMeta) => {
-    const missing = [...new Set((ids || []).map(String))].filter(id => !knownMeta[id]);
+    const unresolved = [...new Set((ids || []).map(String))].filter(id => !knownMeta[id]);
     const resolved = {};
+
+    // A team defense is a negative-id pseudo-player, which the athlete lookup
+    // below could never resolve -- it only knows real athletes. Those are
+    // derived from the id itself instead, which is the only thing left to go
+    // on for a defense that was dropped and so isn't on any roster to read
+    // metadata off of.
+    const missing = [];
+    unresolved.forEach(id => {
+        const defenseMeta = espnDefenseMetaFromId(id);
+        if (defenseMeta) resolved[id] = defenseMeta;
+        else missing.push(id);
+    });
 
     for (let i = 0; i < missing.length; i += ATHLETE_LOOKUP_CONCURRENCY) {
         const batch = missing.slice(i, i + ATHLETE_LOOKUP_CONCURRENCY);

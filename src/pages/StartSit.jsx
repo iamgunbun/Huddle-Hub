@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useLeague } from '../context/LeagueContext';
 import { loadPlayers, getLeagueData, getNflState } from '../utils/helper';
 import { scoreStatLine } from '../utils/yahooScoring';
+import { isForeignPlatformLeague, sleeperFeedKey } from '../utils/platformIds';
 import styles from './StartSit.module.css';
 
 const NFL_TEAMS = new Set([
@@ -28,6 +29,9 @@ const parseAiResponse = (rawText) => {
 
 export default function StartSit() {
     const { activeLeague, isPremium, setShowPremiumModal } = useLeague();
+    // On Yahoo/ESPN the dictionary is keyed by that platform's player ids, which
+    // must never be used against Sleeper's own stat feeds (see sleeperFeedKey).
+    const foreignPlatform = isForeignPlatformLeague(activeLeague?.sleeper_league_id);
     const [loading, setLoading] = useState(true);
     const [playersInfo, setPlayersInfo] = useState({});
     const [leagueData, setLeagueData] = useState(null);
@@ -211,12 +215,12 @@ export default function StartSit() {
 
     const getMatchupOpp = (pId) => {
         const playerObj = getPlayerObj(pId);
-        // Same Yahoo/Sleeper id split as getPlayerProjPts below: the bulk
-        // weekly feeds are keyed by Sleeper id, so a Yahoo id has to be
-        // exchanged for its crosswalked sleeper_id before it can hit.
-        const sleeperKey = playerObj?.sleeper_id;
-        const proj = weeklyProjections[pId] || (sleeperKey ? weeklyProjections[sleeperKey] : null);
-        const stats = weeklyStats[pId] || (sleeperKey ? weeklyStats[sleeperKey] : null);
+        // Sleeper's bulk weekly feeds are keyed by Sleeper ids only, and a
+        // Yahoo/ESPN id looked up in them returns an unrelated player's row
+        // rather than missing -- see sleeperFeedKey.
+        const feedKey = sleeperFeedKey(playerObj, pId, foreignPlatform);
+        const proj = feedKey ? weeklyProjections[feedKey] : null;
+        const stats = feedKey ? weeklyStats[feedKey] : null;
 
         if (!playerObj && !proj && !stats) return '';
 
@@ -239,11 +243,8 @@ export default function StartSit() {
     const getPlayerProjPts = (pId) => {
         if (!pId || pId === "0") return '0.00';
         const playerObj = playersInfo[pId];
-        // Sleeper's feeds are keyed by Sleeper ids; a Yahoo league's roster ids
-        // are Yahoo's, so fall back to the crosswalked sleeper_id.
-        const sleeperKey = playerObj?.sleeper_id;
-        const proj = weeklyProjections[pId] || weeklyStats[pId]
-            || (sleeperKey ? (weeklyProjections[sleeperKey] || weeklyStats[sleeperKey]) : null);
+        const feedKey = sleeperFeedKey(playerObj, pId, foreignPlatform);
+        const proj = feedKey ? (weeklyProjections[feedKey] || weeklyStats[feedKey]) : null;
         const scoringSettings = leagueData?.scoring_settings || {};
 
         if (proj) {
@@ -268,14 +269,13 @@ export default function StartSit() {
 
     const getRawProjStat = (pId, statKey) => {
         const playerObj = getPlayerObj(pId);
-        // Same Yahoo/Sleeper id split as getPlayerProjPts: without this, every
-        // category read here missed for a Yahoo player the bulk weekly feed
-        // only knows by its real Sleeper id -- which is why the projected
-        // points total could show a real number (getPlayerProjPts already had
-        // this fallback) while every individual stat row read a false zero.
-        const sleeperKey = playerObj?.sleeper_id;
-        const proj = weeklyProjections[pId] || weeklyStats[pId]
-            || (sleeperKey ? (weeklyProjections[sleeperKey] || weeklyStats[sleeperKey]) : null);
+        // Every category row on this page reads through here, so getting the
+        // feed key wrong doesn't just zero them out -- it fills them in from
+        // whichever unrelated player happens to own this id in Sleeper's
+        // numbering, which is what put receptions and receiving yards on a
+        // quarterback's projection card.
+        const feedKey = sleeperFeedKey(playerObj, pId, foreignPlatform);
+        const proj = feedKey ? (weeklyProjections[feedKey] || weeklyStats[feedKey]) : null;
         if (!proj) return null;
         const stats = proj.stats || proj || {};
 

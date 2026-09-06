@@ -21,6 +21,9 @@ import {
     parseEspnAthleteResponse,
     isEspnLeagueManager,
     toProxiedEspnImageUrl,
+    isEspnCdnUrl,
+    espnDefenseProTeamId,
+    espnDefenseMetaFromId,
 } from '../src/utils/espnParsers.js';
 import { scoreStatLine } from '../src/utils/yahooScoring.js';
 
@@ -79,6 +82,36 @@ check('no userId -> the url is left alone (nothing to attach cookies for)',
     toProxiedEspnImageUrl('https://a.espncdn.com/logo.png', null), 'https://a.espncdn.com/logo.png');
 check('a local fallback path is never proxied', toProxiedEspnImageUrl('/brand.png', 'user-1'), '/brand.png');
 check('null url stays null', toProxiedEspnImageUrl(null, 'user-1'), null);
+// A manager can point their ESPN team logo at any image on the internet.
+// Those need no ESPN session and the proxy would reject the host outright,
+// so proxying them would break a logo that loads fine on its own.
+check('a non-ESPN host is left as a direct link, not proxied',
+    toProxiedEspnImageUrl('https://i.imgur.com/abc.png', 'user-1'), 'https://i.imgur.com/abc.png');
+check('espncdn.com itself is proxied', isEspnCdnUrl('https://espncdn.com/x.png'), true);
+check('an espncdn subdomain is proxied', isEspnCdnUrl('https://g.espncdn.com/x.png'), true);
+check('an unrelated host is not', isEspnCdnUrl('https://i.imgur.com/x.png'), false);
+check('a lookalike host is not (suffix match must be on a dot boundary)',
+    isEspnCdnUrl('https://notespncdn.com/x.png'), false);
+check('garbage is not a CDN url', isEspnCdnUrl('not a url'), false);
+
+// --- team defenses: ESPN's negative pseudo-player ids ---
+check('a D/ST id decodes to its pro team', espnDefenseProTeamId(-16013), 13);
+check('the Titans D/ST decodes to team 10', espnDefenseProTeamId(-16010), 10);
+check('a positive (real athlete) id is not a defense', espnDefenseProTeamId(4362628), null);
+check('a negative id outside the real team range decodes to no team', espnDefenseProTeamId(-16099), null);
+check('junk decodes to no team', espnDefenseProTeamId(null), null);
+
+const dstMeta = espnDefenseMetaFromId(-16013);
+check('a dropped defense resolves a DEF position instead of a bare id', dstMeta.pos, 'DEF');
+check('and the team abbreviation Sleeper keys its own defenses by', dstMeta.t, 'LV');
+check('and reads as a D/ST rather than a player name', dstMeta.ln, 'D/ST');
+check('and carries no athlete headshot', dstMeta.headshot, null);
+check('a real athlete id produces no defense metadata', espnDefenseMetaFromId(4362628), null);
+// An unrecognized negative id is still definitely a defense -- better to say
+// so with no team than to confidently name the wrong one.
+const unknownDst = espnDefenseMetaFromId(-16099);
+check('an undecodable defense id is still marked DEF', unknownDst.pos, 'DEF');
+check('but claims no team', unknownDst.t, 'FA');
 
 // --- espnLineupSlotName / buildEspnRosterPositions ---
 check('slot 0 is QB', espnLineupSlotName(0), 'QB');

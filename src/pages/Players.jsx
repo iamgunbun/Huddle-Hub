@@ -7,10 +7,13 @@ import { fetchYahooAvailablePlayers } from '../utils/yahooService';
 import PlayerModal from '../components/PlayerModal';
 import { scoreStatLine } from '../utils/yahooScoring';
 import styles from './Players.module.css';
-import { isYahooLeagueId, isEspnLeagueId } from '../utils/platformIds';
+import { isYahooLeagueId, isEspnLeagueId, isForeignPlatformLeague, sleeperFeedKey } from '../utils/platformIds';
 
 export default function Players() {
     const { activeLeague } = useLeague();
+    // On Yahoo/ESPN the dictionary is keyed by that platform's player ids, which
+    // must never be used against Sleeper's own stat feeds (see sleeperFeedKey).
+    const foreignPlatform = isForeignPlatformLeague(activeLeague?.sleeper_league_id);
     const [loading, setLoading] = useState(true);
     const [playersInfo, setPlayersInfo] = useState({});
     const [leagueData, setLeagueData] = useState(null);
@@ -189,16 +192,16 @@ export default function Players() {
 
     const getProjPts = (pId) => {
         if (!pId) return '0.00';
-        // Sleeper's projections/stats feeds are keyed by Sleeper player ids, but
-        // in a Yahoo league these ids are Yahoo's -- fall back to the player's
-        // crosswalked sleeper_id so the lookup doesn't miss and report 0.
-        const sleeperKey = (playersInfo[pId] || playersInfo[String(pId)])?.sleeper_id;
-        const proj = weeklyProjections[pId] || weeklyStats[pId]
-            || (sleeperKey ? (weeklyProjections[sleeperKey] || weeklyStats[sleeperKey]) : null);
+        // Sleeper's projections/stats feeds are keyed by Sleeper player ids, and
+        // a Yahoo/ESPN id looked up in them returns an unrelated player's row
+        // rather than missing -- see sleeperFeedKey.
+        const playerObj = playersInfo[pId] || playersInfo[String(pId)];
+        const feedKey = sleeperFeedKey(playerObj, pId, foreignPlatform);
+        const proj = feedKey ? (weeklyProjections[feedKey] || weeklyStats[feedKey]) : null;
         if (proj) {
             const stats = proj.stats || proj || {};
             const scoringSettings = leagueData?.scoring_settings || {};
-            const playerPos = (playersInfo[pId] || playersInfo[String(pId)])?.pos;
+            const playerPos = playerObj?.pos;
             // Score against the league's own rules (defense tiers, kicker FG
             // distances); null means the line carried none of the scored stats.
             const scored = scoreStatLine(stats, scoringSettings, playerPos);
@@ -217,9 +220,9 @@ export default function Players() {
     const getMatchupText = (playerObj) => {
         if (!playerObj) return '';
         const pId = playerObj.player_id || playerObj.id;
-        const sleeperKey = playerObj.sleeper_id;
-        const proj = weeklyProjections[pId] || (sleeperKey ? weeklyProjections[sleeperKey] : null);
-        const stats = weeklyStats[pId] || (sleeperKey ? weeklyStats[sleeperKey] : null);
+        const feedKey = sleeperFeedKey(playerObj, pId, foreignPlatform);
+        const proj = feedKey ? weeklyProjections[feedKey] : null;
+        const stats = feedKey ? weeklyStats[feedKey] : null;
         const team = normalizeTeam(playerObj.t || playerObj.team);
 
         if (team && nflScheduleMap[team]) {

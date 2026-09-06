@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { isYahooLeagueId, isEspnLeagueId, toEspnLeagueId, toEspnSeasonLeagueId, parseEspnLeagueId, fromEspnLeagueId, detectPlatform, ESPN_ID_PREFIX } from '../src/utils/platformIds.js';
+import { isYahooLeagueId, isEspnLeagueId, toEspnLeagueId, toEspnSeasonLeagueId, parseEspnLeagueId, fromEspnLeagueId, detectPlatform, isForeignPlatformLeague, sleeperFeedKey, ESPN_ID_PREFIX } from '../src/utils/platformIds.js';
 
 let checks = 0;
 const check = (name, actual, expected) => {
@@ -49,5 +49,28 @@ check('detects Yahoo', detectPlatform('461.l.123456'), 'yahoo');
 check('detects ESPN', detectPlatform(toEspnLeagueId('123456')), 'espn');
 check('falls back to Sleeper for a bare numeric id', detectPlatform('123456'), 'sleeper');
 check('ESPN is checked before Yahoo\'s shape check could misfire', detectPlatform(toEspnLeagueId('461')), 'espn');
+
+// --- isForeignPlatformLeague / sleeperFeedKey ---
+// The id spaces OVERLAP, so a foreign id looked up in a Sleeper-keyed feed
+// doesn't miss -- it returns an unrelated player's stat line, which is how a
+// QB ends up showing receptions and receiving yards.
+check('an ESPN league is a foreign platform', isForeignPlatformLeague(toEspnLeagueId('123456')), true);
+check('a Yahoo league is a foreign platform', isForeignPlatformLeague('461.l.123456'), true);
+check('a Sleeper league is not', isForeignPlatformLeague('987654321'), false);
+
+check('the crosswalked sleeper_id is always preferred',
+    sleeperFeedKey({ sleeper_id: '4046', player_id: '12483' }, '12483', true), '4046');
+check('on a foreign platform an uncrosswalked player gets NO key, never the raw id',
+    sleeperFeedKey({ player_id: '12483' }, '12483', true), null);
+check('the raw id is still usable on a native Sleeper league',
+    sleeperFeedKey({ player_id: '4046' }, '4046', false), '4046');
+check('no player object at all on Sleeper still falls back to the raw id',
+    sleeperFeedKey(null, '4046', false), '4046');
+check('no player object on a foreign platform yields nothing to look up',
+    sleeperFeedKey(null, '12483', true), null);
+check('a numeric sleeper_id is coerced to the string key the feeds use',
+    sleeperFeedKey({ sleeper_id: 4046 }, '12483', true), '4046');
+check('an empty sleeper_id is not treated as a real key',
+    sleeperFeedKey({ sleeper_id: '' }, '12483', true), null);
 
 console.log(`OK: ${checks} platform-id checks passed`);
