@@ -3,6 +3,7 @@ import { useLeague } from '../context/LeagueContext';
 import { getAwards, getLeagueTeamManagers, getLeagueRecords } from '../utils/helper';
 import { getManagerIdentity } from '../utils/helperFunctions/universalFunctions';
 import styles from './Awards.module.css';
+import { resolveImageSrc, onImageError } from '../utils/imageFallback';
 
 const DEFAULT_AVATAR = 'https://sleepercdn.com/images/v2/icons/player_default.webp';
 
@@ -188,7 +189,7 @@ export default function Awards() {
                         return (
                             <div key={`champ-${p.year}`} className={`${styles.champCard} ${isReigning ? styles.latestChamp : ''}`}>
                                 <h2 className={styles.heroYear}>{p.year} {isReigning ? 'Champ' : ''}</h2>
-                                <img src={champTeam.avatar} alt="Champ" className={styles.heroAvatar} />
+                                <img src={resolveImageSrc(champTeam.avatar, '/brand.png')} alt="Champ" className={styles.heroAvatar} onError={onImageError(champTeam.avatar, '/brand.png')} />
                                 <div className={styles.heroName}>{champTeam.name}</div>
                             </div>
                         );
@@ -217,7 +218,7 @@ export default function Awards() {
                 <div className={styles.podiumContainer}>
                     {/* 2nd Place */}
                     <div className={`${styles.podiumBlock} ${styles.secondPlace}`}>
-                        <img src={p2.avatar} alt="2nd" className={styles.podiumAvatar} />
+                        <img src={resolveImageSrc(p2.avatar, '/brand.png')} alt="2nd" className={styles.podiumAvatar} onError={onImageError(p2.avatar, '/brand.png')} />
                         <div className={styles.podiumName}>{p2.name}</div>
                         <div className={styles.podiumPedestal}>
                             <span className={styles.medal}>🥈</span>
@@ -227,7 +228,7 @@ export default function Awards() {
                     
                     {/* 1st Place */}
                     <div className={`${styles.podiumBlock} ${styles.firstPlace}`}>
-                        <img src={p1.avatar} alt="1st" className={styles.podiumAvatar} />
+                        <img src={resolveImageSrc(p1.avatar, '/brand.png')} alt="1st" className={styles.podiumAvatar} onError={onImageError(p1.avatar, '/brand.png')} />
                         <div className={styles.podiumName}>{p1.name}</div>
                         <div className={styles.podiumPedestal}>
                             <span className={styles.medal}>🥇</span>
@@ -237,7 +238,7 @@ export default function Awards() {
 
                     {/* 3rd Place */}
                     <div className={`${styles.podiumBlock} ${styles.thirdPlace}`}>
-                        <img src={p3.avatar} alt="3rd" className={styles.podiumAvatar} />
+                        <img src={resolveImageSrc(p3.avatar, '/brand.png')} alt="3rd" className={styles.podiumAvatar} onError={onImageError(p3.avatar, '/brand.png')} />
                         <div className={styles.podiumName}>{p3.name}</div>
                         <div className={styles.podiumPedestal}>
                             <span className={styles.medal}>🥉</span>
@@ -261,7 +262,7 @@ export default function Awards() {
                         return (
                             <div key={`shame-${p.year}`} className={styles.shameCard}>
                                 <div className={styles.shameYear}>{p.year}</div>
-                                <img src={toiletTeam.avatar} alt="Loser" className={styles.shameAvatar} />
+                                <img src={resolveImageSrc(toiletTeam.avatar, '/brand.png')} alt="Loser" className={styles.shameAvatar} onError={onImageError(toiletTeam.avatar, '/brand.png')} />
                                 <div className={styles.shameName}>{toiletTeam.name}</div>
                             </div>
                         );

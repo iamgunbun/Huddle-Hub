@@ -8,6 +8,7 @@ import { fetchESPNTransactions } from '../utils/espnService';
 import { isYahooLeagueId, isEspnLeagueId } from '../utils/platformIds';
 import { withResolvedPlayerMeta } from '../utils/playerPool';
 import styles from './Transactions.module.css';
+import { resolveImageSrc, onImageError } from '../utils/imageFallback';
 
 export default function Transactions() {
     const { activeLeague } = useLeague();
@@ -271,7 +272,7 @@ export default function Transactions() {
                                     <div className={styles.tradeGrid}>
                                         <div className={styles.tradeColumn}>
                                             <div className={styles.teamHeaderRow}>
-                                                <img src={teamA?.avatar || 'https://sleepercdn.com/images/v2/icons/league_default.webp'} alt="" className={styles.teamAvatar} />
+                                                <img src={resolveImageSrc(teamA?.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} alt="" className={styles.teamAvatar} onError={onImageError(teamA?.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} />
                                                 <span className={styles.teamName}>{teamA?.name || 'Team 1'}</span>
                                             </div>
                                             <div className={styles.receivedLabel}>Received:</div>
@@ -295,7 +296,7 @@ export default function Transactions() {
 
                                         <div className={styles.tradeColumn}>
                                             <div className={styles.teamHeaderRow}>
-                                                <img src={teamB?.avatar || 'https://sleepercdn.com/images/v2/icons/league_default.webp'} alt="" className={styles.teamAvatar} />
+                                                <img src={resolveImageSrc(teamB?.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} alt="" className={styles.teamAvatar} onError={onImageError(teamB?.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} />
                                                 <span className={styles.teamName}>{teamB?.name || 'Team 2'}</span>
                                             </div>
                                             <div className={styles.receivedLabel}>Received:</div>
@@ -341,7 +342,7 @@ export default function Transactions() {
 
                                 <div className={styles.waiverBody}>
                                     <div className={styles.teamHeaderRowSingle}>
-                                        <img src={teamMeta?.avatar || 'https://sleepercdn.com/images/v2/icons/league_default.webp'} alt="" className={styles.teamAvatar} />
+                                        <img src={resolveImageSrc(teamMeta?.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} alt="" className={styles.teamAvatar} onError={onImageError(teamMeta?.avatar, 'https://sleepercdn.com/images/v2/icons/league_default.webp')} />
                                         <span className={styles.teamName}>{teamMeta?.name || 'Manager'}</span>
                                     </div>
 

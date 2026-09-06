@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getTeamFromTeamManagers, formatOpponent } from '../../utils/helperFunctions/universalFunctions';
 import PlayerModal from '../PlayerModal';
 import styles from './Matchup.module.css';
+import { resolveImageSrc, onImageError } from '../../utils/imageFallback';
 
 export default function Matchup({ matchup, players, leagueTeamManagers, year, week, leagueData, initialExpanded = false }) {
     // Hooks must run on every render in the same order. The guard below used to
@@ -82,7 +83,7 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                 <div className={styles.desktopScoreboard}>
                     <div className={styles.teamHeader}>
                         <div className={styles.teamIdentity}>
-                            <img src={metaA.avatar} alt="Team A" className={styles.teamAvatar} />
+                            <img src={resolveImageSrc(metaA.avatar, '/brand.png')} alt="Team A" className={styles.teamAvatar} onError={onImageError(metaA.avatar, '/brand.png')} />
                             <div className={styles.teamNameContainer}>
                                 <div className={styles.teamName}>{metaA.name}</div>
                                 <div className={styles.projTotal}>Proj: {projA.toFixed(2)}</div>
@@ -109,7 +110,7 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                                 <div className={styles.teamName}>{metaB.name}</div>
                                 <div className={styles.projTotal}>Proj: {projB.toFixed(2)}</div>
                             </div>
-                            <img src={metaB.avatar} alt="Team B" className={styles.teamAvatar} />
+                            <img src={resolveImageSrc(metaB.avatar, '/brand.png')} alt="Team B" className={styles.teamAvatar} onError={onImageError(metaB.avatar, '/brand.png')} />
                         </div>
                     </div>
                 </div>
@@ -118,7 +119,7 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                 <div className={styles.mobileScoreboard}>
                     <div className={styles.mGridTop}>
                         <div className={styles.mProfileLeft}>
-                            <img src={metaA.avatar} className={styles.mAvatar} alt="A" />
+                            <img src={resolveImageSrc(metaA.avatar, '/brand.png')} className={styles.mAvatar} alt="A" onError={onImageError(metaA.avatar, '/brand.png')} />
                             <div className={styles.mNameStack}>
                                 <span className={styles.mTeamNameText}>{metaA.name}</span>
                             </div>
@@ -131,7 +132,7 @@ export default function Matchup({ matchup, players, leagueTeamManagers, year, we
                             <div className={`${styles.mNameStack} ${styles.mRightAlign}`}>
                                 <span className={styles.mTeamNameText}>{metaB.name}</span>
                             </div>
-                            <img src={metaB.avatar} className={styles.mAvatar} alt="B" />
+                            <img src={resolveImageSrc(metaB.avatar, '/brand.png')} className={styles.mAvatar} alt="B" onError={onImageError(metaB.avatar, '/brand.png')} />
                         </div>
                     </div>
 

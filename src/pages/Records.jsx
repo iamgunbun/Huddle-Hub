@@ -3,6 +3,7 @@ import { useLeague } from '../context/LeagueContext';
 import { getLeagueRecords, getLeagueTeamManagers } from '../utils/helper';
 import { getManagerIdentity } from '../utils/helperFunctions/universalFunctions';
 import styles from './Records.module.css';
+import { resolveImageSrc, onImageError } from '../utils/imageFallback';
 
 export default function RecordsPage() {
     const { activeLeague } = useLeague();
@@ -120,9 +121,26 @@ export default function RecordsPage() {
     if (loading) return <div className={styles.loading}>Parsing All-Time Stat Records...</div>;
     if (!activeDataset) return <div className={styles.loading}>No Historical Data Found.</div>;
 
+    // A league's own recorded season count, not a platform check -- a brand
+    // new Sleeper or Yahoo league looks exactly like this the first time
+    // through too, not just a first-season ESPN one.
+    const seasonsTracked = Object.keys(teamManagers?.teamManagersMap || {}).length;
+    const isFirstSeason = seasonsTracked <= 1;
+
     return (
         <div className={styles.container}>
             <h1 className={styles.headerTitle}>League Record Book</h1>
+
+            {isFirstSeason && (
+                <div style={{ textAlign: 'center', color: '#94a3b8', background: 'rgba(255, 255, 255, 0.02)', border: '1px dashed rgba(255, 255, 255, 0.1)', borderRadius: '12px', padding: '24px 20px', marginBottom: '20px' }}>
+                    <h3 style={{ color: '#f8fafc', margin: '0 0 8px 0' }}>Just Getting Started</h3>
+                    <p style={{ margin: 0 }}>
+                        This is your league's first tracked season, so what's below is this year's numbers, not a
+                        career record yet. Once your league carries over into a new season, blowouts, close games,
+                        and franchise win-loss records will start accumulating across years here.
+                    </p>
+                </div>
+            )}
 
             {/* View Switching Navigation Controls */}
             <div className={styles.controlsRow}>
@@ -168,7 +186,7 @@ export default function RecordsPage() {
                                     <td className={styles.rankNum}>{idx + 1}</td>
                                     <td className={styles.managerNameCell}>
                                         <div className={styles.managerCellLayout}>
-                                            <img src={row.avatar} alt="Avatar" className={styles.tableAvatar} />
+                                            <img src={resolveImageSrc(row.avatar, '/brand.png')} alt="Avatar" className={styles.tableAvatar} onError={onImageError(row.avatar, '/brand.png')} />
                                             <div className={styles.managerIdentityStack}>
                                                 <span className={styles.tableTeamName}>{row.name}</span>
                                                 {row.handle && <span className={styles.tableHandle}>{row.handle}</span>}
@@ -237,7 +255,7 @@ export default function RecordsPage() {
                                                     <td className={styles.rankNum} style={{ textAlign: 'center' }}>{i + 1}</td>
                                                     <td>
                                                         <div className={styles.managerCellLayout}>
-                                                            <img src={team.avatar} alt="Avatar" className={styles.tableAvatar} />
+                                                            <img src={resolveImageSrc(team.avatar, '/brand.png')} alt="Avatar" className={styles.tableAvatar} onError={onImageError(team.avatar, '/brand.png')} />
                                                             <div className={styles.managerIdentityStack}>
                                                                 <span className={styles.tableTeamName}>{team.name}</span>
                                                                 {team.handle && <span className={styles.tableHandle}>{team.handle}</span>}
@@ -284,7 +302,7 @@ export default function RecordsPage() {
                                                     <td className={styles.rankNum} style={{ textAlign: 'center' }}>{i + 1}</td>
                                                     <td>
                                                         <div className={styles.managerCellLayout}>
-                                                            <img src={team.avatar} alt="Avatar" className={styles.tableAvatar} />
+                                                            <img src={resolveImageSrc(team.avatar, '/brand.png')} alt="Avatar" className={styles.tableAvatar} onError={onImageError(team.avatar, '/brand.png')} />
                                                             <div className={styles.managerIdentityStack}>
                                                                 <span className={styles.tableTeamName}>{team.name}</span>
                                                                 {team.handle && <span className={styles.tableHandle}>{team.handle}</span>}

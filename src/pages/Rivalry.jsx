@@ -4,6 +4,7 @@ import { getLeagueRecords, getLeagueTeamManagers } from '../utils/helper';
 import { syncActiveLeague } from '../utils/leagueInfo';
 import { supabase } from '../supabaseClient';
 import styles from './Rivalry.module.css';
+import { resolveImageSrc, onImageError } from '../utils/imageFallback';
 
 export default function Rivalry() {
     const { activeLeague } = useLeague();
@@ -178,6 +179,11 @@ export default function Rivalry() {
     const totalGames = rivalryStats?.winsA + rivalryStats?.winsB + rivalryStats?.ties || 0;
     const winPctA = totalGames ? ((rivalryStats.winsA / totalGames) * 100).toFixed(0) : 50;
     const winPctB = totalGames ? ((rivalryStats.winsB / totalGames) * 100).toFixed(0) : 50;
+    // A league's own recorded season count, not a platform check -- a brand
+    // new Sleeper or Yahoo league has exactly this same "nothing to show yet"
+    // shape the first time through, not just a first-season ESPN one.
+    const seasonsTracked = Object.keys(teamManagersData?.teamManagersMap || {}).length;
+    const isFirstSeason = seasonsTracked <= 1;
 
     return (
         <div className={styles.container}>
@@ -188,7 +194,7 @@ export default function Rivalry() {
 
             <div className={styles.selectorWrapper}>
                 <div className={styles.teamSelector}>
-                    <img src={metaA?.avatar || 'https://sleepercdn.com/images/v2/icons/player_default.webp'} alt="Team A" className={styles.teamAvatar} />
+                    <img src={resolveImageSrc(metaA?.avatar, 'https://sleepercdn.com/images/v2/icons/player_default.webp')} alt="Team A" className={styles.teamAvatar} onError={onImageError(metaA?.avatar, 'https://sleepercdn.com/images/v2/icons/player_default.webp')} />
                     <select 
                         className={styles.dropdown} 
                         value={managerA} 
@@ -205,7 +211,7 @@ export default function Rivalry() {
                 <div className={styles.vsBadge}>VS</div>
 
                 <div className={styles.teamSelector}>
-                    <img src={metaB?.avatar || 'https://sleepercdn.com/images/v2/icons/player_default.webp'} alt="Team B" className={styles.teamAvatar} />
+                    <img src={resolveImageSrc(metaB?.avatar, 'https://sleepercdn.com/images/v2/icons/player_default.webp')} alt="Team B" className={styles.teamAvatar} onError={onImageError(metaB?.avatar, 'https://sleepercdn.com/images/v2/icons/player_default.webp')} />
                     <select 
                         className={styles.dropdown} 
                         value={managerB} 
@@ -222,8 +228,21 @@ export default function Rivalry() {
 
             {totalGames === 0 ? (
                 <div className={styles.emptyState}>
-                    <h3>No Match History Found</h3>
-                    <p>These two franchises have never faced each other.</p>
+                    {isFirstSeason ? (
+                        <>
+                            <h3>Just Getting Started</h3>
+                            <p>
+                                This is your league's first tracked season, so there's no rivalry history between any
+                                two managers yet. Once your league carries over into a new season, every matchup
+                                between these two teams will start building the head-to-head record shown here.
+                            </p>
+                        </>
+                    ) : (
+                        <>
+                            <h3>No Match History Found</h3>
+                            <p>These two franchises have never faced each other.</p>
+                        </>
+                    )}
                 </div>
             ) : (
                 <>
@@ -332,7 +351,7 @@ export default function Rivalry() {
 
                                             <div className={styles.historyScores}>
                                                 <div className={`${styles.hScoreBlock} ${match.scoreA > match.scoreB ? styles.winnerBlock : styles.loserBlock}`}>
-                                                    <img src={metaA.avatar} alt="A" className={styles.hAvatar} />
+                                                    <img src={resolveImageSrc(metaA.avatar, '/brand.png')} alt="A" className={styles.hAvatar} onError={onImageError(metaA.avatar, '/brand.png')} />
                                                     <span className={styles.hScore}>{match.scoreA.toFixed(2)}</span>
                                                 </div>
                                                 
@@ -340,7 +359,7 @@ export default function Rivalry() {
 
                                                 <div className={`${styles.hScoreBlock} ${match.scoreB > match.scoreA ? styles.winnerBlock : styles.loserBlock}`}>
                                                     <span className={styles.hScore}>{match.scoreB.toFixed(2)}</span>
-                                                    <img src={metaB.avatar} alt="B" className={styles.hAvatar} />
+                                                    <img src={resolveImageSrc(metaB.avatar, '/brand.png')} alt="B" className={styles.hAvatar} onError={onImageError(metaB.avatar, '/brand.png')} />
                                                 </div>
                                             </div>
                                         </div>

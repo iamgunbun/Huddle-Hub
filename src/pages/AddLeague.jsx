@@ -6,6 +6,7 @@ import { fetchAndNormalizeESPNLeague } from '../utils/espnService';
 import { parseYahooOwnTeams } from '../utils/yahooHistory';
 import { findSleeperLeagueUser, isSleeperCommissioner, teamClaimKey } from '../utils/leagueMembership';
 import styles from './AddLeague.module.css';
+import { resolveImageSrc, onImageError } from '../utils/imageFallback';
 
 export default function AddLeague() {
     const navigate = useNavigate();
@@ -655,7 +656,7 @@ export default function AddLeague() {
                             {foundLeagues.map(league => (
                                 <div key={league.id} className={styles.leagueItem}>
                                     <div className={styles.leagueInfo}>
-                                        <img src={league.avatar} alt="Logo" className={styles.leagueAvatar} />
+                                        <img src={resolveImageSrc(league.avatar, '/brand.png')} alt="Logo" className={styles.leagueAvatar} onError={onImageError(league.avatar, '/brand.png')} />
                                         <div className={styles.leagueMeta}>
                                             <span className={styles.leagueName}>{league.name}</span>
                                             <span className={styles.leaguePlatform}>
