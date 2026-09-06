@@ -60,7 +60,18 @@ export const getLeagueRosters = async (queryLeagueID = defaultLeagueID, { teamsO
             return eTeams;
         }
 
-        const eRosters = await fetchAndNormalizeESPNRosters(queryLeagueID);
+        let eRosters = await fetchAndNormalizeESPNRosters(queryLeagueID);
+        // A cold page load can race Supabase's session hydration -- the proxy
+        // request resolves with no user id and this comes back with zero
+        // rosters, indistinguishable from "this league genuinely has none".
+        // Available Players reads that as "nobody owns anything" and shows
+        // every NFL player as available, which is worse than a slow page: one
+        // retry, giving hydration a moment to finish, recovers silently
+        // instead of leaving that wrong for the rest of the session.
+        if (!eRosters || Object.keys(eRosters.rosters || {}).length === 0) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            eRosters = await fetchAndNormalizeESPNRosters(queryLeagueID);
+        }
         if (eRosters && Object.keys(eRosters.rosters).length > 0) {
             rostersStore.update(r => { r[queryLeagueID] = eRosters; return r; });
         }

@@ -287,6 +287,13 @@ export default function Players() {
     // rostered. Depends on rosters/the Yahoo pool, not on the search box or
     // position filter, so typing a search doesn't re-derive ownership either.
     const unownedPlayers = useMemo(() => {
+        // rosterPoolIncomplete already detects "not every team's roster made
+        // it in" (see its definition above) and shows a banner for it -- but
+        // showing the banner *alongside* the full, wrong pool (every missing
+        // team's players reading as free agents) is worse than showing
+        // nothing: a wrong "available" list invites rostering someone who's
+        // actually taken, while an empty one just looks like a slow load.
+        if (rosterPoolIncomplete) return [];
         // Name matching only where ids genuinely can't be trusted to line up.
         // A Yahoo or ESPN league's rosters carry that platform's own ids while
         // the dictionary falls back to a Sleeper id for uncrosswalked players,
@@ -339,7 +346,7 @@ export default function Players() {
         });
 
         return list;
-    }, [nflPlayerPool, rosters, yahooPlayersMeta, playersInfo, yahooAvailable, activeLeague, leagueData]);
+    }, [nflPlayerPool, rosters, yahooPlayersMeta, playersInfo, yahooAvailable, activeLeague, leagueData, rosterPoolIncomplete]);
 
     const availablePlayers = useMemo(() => {
         let list = unownedPlayers.map(p => ({ ...p, projVal: parseFloat(getProjPts(p.player_id)) || 0 }));
