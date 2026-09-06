@@ -20,6 +20,9 @@ import {
     espnTeamLogoUrl,
     parseEspnAthleteResponse,
     isEspnLeagueManager,
+    memberHasManagerFlag,
+    espnLeagueManagerIds,
+    describeEspnMemberFlags,
     normalizeSwid,
     espnSwidMatches,
     toProxiedEspnImageUrl,
@@ -516,5 +519,37 @@ check('two different swids still do not match', espnSwidMatches('{AAA}', '{BBB}'
 check('an empty swid never matches, not even another empty one', espnSwidMatches('', ''), false);
 check('a brace-less stored swid finds its league manager',
     isEspnLeagueManager([{ id: '{DEF-456}', isLeagueManager: true }], 'DEF-456'), true);
+
+// ESPN's real field name for "this member runs the league" isn't documented,
+// and both of the obvious spellings turned out to be absent on a real league's
+// member record. Any boolean whose KEY is about running/creating the league
+// counts, so the check doesn't hinge on one guess.
+check('an unexpected manager flag spelling still counts',
+    isEspnLeagueManager([{ id: '{A}', leagueManager: true }], '{A}'), true);
+check('a commissioner-shaped flag counts', memberHasManagerFlag({ isCommissioner: true }), true);
+check('an admin-shaped flag counts', memberHasManagerFlag({ isLeagueAdmin: true }), true);
+check('an unrelated true flag does not', memberHasManagerFlag({ isActive: true, hasPaid: true }), false);
+check('a manager-ish key that is false does not count', memberHasManagerFlag({ isLeagueManager: false }), false);
+check('a manager-ish key that is a non-boolean truthy value does not count',
+    memberHasManagerFlag({ leagueManagerName: 'Somebody' }), false);
+check('no member -> no flag', memberHasManagerFlag(null), false);
+
+// Some responses name the managers in a list of their own rather than
+// flagging each member.
+check('a league-level manager list of bare swids is honoured',
+    isEspnLeagueManager([{ id: '{A}' }], '{A}', { leagueManagers: ['{A}'] }), true);
+check('a league-level manager list of objects is honoured',
+    isEspnLeagueManager([{ id: '{A}' }], '{A}', { settings: { leagueManagers: [{ id: '{A}' }] } }), true);
+check('a league-level list that does not name you grants nothing',
+    isEspnLeagueManager([{ id: '{A}' }], '{A}', { leagueManagers: ['{B}'] }), false);
+check('manager ids are read off whichever list is present',
+    espnLeagueManagerIds({ settings: { managers: ['{A}', '{B}'] } }), ['{A}', '{B}']);
+check('no list anywhere -> nothing', espnLeagueManagerIds({ settings: {} }), []);
+
+// The diagnostic reports shape, never personal data.
+const shape = describeEspnMemberFlags({ id: '{A}', displayName: 'Someone', isLeagueManager: false, isActive: true });
+check('the diagnostic lists every field name', shape.keys, ['id', 'displayName', 'isLeagueManager', 'isActive']);
+check('and reports only the boolean values', shape.booleans, { isLeagueManager: false, isActive: true });
+check('no member -> nothing to describe', describeEspnMemberFlags(null), null);
 
 console.log(`OK: ${checks} ESPN parser checks passed`);
