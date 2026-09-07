@@ -41,6 +41,12 @@ const logRawFeedCheck = (rawPlayers) => {
     }
 };
 
+// The key a player who doesn't own their platform id (no real ESPN/Yahoo
+// crosswalk yet) gets filed under. Namespaced, not the bare Sleeper id --
+// see the PLATFORM ID MAPPING ENGINE comment below for why the bare id
+// used to lose these players outright rather than just mislabel them.
+const sleeperFallbackId = (playerId) => `sleeper:${playerId}`;
+
 const buildNameIndex = (data) => {
     const byName = {};
     // Last-name-plus-initial keys, counted so an ambiguous one can be dropped
@@ -110,21 +116,28 @@ export const loadPlayers = async (activeLeagueId) => {
     // of N, and keeps an ESPN league from silently reading back a Yahoo-keyed
     // cache (or vice versa) when a user switches between them.
     const cacheScope = isEspn ? 'espn' : (isYahoo ? 'yahoo' : 'sleeper');
-    const cacheKey = `playersInfo_v13_${cacheScope}`;
-    const expirationKey = `expiration_v13_${cacheScope}`;
+    const cacheKey = `playersInfo_v14_${cacheScope}`;
+    const expirationKey = `expiration_v14_${cacheScope}`;
 
     // Drop superseded caches: v9 was per-league (quota bloat), v10 predates the
     // `active` flag the availability filter needs, v11 predates
-    // `ownsPlatformId` (without which every entry reads as a stand-in), and
-    // v12 predates isRealCrosswalkId -- built while "0" (Sleeper's own
-    // placeholder for "not mapped yet") was being read as a real, universally
-    // shared platform id, which collapsed every not-yet-mapped player (this
-    // season's rookies most of all) onto one dictionary slot and discarded
-    // all but one of them outright. A v12 cache has already baked that loss
-    // in and would keep serving it for up to 24 hours otherwise.
+    // `ownsPlatformId` (without which every entry reads as a stand-in), v12
+    // predates isRealCrosswalkId -- built while "0" (Sleeper's own placeholder
+    // for "not mapped yet") was being read as a real, universally shared
+    // platform id, which collapsed every not-yet-mapped player onto one
+    // dictionary slot and discarded all but one of them outright -- and v13
+    // predates sleeperFallbackId: on a Yahoo/ESPN league, a not-yet-crosswalked
+    // player fell back to their bare Sleeper id, which isn't actually a safe,
+    // collision-free key (ESPN's own athlete ids have been assigned
+    // sequentially since the late 90s and land in the exact same numeric range
+    // Sleeper is handing today's rookies), so a rookie who lost that collision
+    // fell back onto the very key they'd just lost and vanished from the
+    // dictionary entirely rather than just being mislabeled. A v13 cache has
+    // already baked that loss in and would keep serving it for up to 24 hours
+    // otherwise.
     try {
         Object.keys(localStorage)
-            .filter(k => /^(playersInfo|expiration)_v(9|10|11|12)_/.test(k))
+            .filter(k => /^(playersInfo|expiration)_v(9|10|11|12|13)_/.test(k))
             .forEach(k => localStorage.removeItem(k));
     } catch (e) {
         console.warn("Failed to prune legacy player caches:", e);
@@ -236,13 +249,23 @@ export const loadPlayers = async (activeLeagueId) => {
             // entryOwnsLookupId. isRealCrosswalkId (not a plain `!!` check) is
             // what keeps Sleeper's "0" placeholder for "not mapped yet" from
             // reading as a real, shared id every unmapped player collides on.
+            //
+            // The stand-in key is namespaced (sleeperFallbackId), not the bare
+            // Sleeper id, because the two are NOT independent number spaces:
+            // ESPN has assigned athlete ids sequentially since the late 90s, so
+            // plenty of long-retired players own small ESPN ids -- exactly the
+            // range Sleeper is handing out to this year's rookies right now. A
+            // bare id here can land squarely on a real, already-crosswalked
+            // ESPN id (confirmed live: Ashton Jeanty's Sleeper id 12527 IS
+            // Patrick Chung's real espn_id). That's not a cosmetic collision --
+            // see the fallback re-filing below for what it used to do.
             let ownsPlatformId = true;
             if (isYahoo) {
                 ownsPlatformId = isRealCrosswalkId(p.yahoo_id);
-                primaryId = ownsPlatformId ? String(p.yahoo_id) : String(p.player_id);
+                primaryId = ownsPlatformId ? String(p.yahoo_id) : sleeperFallbackId(p.player_id);
             } else if (isEspn) {
                 ownsPlatformId = isRealCrosswalkId(p.espn_id);
-                primaryId = ownsPlatformId ? String(p.espn_id) : String(p.player_id);
+                primaryId = ownsPlatformId ? String(p.espn_id) : sleeperFallbackId(p.player_id);
             }
 
             const playerObj = {
@@ -285,12 +308,15 @@ export const loadPlayers = async (activeLeagueId) => {
                 // losing the PLAYER from the dictionary entirely -- every page's
                 // name-matching fallback (resolvePlayerFromMeta) can only ever
                 // recover someone who is actually in here somewhere. Filed under
-                // their own real Sleeper id instead, which is unique to them
-                // regardless of what the platform crosswalk says. Skipped only
-                // when that key is itself contested and already held by a
-                // better claim (rare: some other player's real platform id
-                // happens to equal this one's raw Sleeper id).
-                const fallbackId = String(p.player_id);
+                // the same namespaced fallback key used above, which -- unlike
+                // the bare Sleeper id this used to be -- is unique to this
+                // player and can never itself be the id another entry is
+                // contesting. (It used to be the bare id, which meant a player
+                // who lost a real-platform-id collision AND had no crosswalk of
+                // their own tried to fall back onto the exact key they'd just
+                // lost, a no-op that silently dropped them from the dictionary
+                // entirely rather than just mislabeling them.)
+                const fallbackId = sleeperFallbackId(p.player_id);
                 if (fallbackId !== primaryId) {
                     const fallbackObj = { ...playerObj, id: fallbackId, ownsPlatformId: false };
                     if (!isLessProminentDuplicate(data[fallbackId], fallbackObj)) data[fallbackId] = fallbackObj;
