@@ -149,6 +149,9 @@ export default function ProjectionsPanel() {
                 const lastRegularWeek = Math.max(1, playoffWeekStart - 1);
 
                 const teams = [];
+                // Who couldn't be identified, per team -- a coverage percentage
+                // says a roster has a hole in it, but only the names say why.
+                const unidentified = [];
                 let totalPlayersFound = 0;
                 let weeksCompleted = 0;
 
@@ -167,9 +170,12 @@ export default function ProjectionsPanel() {
                         // crosswalk misses, so each team's strength came from a
                         // different arbitrary subset of its roster -- which is
                         // what produced a huge, meaningless spread in the odds.
-                        const { players: rosterPlayers, coverage } = resolveRosterPlayers(
+                        const { players: rosterPlayers, coverage, unresolvedNames } = resolveRosterPlayers(
                             roster.players, playersInfo, playersByName, platformMeta
                         );
+                        if (unresolvedNames.length) {
+                            unidentified.push(`${teamMeta?.name || rosterID}: ${unresolvedNames.join(', ')}`);
+                        }
                         rosterCoverage = coverage;
                         worstCoverage = Math.min(worstCoverage, coverage);
                         const raw = predictScores(rosterPlayers, week, currentLeagueData);
@@ -236,7 +242,7 @@ export default function ProjectionsPanel() {
                 if (worstCoverage < 0.9) {
                     console.warn(
                         `Power rankings: only ${Math.round(worstCoverage * 100)}% of the thinnest roster could be identified. ` +
-                        `Strength estimates for that team understate it.`
+                        `Unidentified players:\n` + unidentified.join('\n')
                     );
                 }
                 setRosterCoverage(worstCoverage);

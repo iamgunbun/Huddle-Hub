@@ -5,7 +5,7 @@
 // incomplete, rostered players are presented as free agents and nothing
 // about the page looks broken.
 
-import { buildOwnedIndex, isPlayerOwned, isRosterableNflPlayer, resolvePlayerFromMeta, playerNameKeyNoSuffix, withResolvedPlayerMeta, resolveRosterPlayers, isLessProminentDuplicate, entryOwnsLookupId } from '../src/utils/playerPool.js';
+import { buildOwnedIndex, isPlayerOwned, isRosterableNflPlayer, resolvePlayerFromMeta, playerNameKeyNoSuffix, withResolvedPlayerMeta, resolveRosterPlayers, isLessProminentDuplicate, entryOwnsLookupId, playerInitialKey, INITIAL_KEY_PREFIX } from '../src/utils/playerPool.js';
 import { findSuccessorLeagueId, pickOwnerId } from '../src/utils/leagueSeason.js';
 
 let pass = 0;
@@ -284,6 +284,34 @@ eq('a defense still resolves by team when the dictionary is keyed by a platform 
     resolvePlayerFromMeta({ fn: 'SF', ln: 'D/ST', pos: 'DEF', t: 'SF' }, espnKeyedDict, espnKeyedByName)?.sleeper_id, 'SF');
 eq('a defense whose team is not in either index still resolves to null',
     resolvePlayerFromMeta({ fn: 'KC', ln: 'D/ST', pos: 'DEF', t: 'KC' }, espnKeyedDict, espnKeyedByName), null);
+
+// --- First-name mismatches: "Cam" vs "Cameron" ----------------------------
+// The platforms disagree at the front of a name more than anywhere else. Last
+// name + first initial survives that, but can be genuinely ambiguous, so it's
+// only usable when exactly one player matches and the positions agree.
+eq('an initial key drops the first name', playerInitialKey('Cameron', 'Ward'), 'c ward');
+eq('and is suffix-tolerant too', playerInitialKey('Michael', 'Pittman Jr.'), 'm pittman');
+eq('a one-word name has no initial key', playerInitialKey('', 'Cher'), '');
+
+const initialDict = { '1': { fn: 'Cameron', ln: 'Ward', pos: 'QB', sleeper_id: '1' } };
+const initialByName = {
+    'cameron ward': initialDict['1'],
+    [`${INITIAL_KEY_PREFIX}c ward`]: initialDict['1'],
+};
+eq('a nickname resolves through the initial index',
+    resolvePlayerFromMeta({ fn: 'Cam', ln: 'Ward', pos: 'QB' }, initialDict, initialByName)?.sleeper_id, '1');
+eq('but not when the positions contradict each other',
+    resolvePlayerFromMeta({ fn: 'Cam', ln: 'Ward', pos: 'WR' }, initialDict, initialByName), null);
+// An ambiguous key is never written to the index, so it simply isn't there.
+eq('an ambiguous last name + initial resolves to nothing',
+    resolvePlayerFromMeta({ fn: 'Cam', ln: 'Smith', pos: 'QB' }, initialDict, initialByName), null);
+
+// Unresolved players are named, not just counted.
+const namedMeta = { 'x1': { fn: 'Nobody', ln: 'Known', pos: 'WR', t: 'KC' } };
+const namedResult = resolveRosterPlayers(['x1'], {}, {}, namedMeta);
+eq('an unidentified player is reported by name', namedResult.unresolvedNames[0], 'Nobody Known (WR, id x1)');
+eq('and a fully resolved roster reports none',
+    resolveRosterPlayers(['1'], initialDict, initialByName, {}).unresolvedNames.length, 0);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

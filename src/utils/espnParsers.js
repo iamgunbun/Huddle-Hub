@@ -407,7 +407,16 @@ export const isEspnLeagueManager = (members, swid, leagueData = null) => {
     const list = Array.isArray(members) ? members : [];
     if (list.some(m => espnSwidMatches(m?.id, swid) && memberHasManagerFlag(m))) return true;
 
-    return espnLeagueManagerIds(leagueData).some(id => espnSwidMatches(id, swid));
+    if (espnLeagueManagerIds(leagueData).some(id => espnSwidMatches(id, swid))) return true;
+
+    // Sole member: whatever ESPN does or doesn't flag, a league with exactly
+    // one member in it is run by that member -- there is nobody else it could
+    // be. Worth stating explicitly because ESPN evidently doesn't always mark
+    // the manager at all, and this is the one case that can be settled from
+    // the membership list alone. Safe against a truncated response: ESPN
+    // returns every member (a 12-team league reports 12), so a list of one is
+    // a league of one.
+    return list.length === 1 && espnSwidMatches(list[0]?.id, swid);
 };
 
 /**
