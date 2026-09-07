@@ -5,7 +5,7 @@
 // incomplete, rostered players are presented as free agents and nothing
 // about the page looks broken.
 
-import { buildOwnedIndex, isPlayerOwned, isRosterableNflPlayer, resolvePlayerFromMeta, playerNameKeyNoSuffix, withResolvedPlayerMeta, resolveRosterPlayers, isLessProminentDuplicate, entryOwnsLookupId, playerInitialKey, INITIAL_KEY_PREFIX } from '../src/utils/playerPool.js';
+import { buildOwnedIndex, isPlayerOwned, isRosterableNflPlayer, resolvePlayerFromMeta, playerNameKeyNoSuffix, withResolvedPlayerMeta, resolveRosterPlayers, isLessProminentDuplicate, entryOwnsLookupId, playerInitialKey, INITIAL_KEY_PREFIX, findByLastNameRaw } from '../src/utils/playerPool.js';
 import { findSuccessorLeagueId, pickOwnerId } from '../src/utils/leagueSeason.js';
 
 let pass = 0;
@@ -310,8 +310,24 @@ eq('an ambiguous last name + initial resolves to nothing',
 const namedMeta = { 'x1': { fn: 'Nobody', ln: 'Known', pos: 'WR', t: 'KC' } };
 const namedResult = resolveRosterPlayers(['x1'], {}, {}, namedMeta);
 eq('an unidentified player is reported by name', namedResult.unresolvedNames[0], 'Nobody Known (WR, id x1)');
+eq('and as structured data too, for a follow-up check',
+    JSON.stringify(namedResult.unresolvedMeta[0]), JSON.stringify({ id: 'x1', fn: 'Nobody', ln: 'Known', pos: 'WR' }));
 eq('and a fully resolved roster reports none',
     resolveRosterPlayers(['1'], initialDict, initialByName, {}).unresolvedNames.length, 0);
+
+// --- Index-independent last-name scan --------------------------------------
+// Separates "the dictionary has nobody by this name" from "an entry exists
+// but the pre-built name index missed it" -- the same symptom, two very
+// different causes, that a coverage percentage alone can't tell apart.
+const scanDict = {
+    '1': { fn: 'Brandon', ln: 'Aubrey', pos: 'K' },
+    '2': { fn: 'Some', ln: 'Aubreyson', pos: 'WR' },
+};
+eq('finds an exact last name', findByLastNameRaw('Aubrey', scanDict).length, 2);
+eq('matching is case-insensitive', findByLastNameRaw('aubrey', scanDict)[0].ln, 'Aubrey');
+eq('nobody by that name at all -> empty, not a throw', findByLastNameRaw('Nonexistent', scanDict).length, 0);
+eq('no name to search -> empty', findByLastNameRaw('', scanDict).length, 0);
+eq('no dictionary at all -> empty, not a throw', findByLastNameRaw('Aubrey', null).length, 0);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
