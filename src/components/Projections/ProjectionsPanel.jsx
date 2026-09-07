@@ -242,7 +242,8 @@ export default function ProjectionsPanel() {
                 if (worstCoverage < 0.9) {
                     console.warn(
                         `Power rankings: only ${Math.round(worstCoverage * 100)}% of the thinnest roster could be identified. ` +
-                        `Unidentified players:\n` + unidentified.join('\n')
+                        `Unidentified players (dictionary: ${Object.keys(playersInfo).length} players, `
+                        + `${Object.keys(playersByName).length} name keys):\n` + unidentified.join('\n')
                     );
                 }
                 setRosterCoverage(worstCoverage);

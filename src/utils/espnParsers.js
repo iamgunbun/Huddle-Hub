@@ -709,7 +709,15 @@ export const parseEspnTransactions = (transactions) => {
 
     rows.forEach(t => {
         const status = String(t?.status || '').toUpperCase();
-        if (status.includes('FAIL') || status.includes('DECLINE')) return;
+        // Only moves that actually happened. A claim that failed, was declined,
+        // was cancelled, or is still pending isn't a completed transaction, and
+        // counting one inflates a team's move count for something it never did.
+        if (
+            status.includes('FAIL')
+            || status.includes('DECLINE')
+            || status.includes('CANCEL')
+            || status.includes('PENDING')
+        ) return;
 
         const items = Array.isArray(t?.items) ? t.items : [];
         const adds = {};
@@ -735,8 +743,19 @@ export const parseEspnTransactions = (transactions) => {
 
         if (!Object.keys(adds).length && !Object.keys(drops).length) return;
 
+        // ESPN's own transaction types are WAIVER, FREEAGENT, TRADE, ROSTER and
+        // DRAFT. Everything that wasn't a trade or a waiver used to collapse
+        // into "free_agent", which swept the DRAFT rows in with it -- every
+        // drafted player is an ADD to a team, so a manager who had made two
+        // waiver claims read as having made five moves. A draft pick is an
+        // acquisition but it is not a transaction anyone means by "moves", so
+        // it keeps its own type and the counts leave it out.
         const rawType = String(t?.type || '').toUpperCase();
-        const type = rawType === 'TRADE' ? 'trade' : (rawType === 'WAIVER' ? 'waiver' : 'free_agent');
+        const type = rawType === 'TRADE' ? 'trade'
+            : rawType === 'WAIVER' ? 'waiver'
+            : rawType.includes('DRAFT') ? 'draft'
+            : rawType === 'ROSTER' ? 'roster'
+            : 'free_agent';
         const statusUpdated = t?.processDate ?? t?.proposedDate ?? null;
 
         results.push({
