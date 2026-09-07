@@ -13,28 +13,12 @@ import {
     seedFrom,
     DEFAULT_SCORE_VOLATILITY,
 } from '../../utils/seasonSimulation';
-import { movementFromSnapshots, withSnapshot } from '../../utils/rankMovement';
+import { movementFromSnapshots } from '../../utils/rankMovement';
+import { readLeagueRankSnapshots, writeLeagueRankSnapshot } from '../../utils/leagueRankSnapshots';
 import { resolveRosterPlayers, findByLastNameRaw } from '../../utils/playerPool';
 import styles from './Projections.module.css';
 import { isYahooLeagueId, isEspnLeagueId } from '../../utils/platformIds';
 import { resolveImageSrc, onImageError } from '../../utils/imageFallback';
-const SNAPSHOT_KEY = (leagueId) => `powerRankOrder_${leagueId}`;
-
-const readSnapshots = (leagueId) => {
-    try {
-        return JSON.parse(localStorage.getItem(SNAPSHOT_KEY(leagueId))) || {};
-    } catch {
-        return {};
-    }
-};
-
-const writeSnapshots = (leagueId, snapshots) => {
-    try {
-        localStorage.setItem(SNAPSHOT_KEY(leagueId), JSON.stringify(snapshots));
-    } catch (e) {
-        console.warn("Couldn't record this week's power ranking order:", e);
-    }
-};
 
 /**
  * The games still to be played.
@@ -308,9 +292,14 @@ export default function ProjectionsPanel() {
                 const champPercent = toWholePercentages(ranked.map(t => t.titleOdds), 1);
 
                 const order = ranked.map(t => t.rosterId);
-                const snapshots = readSnapshots(id);
+                // Shared across every viewer of this league (Supabase, keyed
+                // by the league's DB id -- see leagueRankSnapshots.js), not
+                // this browser's own localStorage: two different members
+                // looking at the same league on the same day need to see the
+                // same "moved up/down" numbers.
+                const snapshots = await readLeagueRankSnapshots(activeLeague.id);
                 const movement = movementFromSnapshots(order, snapshots, week);
-                writeSnapshots(id, withSnapshot(snapshots, week, order));
+                writeLeagueRankSnapshot(activeLeague.id, week, order);
 
                 setPowerRankings(ranked.map((team, i) => ({
                     ...team,

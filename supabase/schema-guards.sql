@@ -142,3 +142,50 @@ create policy leagues_update_commissioner on public.leagues
 -- Closing that properly means moving the flag somewhere the user cannot write,
 -- verified server-side against the platform. Worth doing if league settings
 -- become sensitive; noted here rather than left as a silent assumption.
+
+-- ---------------------------------------------------------------------------
+-- 4. Power-ranking movement, shared across every viewer of a league.
+-- ---------------------------------------------------------------------------
+-- This used to live in the viewing browser's own localStorage, which meant two
+-- different members (or the same person on two devices) could see different
+-- "moved up/down" numbers for the identical league on the identical day,
+-- depending purely on how consistently each one's own browser had happened to
+-- load the app in past weeks. One row per league per week, shared by everyone
+-- who can see the league, is what makes the number actually mean the same
+-- thing to whoever is looking at it.
+create table if not exists public.league_rank_snapshots (
+    league_id   uuid not null references public.leagues(id) on delete cascade,
+    week        integer not null,
+    -- Roster ids, best-to-worst, as of this week -- what movementFromSnapshots
+    -- (src/utils/rankMovement.js) compares the current order against.
+    roster_order jsonb not null,
+    updated_at  timestamptz not null default now(),
+    primary key (league_id, week)
+);
+
+alter table public.league_rank_snapshots enable row level security;
+
+drop policy if exists league_rank_snapshots_select_member on public.league_rank_snapshots;
+drop policy if exists league_rank_snapshots_insert_member on public.league_rank_snapshots;
+drop policy if exists league_rank_snapshots_update_member on public.league_rank_snapshots;
+
+-- Read: anyone in the league -- reuses the same membership function the
+-- user_leagues read policy above already defined, so there is nothing new to
+-- audit for correctness.
+create policy league_rank_snapshots_select_member on public.league_rank_snapshots
+    for select using (league_id in (select public.current_user_league_ids()));
+
+-- Write: also any member, not just the commissioner. Whoever's browser
+-- happens to load the rankings first in a given week is the one that records
+-- it -- there is no single writer to designate, and the value being written
+-- is a deterministic computed snapshot (the same league data produces the
+-- same order for anyone), not a setting one member could use this to
+-- misrepresent to the others. Both insert and update are needed: the app
+-- upserts, and Postgres can route a single upsert through either path
+-- depending on whether the (league_id, week) row already exists.
+create policy league_rank_snapshots_insert_member on public.league_rank_snapshots
+    for insert with check (league_id in (select public.current_user_league_ids()));
+
+create policy league_rank_snapshots_update_member on public.league_rank_snapshots
+    for update using (league_id in (select public.current_user_league_ids()))
+    with check (league_id in (select public.current_user_league_ids()));
