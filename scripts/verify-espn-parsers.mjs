@@ -97,9 +97,19 @@ check('a non-ESPN host is left as a direct link, not proxied',
     toProxiedEspnImageUrl('https://i.imgur.com/abc.png', 'user-1'), 'https://i.imgur.com/abc.png');
 check('espncdn.com itself is proxied', isEspnCdnUrl('https://espncdn.com/x.png'), true);
 check('an espncdn subdomain is proxied', isEspnCdnUrl('https://g.espncdn.com/x.png'), true);
+// A CUSTOM_UPLOAD team logo (a manager's own uploaded image, as opposed to a
+// stock VECTOR mascot/helmet) lives on a completely different ESPN host --
+// confirmed live against a real league's raw mTeam response. Missing this
+// was the actual bug: those logos were hotlinked directly, unproxied, and
+// silently failed while every stock logo on espncdn.com kept working.
+check('a fantasy.espn.com custom-upload logo is proxied', isEspnCdnUrl('https://fantasy.espn.com/x.png'), true);
+check('the real mystique-api custom-upload host is proxied',
+    isEspnCdnUrl('https://mystique-api.fantasy.espn.com/apis/v1/domains/lm/images/abc-123'), true);
 check('an unrelated host is not', isEspnCdnUrl('https://i.imgur.com/x.png'), false);
 check('a lookalike host is not (suffix match must be on a dot boundary)',
     isEspnCdnUrl('https://notespncdn.com/x.png'), false);
+check('a fantasy.espn.com lookalike host is not (suffix match must be on a dot boundary)',
+    isEspnCdnUrl('https://notfantasy.espn.com/x.png'), false);
 check('garbage is not a CDN url', isEspnCdnUrl('not a url'), false);
 
 // --- team defenses: ESPN's negative pseudo-player ids ---

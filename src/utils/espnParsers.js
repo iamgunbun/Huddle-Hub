@@ -476,11 +476,20 @@ export const espnTeamLogoUrl = (rawLogo) => {
  * logo loads through here exactly as well as it would directly, just with
  * one extra (cached) hop, and a local fallback path like '/fallback.png' is left
  * untouched since it was never a hotlink to begin with.
+ *
+ * Two ESPN hosts carry a team's `logo`, not one: `logoType: VECTOR` (the
+ * stock mascot/helmet art pickers) lives on espncdn.com, but `logoType:
+ * CUSTOM_UPLOAD` (a manager's own uploaded image) lives on a completely
+ * different host, mystique-api.fantasy.espn.com -- confirmed live against a
+ * real league's raw mTeam response. Missing that second host is why only
+ * custom-uploaded logos were showing broken/falling back: they were never
+ * routed through the proxy at all, just hotlinked directly and blocked.
  */
 export const isEspnCdnUrl = (rawUrl) => {
     try {
         const { hostname } = new URL(String(rawUrl));
-        return hostname === 'espncdn.com' || hostname.endsWith('.espncdn.com');
+        return hostname === 'espncdn.com' || hostname.endsWith('.espncdn.com')
+            || hostname === 'fantasy.espn.com' || hostname.endsWith('.fantasy.espn.com');
     } catch {
         return false;
     }
