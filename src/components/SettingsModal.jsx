@@ -2,12 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useLeague } from '../context/LeagueContext';
+import { claimCommissionerRole } from '../utils/leagueAdmin';
 import styles from './SettingsModal.module.css';
 
 export default function SettingsModal({ onClose }) {
     const navigate = useNavigate();
-    const { activeLeague } = useLeague();
+    const { activeLeague, patchActiveLeague } = useLeague();
     const [user, setUser] = useState(null);
+    const [claiming, setClaiming] = useState(false);
+    const [claimMessage, setClaimMessage] = useState('');
 
     useEffect(() => {
         const fetchUser = async () => {
@@ -18,6 +21,17 @@ export default function SettingsModal({ onClose }) {
         };
         fetchUser();
     }, []);
+
+    const handleClaimCommissioner = async () => {
+        if (!activeLeague?.id || !user?.id) return;
+        setClaiming(true);
+        const result = await claimCommissionerRole(activeLeague.id, user.id);
+        // Fold it straight into the context so the tools appear here without a
+        // reload -- the whole point is that they were unreachable.
+        if (result.ok) patchActiveLeague({ is_commissioner: true });
+        setClaimMessage(result.message);
+        setClaiming(false);
+    };
 
     const handleNavigation = (path) => {
         navigate(path);
@@ -44,6 +58,28 @@ export default function SettingsModal({ onClose }) {
                         <i className="material-icons">person</i> Edit Profile
                     </button>
                 </div>
+
+                {/*
+                  * ESPN publishes nothing about who runs a league -- its member
+                  * records carry only a name and an id, with no manager flag
+                  * anywhere in the response -- so unlike Yahoo and Sleeper there
+                  * is nothing to detect and the tools would otherwise stay
+                  * permanently out of reach. Asking is the only honest option.
+                  */}
+                {activeLeague?.platform === 'espn' && !activeLeague?.is_commissioner && (
+                    <div className={styles.settingsSection}>
+                        <h3 className={styles.sectionTitle}>Commissioner Tools</h3>
+                        <p style={{ color: '#94a3b8', fontSize: '0.85em', lineHeight: 1.4, margin: '0 0 10px' }}>
+                            ESPN doesn't tell apps who a league's manager is, so this can't be
+                            detected automatically. If you run this league, turn the tools on here.
+                        </p>
+                        {claimMessage && <div className={styles.navBtn} style={{ cursor: 'default' }}>{claimMessage}</div>}
+                        <button className={styles.navBtn} onClick={handleClaimCommissioner} disabled={claiming}>
+                            <i className="material-icons">verified_user</i>
+                            {claiming ? 'Enabling...' : "I'm this league's manager"}
+                        </button>
+                    </div>
+                )}
 
                 {activeLeague?.is_commissioner && (
                     <div className={styles.settingsSection}>
