@@ -23,6 +23,28 @@
 export const playerNameKey = (fn, ln) =>
     `${fn || ''} ${ln || ''}`.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
 
+/**
+ * Whether a platform crosswalk field (Sleeper's own espn_id/yahoo_id) is a
+ * genuine id, not empty/missing/placeholder junk.
+ *
+ * The bug this exists to prevent is a classic JS footgun: Sleeper's own data
+ * sometimes carries "0" (a non-empty STRING) as its "not mapped yet"
+ * placeholder for a crosswalk field, rather than null or an empty string. A
+ * plain `!!value` check treats a non-empty string as truthy no matter what it
+ * says, so every player Sleeper hasn't mapped yet reads as if they all
+ * legitimately own the exact same platform id (0) -- collapsing every one of
+ * them onto a single dictionary slot, of which only one survives. That is a
+ * standing, silent way for freshly-added players (this season's rookies
+ * especially, whose crosswalk entries are the ones least likely to be filled
+ * in yet) to vanish from the shared dictionary entirely, well beyond just
+ * getting mislabeled.
+ */
+export const isRealCrosswalkId = (value) => {
+    if (value === null || value === undefined) return false;
+    const str = String(value).trim();
+    return str !== '' && str !== '0';
+};
+
 // Sleeper's own espn_id/yahoo_id crosswalk isn't guaranteed unique -- a stale
 // or duplicate mapping can give two different Sleeper players the same
 // platform id. Without this check, whichever the shared dictionary builder

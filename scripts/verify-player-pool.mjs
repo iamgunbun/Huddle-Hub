@@ -5,7 +5,7 @@
 // incomplete, rostered players are presented as free agents and nothing
 // about the page looks broken.
 
-import { buildOwnedIndex, isPlayerOwned, isRosterableNflPlayer, resolvePlayerFromMeta, playerNameKeyNoSuffix, withResolvedPlayerMeta, resolveRosterPlayers, isLessProminentDuplicate, entryOwnsLookupId, playerInitialKey, INITIAL_KEY_PREFIX, findByLastNameRaw } from '../src/utils/playerPool.js';
+import { buildOwnedIndex, isPlayerOwned, isRosterableNflPlayer, resolvePlayerFromMeta, playerNameKeyNoSuffix, withResolvedPlayerMeta, resolveRosterPlayers, isLessProminentDuplicate, entryOwnsLookupId, playerInitialKey, INITIAL_KEY_PREFIX, findByLastNameRaw, isRealCrosswalkId } from '../src/utils/playerPool.js';
 import { findSuccessorLeagueId, pickOwnerId } from '../src/utils/leagueSeason.js';
 
 let pass = 0;
@@ -328,6 +328,21 @@ eq('matching is case-insensitive', findByLastNameRaw('aubrey', scanDict)[0].ln, 
 eq('nobody by that name at all -> empty, not a throw', findByLastNameRaw('Nonexistent', scanDict).length, 0);
 eq('no name to search -> empty', findByLastNameRaw('', scanDict).length, 0);
 eq('no dictionary at all -> empty, not a throw', findByLastNameRaw('Aubrey', null).length, 0);
+
+// --- isRealCrosswalkId: the actual root cause behind the vanishing rookies -
+// Sleeper's own data uses "0" (a non-empty STRING) as its placeholder for "not
+// mapped yet" on some crosswalk fields. A plain `!!value` check treats any
+// non-empty string as a real id no matter what it says, which read every
+// unmapped player's placeholder as the SAME shared id -- collapsing every one
+// of them onto a single dictionary slot, all but one silently discarded.
+eq('a real numeric id is real', isRealCrosswalkId(4870795), true);
+eq('a real numeric id as a string is real', isRealCrosswalkId('4870795'), true);
+eq('the string "0" is Sleeper\'s placeholder, not a real id', isRealCrosswalkId('0'), false);
+eq('the number 0 is not a real id either', isRealCrosswalkId(0), false);
+eq('an empty string is not a real id', isRealCrosswalkId(''), false);
+eq('whitespace-only is not a real id', isRealCrosswalkId('   '), false);
+eq('null is not a real id', isRealCrosswalkId(null), false);
+eq('undefined is not a real id', isRealCrosswalkId(undefined), false);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

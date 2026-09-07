@@ -7,7 +7,7 @@ import { isYahooLeagueId, isEspnLeagueId } from '../platformIds';
 // testable); re-exported here for the callers that already import it from this
 // module.
 export { playerNameKey, isLessProminentDuplicate } from '../playerPool';
-import { playerNameKey, playerNameKeyNoSuffix, playerInitialKey, INITIAL_KEY_PREFIX, isLessProminentDuplicate } from '../playerPool';
+import { playerNameKey, playerNameKeyNoSuffix, playerInitialKey, INITIAL_KEY_PREFIX, isLessProminentDuplicate, isRealCrosswalkId } from '../playerPool';
 
 const buildNameIndex = (data) => {
     const byName = {};
@@ -78,15 +78,21 @@ export const loadPlayers = async (activeLeagueId) => {
     // of N, and keeps an ESPN league from silently reading back a Yahoo-keyed
     // cache (or vice versa) when a user switches between them.
     const cacheScope = isEspn ? 'espn' : (isYahoo ? 'yahoo' : 'sleeper');
-    const cacheKey = `playersInfo_v12_${cacheScope}`;
-    const expirationKey = `expiration_v12_${cacheScope}`;
+    const cacheKey = `playersInfo_v13_${cacheScope}`;
+    const expirationKey = `expiration_v13_${cacheScope}`;
 
     // Drop superseded caches: v9 was per-league (quota bloat), v10 predates the
-    // `active` flag the availability filter needs, and v11 predates
-    // `ownsPlatformId` -- without which every entry reads as a stand-in.
+    // `active` flag the availability filter needs, v11 predates
+    // `ownsPlatformId` (without which every entry reads as a stand-in), and
+    // v12 predates isRealCrosswalkId -- built while "0" (Sleeper's own
+    // placeholder for "not mapped yet") was being read as a real, universally
+    // shared platform id, which collapsed every not-yet-mapped player (this
+    // season's rookies most of all) onto one dictionary slot and discarded
+    // all but one of them outright. A v12 cache has already baked that loss
+    // in and would keep serving it for up to 24 hours otherwise.
     try {
         Object.keys(localStorage)
-            .filter(k => /^(playersInfo|expiration)_v(9|10|11)_/.test(k))
+            .filter(k => /^(playersInfo|expiration)_v(9|10|11|12)_/.test(k))
             .forEach(k => localStorage.removeItem(k));
     } catch (e) {
         console.warn("Failed to prune legacy player caches:", e);
@@ -194,14 +200,16 @@ export const loadPlayers = async (activeLeagueId) => {
             // PLATFORM, or just their Sleeper id standing in because the
             // crosswalk has nothing. A lookup by a real platform id that lands
             // on a stand-in is a wrong player, not a missing one -- see
-            // entryOwnsLookupId.
+            // entryOwnsLookupId. isRealCrosswalkId (not a plain `!!` check) is
+            // what keeps Sleeper's "0" placeholder for "not mapped yet" from
+            // reading as a real, shared id every unmapped player collides on.
             let ownsPlatformId = true;
             if (isYahoo) {
-                ownsPlatformId = !!p.yahoo_id;
-                primaryId = String(p.yahoo_id || p.player_id);
+                ownsPlatformId = isRealCrosswalkId(p.yahoo_id);
+                primaryId = ownsPlatformId ? String(p.yahoo_id) : String(p.player_id);
             } else if (isEspn) {
-                ownsPlatformId = !!p.espn_id;
-                primaryId = String(p.espn_id || p.player_id);
+                ownsPlatformId = isRealCrosswalkId(p.espn_id);
+                primaryId = ownsPlatformId ? String(p.espn_id) : String(p.player_id);
             }
 
             const playerObj = {
@@ -239,7 +247,23 @@ export const loadPlayers = async (activeLeagueId) => {
                 };
             }
 
-            if (isLessProminentDuplicate(data[primaryId], playerObj)) continue;
+            if (isLessProminentDuplicate(data[primaryId], playerObj)) {
+                // Losing the contested slot to its genuine owner must not mean
+                // losing the PLAYER from the dictionary entirely -- every page's
+                // name-matching fallback (resolvePlayerFromMeta) can only ever
+                // recover someone who is actually in here somewhere. Filed under
+                // their own real Sleeper id instead, which is unique to them
+                // regardless of what the platform crosswalk says. Skipped only
+                // when that key is itself contested and already held by a
+                // better claim (rare: some other player's real platform id
+                // happens to equal this one's raw Sleeper id).
+                const fallbackId = String(p.player_id);
+                if (fallbackId !== primaryId) {
+                    const fallbackObj = { ...playerObj, id: fallbackId, ownsPlatformId: false };
+                    if (!isLessProminentDuplicate(data[fallbackId], fallbackObj)) data[fallbackId] = fallbackObj;
+                }
+                continue;
+            }
 
             data[primaryId] = playerObj;
 
