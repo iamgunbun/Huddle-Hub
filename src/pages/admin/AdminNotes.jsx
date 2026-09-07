@@ -5,7 +5,7 @@ import BackButton from '../../components/BackButton';
 import styles from '../Settings.module.css';
 
 export default function AdminNotes() {
-    const { activeLeague } = useLeague();
+    const { activeLeague, patchActiveLeague } = useLeague();
     const [note, setNote] = useState('');
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState('');
@@ -20,6 +20,10 @@ export default function AdminNotes() {
         if (!activeLeague?.id) return;
         setSaving(true);
         const result = await updateLeagueSettings(activeLeague.id, { commish_note: note });
+        // Home reads the note off the league context, which was loaded before
+        // this edit -- so without folding it back in, a good save doesn't reach
+        // the page it exists for until a full reload.
+        if (result.ok) patchActiveLeague({ commish_note: note });
         setMessage(result.ok ? 'Note saved successfully!' : result.message);
         if (result.ok) setTimeout(() => setMessage(''), 3000);
         setSaving(false);

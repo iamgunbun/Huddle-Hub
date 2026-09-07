@@ -5,7 +5,7 @@ import BackButton from '../../components/BackButton';
 import styles from '../Settings.module.css';
 
 export default function AdminConstitution() {
-    const { activeLeague } = useLeague();
+    const { activeLeague, patchActiveLeague } = useLeague();
     const [constitution, setConstitution] = useState('');
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState('');
@@ -20,6 +20,10 @@ export default function AdminConstitution() {
         if (!activeLeague?.id) return;
         setSaving(true);
         const result = await updateLeagueSettings(activeLeague.id, { constitution });
+        // The rest of the app reads this off the league context, which was
+        // loaded before this edit -- without folding it back in, a perfectly
+        // good save doesn't show up anywhere until a full page reload.
+        if (result.ok) patchActiveLeague({ constitution });
         setMessage(result.ok ? 'Constitution saved successfully!' : result.message);
         if (result.ok) setTimeout(() => setMessage(''), 3000);
         setSaving(false);

@@ -345,6 +345,22 @@ export function LeagueProvider({ children }) {
         }
     };
 
+    /**
+     * Folds a just-saved league change into what's already in memory.
+     *
+     * The commissioner pages write straight to the `leagues` row, but the rest
+     * of the app reads those fields off this context -- which was loaded once,
+     * before the edit. So a commish note or constitution could save perfectly
+     * and still not appear anywhere until a full page reload, which reads as
+     * the save having silently failed. Patching both the active league and the
+     * switcher's copy keeps them honest without refetching everything.
+     */
+    const patchActiveLeague = (patch) => {
+        if (!patch || !activeLeague?.id) return;
+        setActiveLeague(prev => (prev ? { ...prev, ...patch } : prev));
+        setUserLeagues(prev => prev.map(l => (l.id === activeLeague.id ? { ...l, ...patch } : l)));
+    };
+
     useEffect(() => {
         let isMounted = true;
 
@@ -396,6 +412,7 @@ export function LeagueProvider({ children }) {
             loading, 
             loadLeagueContext, 
             switchActiveLeague, 
+            patchActiveLeague,
             isPremium, 
             setIsPremium,
             showPremiumModal, 

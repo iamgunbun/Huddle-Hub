@@ -34,7 +34,7 @@ import {
 } from '../src/utils/yahooHistory.js';
 import { getPlatformLink } from '../src/utils/platformLinks.js';
 import { findSleeperLeagueUser, isSleeperCommissioner, teamClaimKey } from '../src/utils/leagueMembership.js';
-import { describeLeagueWrite } from '../src/utils/dbWrite.js';
+import { describeLeagueWrite, describeWriteRefusal } from '../src/utils/dbWrite.js';
 
 let pass = 0;
 let fail = 0;
@@ -578,6 +578,17 @@ eq('the error message is surfaced', describeLeagueWrite({ message: 'boom' }, 0).
 // The load-bearing one: no error, but nothing written.
 eq('changing no rows is NOT a success', describeLeagueWrite(null, 0).ok, false);
 eq('and says why', describeLeagueWrite(null, 0).message.includes('permission'), true);
+
+// "No permission" is true of all three causes and actionable for none, so the
+// refusal is separated into which one it actually was.
+eq('a missing league row says the row isn\'t there',
+    describeWriteRefusal({ leagueExists: false, isCommissioner: true }).includes("isn't in the database"), true);
+eq('not being the commissioner says exactly that',
+    describeWriteRefusal({ leagueExists: true, isCommissioner: false }).includes("isn't recorded as this league's commissioner"), true);
+// The one worth naming out loud: everything on the app side is right and the
+// database simply has no policy permitting the update.
+eq('being the commissioner and still refused points at the missing policy',
+    describeWriteRefusal({ leagueExists: true, isCommissioner: true }).includes('schema-guards.sql'), true);
 
 // --- Actual points, per player ---------------------------------------------
 // Projections and actuals are different problems. Yahoo publishes no per-player
