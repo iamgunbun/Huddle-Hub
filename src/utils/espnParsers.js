@@ -163,16 +163,24 @@ export const isEspnSeasonComplete = ({ seasonId, currentMatchupPeriod, matchupPe
     return (parseInt(currentMatchupPeriod) || 0) > total;
 };
 
-// A player's `defaultPositionId` uses the SAME numbering ESPN's lineup slot
-// ids do (see ESPN_LINEUP_SLOT_MAP below) -- 0=QB, 2=RB, 4=WR, 6=TE, 16=D/ST,
-// 17=K, not the small sequential 1-5 scheme a naive reading of "QB, RB, WR,
-// TE, K" in numeric order would suggest. Getting this wrong silently
-// mislabeled real WRs as TE and left QB/TE/K falling through to the "BN"
-// fallback -- which broke defense identification specifically hard, since
-// a defense that doesn't read as pos "DEF" skips the team-abbreviation
-// matching every other defense-aware code path (ownership, scoring)
-// depends on, leaving it correctly named by nothing at all.
-export const ESPN_POSITION_MAP = { 0: 'QB', 2: 'RB', 4: 'WR', 6: 'TE', 16: 'DEF', 17: 'K' };
+// A player's `defaultPositionId` and a roster entry's `lineupSlotId` are TWO
+// DIFFERENT enums, and they must not be unified. Slots use the wide numbering
+// in ESPN_LINEUP_SLOT_MAP below (0=QB, 4=WR, 6=TE, 17=K, 23=FLEX...); a
+// player's own position uses this small sequential one.
+//
+// This was previously "corrected" to the slot numbering, which is wrong, and
+// the mistake was self-concealing: RB is 2 in BOTH schemes, so rosters looked
+// broadly right while every other position was quietly wrong. A live league's
+// roster metadata settles it -- real tight ends (Colston Loveland, Harold
+// Fannin Jr.) came back labelled "WR", which is what id 4 means under the
+// slot numbering and what TE means here; and real wide receivers and kickers
+// (Emeka Egbuka, Brandon Aubrey, Cam Little) came back as "BN", because ids 3
+// and 5 have no entry at all under the slot numbering.
+//
+// Positions matter well beyond the label: defenses are matched by team only
+// once they read as DEF, and a wrong or unknown position blocks the
+// position-checked name fallbacks in playerPool.js.
+export const ESPN_POSITION_MAP = { 1: 'QB', 2: 'RB', 3: 'WR', 4: 'TE', 5: 'K', 16: 'DEF' };
 
 export const espnPositionName = (defaultPositionId) => ESPN_POSITION_MAP[defaultPositionId] || 'BN';
 

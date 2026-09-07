@@ -46,19 +46,22 @@ const check = (name, actual, expected) => {
 // --- basic maps ---
 check('proTeamId 25 is SF', espnProTeamAbbr(25), 'SF');
 check('unknown proTeamId falls back to FA', espnProTeamAbbr(999), 'FA');
-check('defaultPositionId 0 is QB', espnPositionName(0), 'QB');
+// A player's defaultPositionId is NOT the lineup-slot enum. Confirmed against
+// a live league: with the slot numbering applied here, real tight ends came
+// back labelled "WR" (slot id 4) and real receivers and kickers came back
+// "BN" (slot numbering has no 3 or 5).
+check('defaultPositionId 1 is QB', espnPositionName(1), 'QB');
 check('defaultPositionId 2 is RB', espnPositionName(2), 'RB');
-check('defaultPositionId 4 is WR', espnPositionName(4), 'WR');
-check('defaultPositionId 6 is TE', espnPositionName(6), 'TE');
+check('defaultPositionId 3 is WR', espnPositionName(3), 'WR');
+check('defaultPositionId 4 is TE', espnPositionName(4), 'TE');
+check('defaultPositionId 5 is K', espnPositionName(5), 'K');
 check('defaultPositionId 16 is DEF', espnPositionName(16), 'DEF');
-check('defaultPositionId 17 is K', espnPositionName(17), 'K');
 check('unknown position falls back to BN', espnPositionName(999), 'BN');
-// These are the WRONG (pre-fix) numbers for QB/WR/TE/K -- confirming they no
-// longer resolve is what guards against reintroducing the small-sequential
-// 1-5 numbering this used to (incorrectly) use instead of ESPN's real one.
-check('the old, wrong QB id (1) no longer resolves to QB', espnPositionName(1), 'BN');
-check('the old, wrong WR id (3) no longer resolves to WR', espnPositionName(3), 'BN');
-check('the old, wrong TE id (5) no longer resolves to TE', espnPositionName(5), 'BN');
+// The slot enum's own ids must NOT resolve as positions here -- that
+// conflation is exactly what mislabeled tight ends as receivers.
+check('slot-numbering QB (0) is not a position id', espnPositionName(0), 'BN');
+check('slot-numbering TE (6) is not a position id', espnPositionName(6), 'BN');
+check('slot-numbering K (17) is not a position id', espnPositionName(17), 'BN');
 check('bench slot (20) is not a starter', isEspnStarterSlot(20), false);
 check('IR slot (21) is not a starter', isEspnStarterSlot(21), false);
 check('IR slot is reserve', isEspnReserveSlot(21), true);
@@ -155,7 +158,7 @@ const starterEntry = {
             firstName: 'Test',
             lastName: 'Runner',
             fullName: 'Test Runner',
-            defaultPositionId: 2,
+            defaultPositionId: 2, // RB in the player-position enum
             proTeamId: 25,
             injuryStatus: 'ACTIVE',
             stats: [

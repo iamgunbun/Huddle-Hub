@@ -128,8 +128,17 @@ export const resolvePlayerFromMeta = (meta, playersInfo = {}, playersByName = {}
     const initialKey = playerInitialKey(meta.fn, meta.ln);
     const byInitial = initialKey && playersByName[`${INITIAL_KEY_PREFIX}${initialKey}`];
     if (byInitial) {
-        const matchedPos = String(byInitial.pos || '').toUpperCase();
-        if (!pos || !matchedPos || matchedPos === pos) return byInitial;
+        // "BN" is what the ESPN parser returns for a position id it doesn't
+        // recognise -- it means "unknown", not "bench player", and treating it
+        // as a real position would reject correct matches on the strength of a
+        // position we never actually read.
+        const knownPos = (p) => {
+            const upper = String(p || '').toUpperCase();
+            return upper && upper !== 'BN' ? upper : '';
+        };
+        const wantPos = knownPos(pos);
+        const matchedPos = knownPos(byInitial.pos);
+        if (!wantPos || !matchedPos || matchedPos === wantPos) return byInitial;
     }
 
     return null;

@@ -44,6 +44,38 @@ const diagnoseLeagueWriteRefusal = async (leagueId) => {
     return { leagueExists: !!leagueRow, isCommissioner };
 };
 
+/**
+ * Records this account as the league's commissioner.
+ *
+ * Yahoo and Sleeper both state who runs a league, so those are detected and
+ * never asked about. ESPN does not: its member records carry only
+ * displayName/firstName/id/lastName/notificationSettings -- no flag of any
+ * kind, and no manager list anywhere else in the response. So for an ESPN
+ * league with more than one member there is nothing to detect, and the only
+ * honest options are to ask or to leave the tools permanently unreachable.
+ *
+ * This grants no access the account didn't already have: is_commissioner lives
+ * on the user's OWN membership row, which their own policy already lets them
+ * update (see the note at the end of supabase/schema-guards.sql). This just
+ * stops that being a thing you'd need to use the API by hand to do.
+ */
+export const claimCommissionerRole = async (leagueId, userId) => {
+    if (!leagueId || !userId) return { ok: false, message: 'No league selected.' };
+
+    const { data, error } = await supabase
+        .from('user_leagues')
+        .update({ is_commissioner: true })
+        .eq('user_id', userId)
+        .eq('league_id', leagueId)
+        .select('league_id');
+
+    if (error) return { ok: false, message: `Couldn't save: ${error.message || 'database error'}.` };
+    if (!data?.length) {
+        return { ok: false, message: "Nothing was saved -- this account has no membership row for this league." };
+    }
+    return { ok: true, message: 'Commissioner tools enabled.' };
+};
+
 /** Applies a patch to the league row, and reports whether it truly landed. */
 export const updateLeagueSettings = async (leagueId, patch) => {
     if (!leagueId) return { ok: false, message: 'No league selected.' };

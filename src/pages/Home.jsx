@@ -7,6 +7,7 @@ import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunct
 import styles from './Home.module.css';
 import { resolveImageSrc, onImageError } from '../utils/imageFallback';
 import ProjectionsPanel from '../components/Projections/ProjectionsPanel';
+import { fetchESPNTransactions } from '../utils/espnService';
 
 export default function Home() {
     const navigate = useNavigate();
@@ -102,6 +103,7 @@ export default function Home() {
             const platform = activeLeague.platform || 'sleeper';
             const isYahoo = platform === 'yahoo';
             const isSleeper = platform === 'sleeper';
+            const isEspn = platform === 'espn';
 
             try {
                 const { data: { session } } = await supabase.auth.getSession();
@@ -315,6 +317,87 @@ export default function Home() {
                     const latestPodium = [...(podiums || [])].sort((a, b) => b.year - a.year)[0];
                     setRecentChamp(latestPodium?.champion !== undefined
                         ? { year: latestPodium.year, champion: latestPodium.champion }
+                        : null);
+                }
+                else if (isEspn) {
+                    // --- ESPN PLATFORM ROUTING ---
+                    // This branch didn't exist: the hub ran Sleeper's path or
+                    // Yahoo's and simply fell through for ESPN, so none of the
+                    // state below was ever set for an ESPN league. Role stayed
+                    // "Member" whatever the database said, tenure stayed on its
+                    // loading placeholder, and dues always read as unset no
+                    // matter what the commissioner had saved -- which is what
+                    // made the dues screen look like it wasn't saving.
+                    const currentRole = activeLeague.is_commissioner || ulData?.is_commissioner ? 'Commissioner' : 'Member';
+                    setLeagueRole(currentRole);
+
+                    const [managersData, podiums, espnRosters] = await Promise.all([
+                        getLeagueTeamManagers(targetId),
+                        getAwards(true, targetId),
+                        getLeagueRosters(targetId, { teamsOnly: true }),
+                    ]);
+                    setTeamManagers(managersData);
+
+                    const espnYears = Object.keys(managersData?.teamManagersMap || {})
+                        .map(Number)
+                        .filter(Number.isFinite);
+                    if (espnYears.length > 0) {
+                        const startYear = Math.min(...espnYears);
+                        setLeagueTenure(`${startYear} - Present (${espnYears.length} Year${espnYears.length > 1 ? 's' : ''})`);
+                    } else {
+                        setLeagueTenure("ESPN League");
+                    }
+
+                    // ESPN flags the connecting account's own team outright (by
+                    // its SWID), which beats matching a stored team name.
+                    const myRoster = Object.values(espnRosters?.rosters || {})
+                        .find(r => r?.is_owned_by_current_login);
+                    const myRosterId = myRoster ? String(myRoster.roster_id) : null;
+
+                    // Transaction fees are charged per add, so the count has to
+                    // come from this account's own adds -- the same rule the
+                    // Sleeper branch applies, including honouring the
+                    // "don't charge for defenses" setting.
+                    const isExcludeDefsEnabled = dbLeagueMeta?.exclude_defenses_from_fees ?? false;
+                    let addsCount = 0;
+                    if (myRosterId) {
+                        const { transactions: espnTxns, playerMeta } = await fetchESPNTransactions(targetId)
+                            .catch(() => ({ transactions: [], playerMeta: {} }));
+
+                        (espnTxns || []).forEach(txn => {
+                            if (txn.type === 'trade') {
+                                if ((txn.roster_ids || []).some(rid => String(rid) === myRosterId)) addsCount++;
+                                return;
+                            }
+                            Object.entries(txn.adds || {}).forEach(([pId, rId]) => {
+                                if (String(rId) !== myRosterId) return;
+                                // A defense is ESPN's negative-id pseudo-player,
+                                // which its own roster metadata also marks DEF.
+                                const isDef = playerMeta?.[pId]?.pos === 'DEF' || Number(pId) < 0;
+                                if (!isExcludeDefsEnabled || !isDef) addsCount++;
+                            });
+                        });
+                    }
+                    setMyTxnCount(addsCount);
+
+                    const isDuesSetUp = dbLeagueMeta?.dues_amount !== null && dbLeagueMeta?.dues_amount !== undefined && dbLeagueMeta?.dues_amount !== '';
+                    setDuesConfigured(isDuesSetUp);
+
+                    if (isDuesSetUp) {
+                        const baseDues = Number(dbLeagueMeta.dues_amount) || 0;
+                        const txnFeeCost = dbLeagueMeta.enable_txn_fees ? (addsCount * (dbLeagueMeta.txn_fee_amount ?? 1)) : 0;
+                        // The ledger is keyed by roster id -- that's what the
+                        // dues manager writes.
+                        const ledger = dbLeagueMeta.financial_ledger || {};
+                        const collectedAmount = myRosterId ? Number(ledger[myRosterId]) || 0 : 0;
+                        setMyBalanceOwed(baseDues + txnFeeCost - collectedAmount);
+                    } else {
+                        setMyBalanceOwed(0);
+                    }
+
+                    const latestEspnPodium = [...(podiums || [])].sort((a, b) => b.year - a.year)[0];
+                    setRecentChamp(latestEspnPodium?.champion !== undefined
+                        ? { year: latestEspnPodium.year, champion: latestEspnPodium.champion }
                         : null);
                 }
             } catch (e) {
