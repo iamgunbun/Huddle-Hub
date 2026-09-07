@@ -77,10 +77,10 @@ export default function Login() {
 
                     // Optional call to trigger automated subscription in Resend
                     if (newsletterOptIn) {
-                        fetch('/api/enroll-subscriber', {
+                        fetch('/api/resend', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ email: data.user.email })
+                            body: JSON.stringify({ action: 'enroll', email: data.user.email })
                         }).catch((err) => console.error("Newsletter enrollment error:", err));
                     }
                 }

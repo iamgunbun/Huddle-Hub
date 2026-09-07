@@ -90,10 +90,10 @@ export default function UserSettings() {
             // over there never drift apart. Fire-and-forget: Supabase above is
             // the source of truth the rest of the app reads, so a failure here
             // shouldn't roll back or block the toggle the user just clicked.
-            fetch('/api/update-subscriber', {
+            fetch('/api/resend', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: userEmail, unsubscribed: !nextState })
+                body: JSON.stringify({ action: 'update', email: userEmail, unsubscribed: !nextState })
             }).catch((err) => console.error("Newsletter sync error:", err));
         } catch (err) {
             console.error("Error updating preferences:", err);
