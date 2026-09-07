@@ -249,7 +249,11 @@ export default function Transactions() {
                     <button className={`${styles.navTab} ${activeTab === 'trades' ? styles.activeNavTab : ''}`} onClick={() => setActiveTab('trades')}>Trades</button>
                     <button className={`${styles.navTab} ${activeTab === 'waivers' ? styles.activeNavTab : ''}`} onClick={() => setActiveTab('waivers')}>Waivers</button>
                     {myRosterId != null && (
-                        <button className={`${styles.navTab} ${activeTab === 'mine' ? styles.activeNavTab : ''}`} onClick={() => setActiveTab('mine')}>My Transactions</button>
+                        // "Mine", not "My Transactions" -- already sits right next
+                        // to All/Trades/Waivers, and the longer label was a big
+                        // part of why 4 tabs plus the search button and week
+                        // dropdown no longer fit one row on a phone-width screen.
+                        <button className={`${styles.navTab} ${activeTab === 'mine' ? styles.activeNavTab : ''}`} onClick={() => setActiveTab('mine')}>Mine</button>
                     )}
                 </div>
                 <select 
