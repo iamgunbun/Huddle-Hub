@@ -13,9 +13,14 @@ import { createClient } from '@supabase/supabase-js';
 const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 // This fetches whatever host it's given server-side, so restricting it to
-// ESPN's own image CDN is what stands between this and an open SSRF proxy.
+// ESPN's own image hosts is what stands between this and an open SSRF proxy.
+// Two hosts, not one: espncdn.com serves the stock mascot/helmet art
+// (logoType VECTOR); a manager's own uploaded logo (logoType CUSTOM_UPLOAD)
+// is served from mystique-api.fantasy.espn.com instead -- see isEspnCdnUrl
+// in espnParsers.js, which this must stay in sync with.
 const isAllowedEspnImageHost = (hostname) =>
-    hostname === 'espncdn.com' || hostname.endsWith('.espncdn.com');
+    hostname === 'espncdn.com' || hostname.endsWith('.espncdn.com')
+    || hostname === 'fantasy.espn.com' || hostname.endsWith('.fantasy.espn.com');
 
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
