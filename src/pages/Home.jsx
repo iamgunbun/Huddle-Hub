@@ -364,19 +364,47 @@ export default function Home() {
                         const { transactions: espnTxns, playerMeta } = await fetchESPNTransactions(targetId)
                             .catch(() => ({ transactions: [], playerMeta: {} }));
 
-                        (espnTxns || []).forEach(txn => {
-                            if (txn.type === 'trade') {
-                                if ((txn.roster_ids || []).some(rid => String(rid) === myRosterId)) addsCount++;
-                                return;
-                            }
-                            Object.entries(txn.adds || {}).forEach(([pId, rId]) => {
-                                if (String(rId) !== myRosterId) return;
-                                // A defense is ESPN's negative-id pseudo-player,
-                                // which its own roster metadata also marks DEF.
-                                const isDef = playerMeta?.[pId]?.pos === 'DEF' || Number(pId) < 0;
-                                if (!isExcludeDefsEnabled || !isDef) addsCount++;
+                        // Draft picks and lineup/IR moves are not "moves" in the
+                        // sense this counts -- every drafted player is an ADD to
+                        // a team, so including them made two waiver claims read
+                        // as five.
+                        const countedMoves = [];
+                        (espnTxns || [])
+                            .filter(txn => txn.type === 'trade' || txn.type === 'waiver' || txn.type === 'free_agent')
+                            .forEach(txn => {
+                                if (txn.type === 'trade') {
+                                    if ((txn.roster_ids || []).some(rid => String(rid) === myRosterId)) {
+                                        addsCount++;
+                                        countedMoves.push({ type: 'trade', week: txn.leg });
+                                    }
+                                    return;
+                                }
+                                Object.entries(txn.adds || {}).forEach(([pId, rId]) => {
+                                    if (String(rId) !== myRosterId) return;
+                                    // A defense is ESPN's negative-id pseudo-player,
+                                    // which its own roster metadata also marks DEF.
+                                    const isDef = playerMeta?.[pId]?.pos === 'DEF' || Number(pId) < 0;
+                                    if (isExcludeDefsEnabled && isDef) return;
+                                    addsCount++;
+                                    countedMoves.push({
+                                        type: txn.type,
+                                        week: txn.leg,
+                                        player: playerMeta?.[pId] ? `${playerMeta[pId].fn} ${playerMeta[pId].ln}` : pId,
+                                        isDef,
+                                    });
+                                });
                             });
-                        });
+
+                        // Says which moves the count is made of, so a wrong
+                        // total can be checked against the actual moves rather
+                        // than argued about.
+                        console.info('[ESPN] transaction count ' + JSON.stringify({
+                            league: targetId,
+                            rosterId: myRosterId,
+                            excludeDefenses: isExcludeDefsEnabled,
+                            counted: countedMoves,
+                            typesSeen: [...new Set((espnTxns || []).map(t => t.type))],
+                        }));
                     }
                     setMyTxnCount(addsCount);
 

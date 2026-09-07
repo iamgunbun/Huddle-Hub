@@ -324,6 +324,23 @@ check('a trade type is reported as trade', parsedTxns[0].type, 'trade');
 check('a trade resolves the receiving side as an add', parsedTxns[0].adds, { '333': 2, '444': 1 });
 check('a trade\'s roster_ids include every team involved', parsedTxns[0].roster_ids.sort(), [1, 2]);
 
+// A draft pick is an acquisition, but it is not one of "your moves". Folding
+// DRAFT rows in with free agency is what made two waiver claims count as five.
+const draftAndPending = parseEspnTransactions([
+    { id: 'd1', type: 'DRAFT', status: 'EXECUTED', items: [{ playerId: 777, type: 'ADD', toTeamId: 1 }] },
+    { id: 'w1', type: 'WAIVER', status: 'EXECUTED', items: [{ playerId: 888, type: 'ADD', toTeamId: 1 }] },
+    { id: 'f1', type: 'FREEAGENT', status: 'EXECUTED', items: [{ playerId: 999, type: 'ADD', toTeamId: 1 }] },
+    // Neither of these actually happened.
+    { id: 'p1', type: 'WAIVER', status: 'PENDING', items: [{ playerId: 1010, type: 'ADD', toTeamId: 1 }] },
+    { id: 'c1', type: 'WAIVER', status: 'CANCELED', items: [{ playerId: 1111, type: 'ADD', toTeamId: 1 }] },
+]);
+check('pending and cancelled claims never happened, so they are dropped', draftAndPending.length, 3);
+check('a draft pick keeps its own type rather than posing as a free agent add',
+    draftAndPending.find(t => t.transaction_id === 'd1').type, 'draft');
+check('a waiver claim is still a waiver', draftAndPending.find(t => t.transaction_id === 'w1').type, 'waiver');
+check('a free agent add is still a free agent add',
+    draftAndPending.find(t => t.transaction_id === 'f1').type, 'free_agent');
+
 // --- parseEspnDraftDetail ---
 const draftPicks = [];
 for (let round = 1; round <= 2; round++) {
