@@ -231,6 +231,30 @@
     transition: background 0.2s;
 }
 
+.platformDivider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #64748b;
+    font-size: 0.7em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 0 15px;
+    margin: 14px 0 6px;
+}
+
+.platformDivider:first-child {
+    margin-top: 0;
+}
+
+.platformDivider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
 .leagueItem:hover {
     background: rgba(255, 255, 255, 0.02);
     color: #f8fafc;
