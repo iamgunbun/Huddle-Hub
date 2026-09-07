@@ -49,6 +49,22 @@
     display: flex;
     gap: 6px;
     flex: 1;
+    /* min-width: 0 is what lets a flex item actually shrink below its
+       content's natural width -- without it this row refuses to overflow
+       into a scrollbar and instead pushes the week dropdown (and, on a
+       narrow screen, the tabs themselves) out past the edge of the page.
+       Four tabs (All/Trades/Waivers/My Transactions) plus the search button
+       and week dropdown no longer reliably fit one row on mobile, so this
+       scrolls instead of clipping or overflowing the layout. */
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+
+.navTabs::-webkit-scrollbar {
+    display: none;
 }
 
 .navTab {
@@ -61,8 +77,15 @@
     text-transform: uppercase;
     letter-spacing: 0.5px;
     cursor: pointer;
-    padding: 8px 14px;
+    /* Tighter than before (was 8px 14px) -- with 4 tabs now instead of 3,
+       the old padding was most of why they no longer fit one row on a
+       phone-width screen. Still comfortably tappable. */
+    padding: 8px 10px;
     transition: all 0.2s ease;
+    /* Scroll, don't shrink -- a squeezed tab label wraps or gets truncated
+       illegibly long before the row would actually run out of space. */
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .activeNavTab {
