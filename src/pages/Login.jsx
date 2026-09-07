@@ -113,8 +113,8 @@ export default function Login() {
                 <div className={styles.brandContent}>
                     <img src="/brand.png" alt="League Brand" className={styles.brandLogo} />
                     <div className={styles.brandSummary}>
-                        The ultimate custom platform for your fantasy football league. Sync your <strong>Sleeper</strong> leagues, track historical records, and manage your empire all in one place.
-                        <div className={styles.futurePlatforms}>* Integrations for Yahoo, ESPN, and other platforms are currently in the works.</div>
+                        The ultimate custom platform for your fantasy football league. Connect your <strong>Sleeper</strong>, <strong>Yahoo</strong>, and <strong>ESPN</strong> leagues, track historical records, and manage your empire all in one place.
+                        <div className={styles.futurePlatforms}>* Integrations for MFL, Flea Flicker, and CBS are currently in the works.</div>
                     </div>
                 </div>
             </div>
