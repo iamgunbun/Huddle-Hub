@@ -7,7 +7,7 @@ import BackButton from '../../components/BackButton';
 import styles from '../Settings.module.css';
 
 export default function AdminFees() {
-    const { activeLeague } = useLeague();
+    const { activeLeague, patchActiveLeague } = useLeague();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState('');
@@ -91,6 +91,15 @@ export default function AdminFees() {
             financial_ledger: ledger
         });
 
+        if (result.ok) {
+            patchActiveLeague({
+                dues_amount: duesAmount,
+                enable_txn_fees: enableTxnFees,
+                txn_fee_amount: txnFeeAmount,
+                exclude_defenses_from_fees: excludeDefs,
+                financial_ledger: ledger,
+            });
+        }
         setMessage(result.ok ? 'Financial settings saved!' : result.message);
         if (result.ok) setTimeout(() => setMessage(''), 3000);
         setSaving(false);
