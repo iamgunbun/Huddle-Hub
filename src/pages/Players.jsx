@@ -31,6 +31,27 @@ export default function Players() {
     const [nflScheduleMap, setNflScheduleMap] = useState({});
     const [trendingUp, setTrendingUp] = useState([]);
     const [trendingDown, setTrendingDown] = useState([]);
+
+    // Sleeper's trending endpoint is site-wide (every Sleeper user, not just
+    // this league) and always keyed by Sleeper's own player ids -- on a
+    // Yahoo/ESPN league, playersInfo is keyed by THAT platform's id instead,
+    // with a not-yet-crosswalked player filed under `sleeper:<id>` (see
+    // helperFunctions/players.js), never the bare id trending hands back. A
+    // bare-id lookup there either misses outright (nothing shows) or, worse,
+    // lands on a coincidentally-matching unrelated player -- ESPN's own ids
+    // reach back to the late 90s, so a bare Sleeper id can land on a
+    // long-retired veteran's real ESPN id and show them as "trending"
+    // instead. Every dictionary entry carries its true sleeper_id regardless
+    // of what key it's filed under, so indexing by that value (not the key)
+    // is what makes a trending id resolve to the same real player on every
+    // platform.
+    const playersBySleeperId = useMemo(() => {
+        const bySleeperId = {};
+        Object.values(playersInfo || {}).forEach(p => {
+            if (p?.sleeper_id) bySleeperId[String(p.sleeper_id)] = p;
+        });
+        return bySleeperId;
+    }, [playersInfo]);
     
     // Navigation & Filters
     const [activeTab, setActiveTab] = useState('available');
@@ -179,11 +200,16 @@ export default function Players() {
             })
             .catch(err => console.error("ESPN Schedule fetch err:", err));
 
-        fetch('https://api.sleeper.app/v1/players/nfl/trending/add?lookback_hours=72&limit=30')
+        // 24h, not 72h: Sleeper's own app's trending tab reads a 1-day window,
+        // and a 3-day one naturally accumulates a much larger, non-comparable
+        // add/drop count for the same players -- confirmed against a live
+        // side-by-side (this app was reading roughly 2-3x Sleeper's own
+        // numbers for identical players at the same moment).
+        fetch('https://api.sleeper.app/v1/players/nfl/trending/add?lookback_hours=24&limit=30')
             .then(res => res.json())
             .then(data => { if (isMounted) setTrendingUp(data || []); }).catch(console.error);
 
-        fetch('https://api.sleeper.app/v1/players/nfl/trending/drop?lookback_hours=72&limit=30')
+        fetch('https://api.sleeper.app/v1/players/nfl/trending/drop?lookback_hours=24&limit=30')
             .then(res => res.json())
             .then(data => { if (isMounted) setTrendingDown(data || []); }).catch(console.error);
 
@@ -373,7 +399,7 @@ export default function Players() {
     }, [unownedPlayers, posFilter, searchQuery, weeklyProjections, weeklyStats, nflScheduleMap]);
 
     const renderPlayerRow = (pId, pObj = null, trendCount = null) => {
-        const player = pObj || playersInfo[pId] || playersInfo[String(pId)];
+        const player = pObj || playersInfo[pId] || playersInfo[String(pId)] || playersBySleeperId[String(pId)];
         if (!player) return null;
         
         const playerId = player.player_id || pId;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLeague } from '../context/LeagueContext';
 import { supabase } from '../supabaseClient';
@@ -15,6 +15,28 @@ export default function Sidebar({ isOpen, onClose }) {
     const [infoOpen, setInfoOpen] = useState(false);
     const [hoveredLeague, setHoveredLeague] = useState(null);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+    // Grouped by platform so a manager with leagues on more than one site can
+    // tell them apart at a glance instead of one flat list where a Sleeper
+    // league and an ESPN league look identical. PLATFORM_ORDER is fixed
+    // rather than alphabetical so the list doesn't reshuffle itself as
+    // leagues on different platforms get added or removed over time.
+    const PLATFORM_ORDER = ['sleeper', 'yahoo', 'espn'];
+    const PLATFORM_LABELS = { sleeper: 'Sleeper', yahoo: 'Yahoo', espn: 'ESPN' };
+    const groupedLeagues = useMemo(() => {
+        const byPlatform = {};
+        userLeagues.forEach(l => {
+            const key = l.platform || 'other';
+            if (!byPlatform[key]) byPlatform[key] = [];
+            byPlatform[key].push(l);
+        });
+        const orderedKeys = [
+            ...PLATFORM_ORDER.filter(p => byPlatform[p]),
+            ...Object.keys(byPlatform).filter(p => !PLATFORM_ORDER.includes(p)),
+        ];
+        return orderedKeys.map(platform => ({ platform, leagues: byPlatform[platform] }));
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- PLATFORM_ORDER is a fixed constant, not state
+    }, [userLeagues]);
 
     const handleSwitchLeague = async (id) => {
         await switchActiveLeague(id);
@@ -143,50 +165,57 @@ export default function Sidebar({ isOpen, onClose }) {
 
                         <div className={styles.section}>
                             <h4>Switch League</h4>
-                            {userLeagues.map(l => (
-                                <div 
-                                    key={l.id} 
-                                    className={styles.leagueItem} 
-                                    onClick={() => handleSwitchLeague(l.id)}
-                                    onMouseEnter={() => setHoveredLeague(l.id)}
-                                    onMouseLeave={() => setHoveredLeague(null)}
-                                    style={{ position: 'relative' }}
-                                >
-                                    {l.avatar ? (
-                                        <img 
-                                            src={l.avatar} 
-                                            alt="Logo" 
-                                            className={styles.leagueItemAvatar} 
-                                            style={{ borderColor: activeLeague?.id === l.id ? '#eebf1c' : '#475569' }} 
-                                            onError={(e) => e.target.src = '/fallback.png'}
-                                        />
-                                    ) : (
-                                        <div className={styles.radio} style={{ backgroundColor: activeLeague?.id === l.id ? '#eebf1c' : 'transparent', borderColor: activeLeague?.id === l.id ? '#eebf1c' : '#475569' }}></div>
-                                    )}
-                                    
-                                    <span className={activeLeague?.id === l.id ? styles.activeLeagueText : ''}>{l.name || l.league_name}</span>
-                                    
-                                    {hoveredLeague === l.id && (
-                                        <div 
-                                            onClick={(e) => handleDeleteLeague(e, l.id, l.platform)}
-                                            style={{
-                                                position: 'absolute',
-                                                right: '10px',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                color: '#ef4444',
-                                                background: 'rgba(239, 68, 68, 0.1)',
-                                                borderRadius: '6px',
-                                                padding: '4px',
-                                                cursor: 'pointer',
-                                                zIndex: 10
-                                            }}
+                            {groupedLeagues.map(({ platform, leagues }) => (
+                                <React.Fragment key={platform}>
+                                    <div className={styles.platformDivider}>
+                                        {PLATFORM_LABELS[platform] || platform}
+                                    </div>
+                                    {leagues.map(l => (
+                                        <div
+                                            key={l.id}
+                                            className={styles.leagueItem}
+                                            onClick={() => handleSwitchLeague(l.id)}
+                                            onMouseEnter={() => setHoveredLeague(l.id)}
+                                            onMouseLeave={() => setHoveredLeague(null)}
+                                            style={{ position: 'relative' }}
                                         >
-                                            <i className="material-icons" style={{ fontSize: '18px' }}>delete</i>
+                                            {l.avatar ? (
+                                                <img
+                                                    src={l.avatar}
+                                                    alt="Logo"
+                                                    className={styles.leagueItemAvatar}
+                                                    style={{ borderColor: activeLeague?.id === l.id ? '#eebf1c' : '#475569' }}
+                                                    onError={(e) => e.target.src = '/fallback.png'}
+                                                />
+                                            ) : (
+                                                <div className={styles.radio} style={{ backgroundColor: activeLeague?.id === l.id ? '#eebf1c' : 'transparent', borderColor: activeLeague?.id === l.id ? '#eebf1c' : '#475569' }}></div>
+                                            )}
+
+                                            <span className={activeLeague?.id === l.id ? styles.activeLeagueText : ''}>{l.name || l.league_name}</span>
+
+                                            {hoveredLeague === l.id && (
+                                                <div
+                                                    onClick={(e) => handleDeleteLeague(e, l.id, l.platform)}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        right: '10px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        color: '#ef4444',
+                                                        background: 'rgba(239, 68, 68, 0.1)',
+                                                        borderRadius: '6px',
+                                                        padding: '4px',
+                                                        cursor: 'pointer',
+                                                        zIndex: 10
+                                                    }}
+                                                >
+                                                    <i className="material-icons" style={{ fontSize: '18px' }}>delete</i>
+                                                </div>
+                                            )}
                                         </div>
-                                    )}
-                                </div>
+                                    ))}
+                                </React.Fragment>
                             ))}
                             <div className={styles.link} style={{color: '#eebf1c', marginTop: '10px'}} onClick={() => {navigate('/add-league'); if(onClose) onClose();}}>
                                 <i className="material-icons">add_circle_outline</i> Connect League
