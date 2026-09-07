@@ -68,10 +68,11 @@ export default function Login() {
                 if (error) throw error;
 
                 if (data?.user) {
-                    await supabase.from('profiles').upsert({ 
-                        id: data.user.id, 
+                    await supabase.from('profiles').upsert({
+                        id: data.user.id,
+                        email: data.user.email,
                         favorite_team: favoriteTeam,
-                        newsletter_opt_in: newsletterOptIn 
+                        newsletter_opt_in: newsletterOptIn
                     });
 
                     // Optional call to trigger automated subscription in Resend

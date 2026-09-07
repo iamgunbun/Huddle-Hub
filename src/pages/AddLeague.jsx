@@ -425,6 +425,18 @@ export default function AddLeague() {
 
             if (insertErr) throw insertErr;
 
+            // Transactional, not gated on the newsletter opt-in -- this is tied
+            // to the connect action itself, not a marketing preference. Fire-
+            // and-forget so a slow or misconfigured mail provider never holds
+            // up finishing the connection.
+            if (session.user.email) {
+                fetch('/api/send-league-welcome-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: session.user.email, leagueName: league.name })
+                }).catch((err) => console.error("Welcome email error:", err));
+            }
+
             // A private league's cookies were only ever used for this one
             // preview fetch and then discarded -- every other page in the app
             // asks for this league's data with no cookies at all, which is a
