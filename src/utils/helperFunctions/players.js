@@ -7,7 +7,39 @@ import { isYahooLeagueId, isEspnLeagueId } from '../platformIds';
 // testable); re-exported here for the callers that already import it from this
 // module.
 export { playerNameKey, isLessProminentDuplicate } from '../playerPool';
-import { playerNameKey, playerNameKeyNoSuffix, playerInitialKey, INITIAL_KEY_PREFIX, isLessProminentDuplicate, isRealCrosswalkId } from '../playerPool';
+import { playerNameKey, playerNameKeyNoSuffix, playerInitialKey, INITIAL_KEY_PREFIX, isLessProminentDuplicate, isRealCrosswalkId, findByLastNameRaw } from '../playerPool';
+
+// A specific player reported as unidentified, checked against Sleeper's raw
+// API response BEFORE this module's own remapping/collision logic touches it
+// at all. The previous diagnostic (findByLastNameRaw against the finished
+// dictionary) proved these players aren't in the FINAL data, but that result
+// is consistent with two very different causes: Sleeper's own feed never had
+// them, or this module's own processing is what drops them. Checking the raw
+// response directly is the only way to tell which -- and unlike the finished
+// dictionary, there's no plausible bug in "read this field off the object
+// Sleeper just sent" for this check to hide behind.
+//
+// Names, not ids, because the finished-dictionary scan found by NAME already
+// -- an id-based check here would just be testing a different, unrelated
+// question (whether their true Sleeper id is present) instead of the one
+// that's actually in doubt.
+const RAW_FEED_WATCHLIST = [
+    'Jeanty', 'Loveland', 'Burden', 'Fannin', 'Aubrey', 'Little', 'Egbuka',
+];
+
+const logRawFeedCheck = (rawPlayers) => {
+    try {
+        const report = RAW_FEED_WATCHLIST.map(lastName => {
+            const hits = findByLastNameRaw(lastName, rawPlayers);
+            return `${lastName} -> Sleeper's OWN raw feed has: ` + (hits.length
+                ? hits.map(h => `${h.fn} ${h.ln} (${h.pos}, sleeper id ${h.id})`).join(' | ')
+                : 'NOBODY -- confirmed absent from Sleeper itself, not something this app dropped');
+        });
+        console.info('[players] raw Sleeper feed check (before any of our own processing):\n' + report.join('\n'));
+    } catch (e) {
+        console.warn('Raw feed check failed:', e);
+    }
+};
 
 const buildNameIndex = (data) => {
     const byName = {};
@@ -135,6 +167,7 @@ export const loadPlayers = async (activeLeagueId) => {
         }
 
         const rawPlayers = await sleeperRes.json();
+        logRawFeedCheck(rawPlayers);
         const nflState = await stateRes.json();
         const leagueData = leagueRes ? await leagueRes.json() : null;
 
