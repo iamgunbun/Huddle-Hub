@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLeague } from '../context/LeagueContext';
-import { getLeagueData, getLeagueTeamManagers, loadPlayers, getNflState } from '../utils/helper';
+import { getLeagueData, getLeagueTeamManagers, getLeagueRosters, loadPlayers, getNflState } from '../utils/helper';
 import { getTeamFromTeamManagers } from '../utils/helperFunctions/universalFunctions';
 import PlayerModal from '../components/PlayerModal';
 import { fetchYahooTransactions } from '../utils/yahooService';
 import { fetchESPNTransactions } from '../utils/espnService';
 import { isYahooLeagueId, isEspnLeagueId } from '../utils/platformIds';
 import { withResolvedPlayerMeta } from '../utils/playerPool';
+import { supabase } from '../supabaseClient';
 import styles from './Transactions.module.css';
 import { resolveImageSrc, onImageError } from '../utils/imageFallback';
+
+const normalizeStr = (str) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 export default function Transactions() {
     const { activeLeague } = useLeague();
@@ -19,7 +22,13 @@ export default function Transactions() {
     const [transactions, setTransactions] = useState([]);
 
     // Navigation & Filters
-    const [activeTab, setActiveTab] = useState('all'); // 'all', 'trades', 'waivers'
+    const [activeTab, setActiveTab] = useState('all'); // 'all', 'trades', 'waivers', 'mine'
+    // The signed-in account's own roster_id in this league, so "My
+    // Transactions" can filter to it -- resolved the same way Rosters.jsx
+    // finds "my team": Yahoo/ESPN flag the requesting account's own roster
+    // directly, but Sleeper has no such flag, so it's found by matching this
+    // account's stored team_name against the league's current roster names.
+    const [myRosterId, setMyRosterId] = useState(null);
     const [activeWeek, setActiveWeek] = useState(1);
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -58,6 +67,27 @@ export default function Transactions() {
                 // correctly landed on the current week by.
                 if (nflState?.season_type === 'regular') setActiveWeek(nflState.display_week || nflState.week || 1);
                 else if (nflState?.season_type === 'post') setActiveWeek(18);
+
+                if (isYahooLeagueId(sleeperId) || isEspnLeagueId(sleeperId)) {
+                    // Both platforms flag the requesting account's own roster
+                    // directly (Yahoo on the roster fetch itself, ESPN resolved
+                    // from the connecting account's SWID) -- reliable regardless
+                    // of what got stored as this connection's team_name.
+                    const rData = await getLeagueRosters(sleeperId, { teamsOnly: true }).catch(() => null);
+                    const ownedRoster = Object.values(rData?.rosters || {}).find(r => r.is_owned_by_current_login);
+                    if (isMounted && ownedRoster) setMyRosterId(ownedRoster.roster_id);
+                } else {
+                    const { data: sessionData } = await supabase.auth.getSession();
+                    if (sessionData?.session?.user && activeLeague?.id) {
+                        const { data: ulData } = await supabase.from('user_leagues').select('team_name').eq('user_id', sessionData.session.user.id).eq('league_id', activeLeague.id).single();
+                        const searchName = normalizeStr(ulData?.team_name);
+                        if (searchName && searchName !== normalizeStr('commissioner team')) {
+                            const rostersMap = tmData.teamManagersMap[tmData.currentSeason] || {};
+                            const foundRosterId = Object.keys(rostersMap).find(rId => normalizeStr(rostersMap[rId].team?.name) === searchName);
+                            if (isMounted && foundRosterId) setMyRosterId(foundRosterId);
+                        }
+                    }
+                }
 
             } catch (e) {
                 console.error("Error loading base transaction data:", e);
@@ -126,6 +156,11 @@ export default function Transactions() {
             list = list.filter(t => t.type === 'trade');
         } else if (activeTab === 'waivers') {
             list = list.filter(t => t.type === 'waiver' || t.type === 'free_agent');
+        } else if (activeTab === 'mine') {
+            list = list.filter(t =>
+                (t.type === 'trade' || t.type === 'waiver' || t.type === 'free_agent')
+                && (t.roster_ids || []).some(rId => String(rId) === String(myRosterId))
+            );
         }
 
         if (searchQuery.trim()) {
@@ -153,7 +188,7 @@ export default function Transactions() {
         }
 
         return list.sort((a, b) => b.status_updated - a.status_updated);
-    }, [transactions, activeTab, searchQuery, playersInfo, teamManagers, currentSeason]);
+    }, [transactions, activeTab, searchQuery, playersInfo, teamManagers, currentSeason, myRosterId]);
 
     // Sleeper's image CDN is keyed by SLEEPER ids. In a Yahoo league the id on a
     // transaction is a Yahoo one, so the crosswalked sleeper_id is what makes
@@ -213,6 +248,9 @@ export default function Transactions() {
                     <button className={`${styles.navTab} ${activeTab === 'all' ? styles.activeNavTab : ''}`} onClick={() => setActiveTab('all')}>All</button>
                     <button className={`${styles.navTab} ${activeTab === 'trades' ? styles.activeNavTab : ''}`} onClick={() => setActiveTab('trades')}>Trades</button>
                     <button className={`${styles.navTab} ${activeTab === 'waivers' ? styles.activeNavTab : ''}`} onClick={() => setActiveTab('waivers')}>Waivers</button>
+                    {myRosterId != null && (
+                        <button className={`${styles.navTab} ${activeTab === 'mine' ? styles.activeNavTab : ''}`} onClick={() => setActiveTab('mine')}>My Transactions</button>
+                    )}
                 </div>
                 <select 
                     className={styles.weekDropdown} 
@@ -357,7 +395,9 @@ export default function Transactions() {
                 ) : (
                     <div className={styles.emptyState}>
                         <i className="material-icons">swap_horiz</i>
-                        <p>No transactions found for Week {activeWeek}.</p>
+                        <p>{activeTab === 'mine'
+                            ? `No trades or waiver moves of yours found for Week ${activeWeek}.`
+                            : `No transactions found for Week ${activeWeek}.`}</p>
                     </div>
                 )}
             </div>
