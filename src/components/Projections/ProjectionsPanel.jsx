@@ -14,7 +14,7 @@ import {
     DEFAULT_SCORE_VOLATILITY,
 } from '../../utils/seasonSimulation';
 import { movementFromSnapshots, withSnapshot } from '../../utils/rankMovement';
-import { resolveRosterPlayers } from '../../utils/playerPool';
+import { resolveRosterPlayers, findByLastNameRaw } from '../../utils/playerPool';
 import styles from './Projections.module.css';
 import { isYahooLeagueId, isEspnLeagueId } from '../../utils/platformIds';
 import { resolveImageSrc, onImageError } from '../../utils/imageFallback';
@@ -152,6 +152,7 @@ export default function ProjectionsPanel() {
                 // Who couldn't be identified, per team -- a coverage percentage
                 // says a roster has a hole in it, but only the names say why.
                 const unidentified = [];
+                const unresolvedForRawScan = [];
                 let totalPlayersFound = 0;
                 let weeksCompleted = 0;
 
@@ -170,11 +171,12 @@ export default function ProjectionsPanel() {
                         // crosswalk misses, so each team's strength came from a
                         // different arbitrary subset of its roster -- which is
                         // what produced a huge, meaningless spread in the odds.
-                        const { players: rosterPlayers, coverage, unresolvedNames } = resolveRosterPlayers(
+                        const { players: rosterPlayers, coverage, unresolvedNames, unresolvedMeta } = resolveRosterPlayers(
                             roster.players, playersInfo, playersByName, platformMeta
                         );
                         if (unresolvedNames.length) {
                             unidentified.push(`${teamMeta?.name || rosterID}: ${unresolvedNames.join(', ')}`);
+                            unresolvedForRawScan.push(...unresolvedMeta);
                         }
                         rosterCoverage = coverage;
                         worstCoverage = Math.min(worstCoverage, coverage);
@@ -240,10 +242,23 @@ export default function ProjectionsPanel() {
                 // on how much of each could be looked up, not on how good they
                 // are. Say so rather than presenting it as the same thing.
                 if (worstCoverage < 0.9) {
+                    // Two very different problems share this symptom: the
+                    // dictionary genuinely has nobody by this name, or an entry
+                    // exists but the pre-built name index missed it. Scanning
+                    // playersInfo directly -- bypassing playerNameKey and
+                    // playersByName entirely -- tells them apart. Capped since
+                    // this runs a linear scan per player.
+                    const rawScan = unresolvedForRawScan.slice(0, 8).map(m => {
+                        const hits = findByLastNameRaw(m.ln, playersInfo);
+                        return `${m.fn} ${m.ln} -> dictionary has by that last name: `
+                            + (hits.length ? hits.map(h => `${h.fn} ${h.ln} (${h.pos}, id ${h.id})`).join(' | ') : 'NOBODY');
+                    });
                     console.warn(
                         `Power rankings: only ${Math.round(worstCoverage * 100)}% of the thinnest roster could be identified. ` +
                         `Unidentified players (dictionary: ${Object.keys(playersInfo).length} players, `
                         + `${Object.keys(playersByName).length} name keys):\n` + unidentified.join('\n')
+                        + `\n\nIndependent check -- does the dictionary have ANYONE by that last name at all ` +
+                        `(bypasses the name index entirely):\n` + rawScan.join('\n')
                     );
                 }
                 setRosterCoverage(worstCoverage);

@@ -278,6 +278,30 @@ export const isPlayerOwned = (player, ownedIndex) => {
 };
 
 /**
+ * Independent, index-free check for whether a name genuinely has nobody in
+ * the dictionary, or whether an entry exists but the pre-built name index
+ * (playersByName) missed it -- two very different problems with the same
+ * symptom ("unresolved"), that a coverage percentage can't tell apart.
+ *
+ * Scans playersInfo directly rather than going through playerNameKey/
+ * playersByName at all, so a bug in either of those can't hide behind this
+ * check agreeing with them. Matches on last name alone (case-insensitive,
+ * substring) since that catches a first-name spelling difference too, at the
+ * cost of a few unrelated same-surname players in a large dictionary --
+ * acceptable for a diagnostic that exists to be read by a person, not acted
+ * on by code.
+ */
+export const findByLastNameRaw = (lastName, playersInfo) => {
+    const needle = String(lastName || '').toLowerCase().trim();
+    if (!needle) return [];
+
+    return Object.entries(playersInfo || {})
+        .filter(([, p]) => p && String(p.ln || p.last_name || '').toLowerCase().includes(needle))
+        .map(([id, p]) => ({ id, fn: p.fn || p.first_name, ln: p.ln || p.last_name, pos: p.pos || p.position }))
+        .slice(0, 5);
+};
+
+/**
  * Folds a platform's own player details into the shared dictionary.
  *
  * In a Yahoo league every id in a roster, draft or transaction is a Yahoo id,
@@ -328,6 +352,10 @@ export const resolveRosterPlayers = (playerIds, playersInfo = {}, playersByName 
     // between a fixable matching gap and a player the dictionary genuinely
     // doesn't have.
     const unresolvedNames = [];
+    // The same failures as unresolvedNames, but as data (id/fn/ln/pos) rather
+    // than a formatted string -- so a caller can run its own follow-up check
+    // (e.g. an index-independent name scan) without re-parsing the label.
+    const unresolvedMeta = [];
     let unresolved = 0;
 
     ids.forEach(pId => {
@@ -346,8 +374,9 @@ export const resolveRosterPlayers = (playerIds, playersInfo = {}, playersByName 
         unresolved++;
         const label = meta ? `${meta.fn || ''} ${meta.ln || ''}`.trim() : '';
         unresolvedNames.push(label ? `${label} (${meta.pos || '?'}, id ${pId})` : `id ${pId}`);
+        unresolvedMeta.push({ id: pId, fn: meta?.fn || null, ln: meta?.ln || null, pos: meta?.pos || null });
     });
 
     const total = players.length + unresolved;
-    return { players, unresolved, unresolvedNames, coverage: total ? players.length / total : 1 };
+    return { players, unresolved, unresolvedNames, unresolvedMeta, coverage: total ? players.length / total : 1 };
 };
