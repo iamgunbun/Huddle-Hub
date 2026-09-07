@@ -73,6 +73,22 @@ export const playerNameKeyNoSuffix = (fn, ln) => {
     return parts.join(' ');
 };
 
+// Last resort for a name the platforms spell differently at the FRONT rather
+// than the end: "Cam" vs "Cameron", "Mike" vs "Michael", "DJ" vs "D.J.". The
+// last name plus a first initial survives all of those.
+//
+// Prefixed and indexed separately because it's the one match that can be
+// genuinely wrong -- two real players can share a last name and initial. The
+// index only keeps keys that resolve to exactly one player, so an ambiguous
+// one is dropped rather than guessed at.
+export const INITIAL_KEY_PREFIX = 'i:';
+
+export const playerInitialKey = (fn, ln) => {
+    const parts = playerNameKeyNoSuffix(fn, ln).split(' ').filter(Boolean);
+    if (parts.length < 2) return '';
+    return `${parts[0].charAt(0)} ${parts.slice(1).join(' ')}`;
+};
+
 /**
  * Resolves a player the league's roster referred to, given whatever metadata the
  * platform supplied alongside it, against the shared player dictionary.
@@ -102,7 +118,21 @@ export const resolvePlayerFromMeta = (meta, playersInfo = {}, playersByName = {}
     if (exact) return exact;
 
     const noSuffix = playerNameKeyNoSuffix(meta.fn, meta.ln);
-    return (noSuffix && playersByName[noSuffix]) || null;
+    const bySuffixFree = noSuffix && playersByName[noSuffix];
+    if (bySuffixFree) return bySuffixFree;
+
+    // Same player, different first name: the platforms disagree on "Cam" vs
+    // "Cameron" far more often than on anything else. Only accepted when the
+    // index found exactly one player with that last name and initial, and
+    // when the positions don't contradict each other.
+    const initialKey = playerInitialKey(meta.fn, meta.ln);
+    const byInitial = initialKey && playersByName[`${INITIAL_KEY_PREFIX}${initialKey}`];
+    if (byInitial) {
+        const matchedPos = String(byInitial.pos || '').toUpperCase();
+        if (!pos || !matchedPos || matchedPos === pos) return byInitial;
+    }
+
+    return null;
 };
 
 export const NFL_TEAMS = new Set([
@@ -284,6 +314,11 @@ export const withResolvedPlayerMeta = (playersInfo, playersByName, platformMeta)
 export const resolveRosterPlayers = (playerIds, playersInfo = {}, playersByName = {}, platformMeta = {}) => {
     const ids = playerIds || [];
     const players = [];
+    // Who couldn't be identified, not just how many. A coverage number says a
+    // roster has a hole in it; the names say WHY, which is the difference
+    // between a fixable matching gap and a player the dictionary genuinely
+    // doesn't have.
+    const unresolvedNames = [];
     let unresolved = 0;
 
     ids.forEach(pId => {
@@ -297,10 +332,13 @@ export const resolveRosterPlayers = (playerIds, playersInfo = {}, playersByName 
 
         const meta = platformMeta[pId] || platformMeta[String(pId)];
         const matched = meta ? resolvePlayerFromMeta(meta, playersInfo, playersByName) : null;
-        if (matched) players.push(matched);
-        else unresolved++;
+        if (matched) { players.push(matched); return; }
+
+        unresolved++;
+        const label = meta ? `${meta.fn || ''} ${meta.ln || ''}`.trim() : '';
+        unresolvedNames.push(label ? `${label} (${meta.pos || '?'}, id ${pId})` : `id ${pId}`);
     });
 
     const total = players.length + unresolved;
-    return { players, unresolved, coverage: total ? players.length / total : 1 };
+    return { players, unresolved, unresolvedNames, coverage: total ? players.length / total : 1 };
 };

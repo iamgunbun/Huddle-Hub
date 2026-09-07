@@ -267,7 +267,10 @@ export const fetchESPNCommissionerStatus = async (leagueId, passedUserId = null)
         // names, emails or ids are logged.
         if (!isManager) {
             const me = members.find(m => espnSwidMatches(m?.id, resolvedSwid));
-            console.info('[ESPN] commissioner check', {
+            // Stringified on purpose: a console object logs collapsed as
+            // "▶ Object", which is unreadable in a screenshot and hides the
+            // one thing being asked for. One flat line can just be read.
+            console.info('[ESPN] commissioner check ' + JSON.stringify({
                 league: leagueId,
                 membersReturned: members.length,
                 swidMatchedAMember: !!me,
@@ -275,7 +278,7 @@ export const fetchESPNCommissionerStatus = async (leagueId, passedUserId = null)
                 leagueLevelManagerListFound: espnLeagueManagerIds(data).length > 0,
                 leagueKeys: Object.keys(data || {}),
                 settingsKeys: Object.keys(data?.settings || {}),
-            });
+            }));
         }
 
         return isManager;

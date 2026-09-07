@@ -7,10 +7,13 @@ import { isYahooLeagueId, isEspnLeagueId } from '../platformIds';
 // testable); re-exported here for the callers that already import it from this
 // module.
 export { playerNameKey, isLessProminentDuplicate } from '../playerPool';
-import { playerNameKey, playerNameKeyNoSuffix, isLessProminentDuplicate } from '../playerPool';
+import { playerNameKey, playerNameKeyNoSuffix, playerInitialKey, INITIAL_KEY_PREFIX, isLessProminentDuplicate } from '../playerPool';
 
 const buildNameIndex = (data) => {
     const byName = {};
+    // Last-name-plus-initial keys, counted so an ambiguous one can be dropped
+    // rather than guessed at -- two real players can share both.
+    const byInitial = {};
     Object.values(data || {}).forEach(p => {
         if (!p) return;
 
@@ -37,7 +40,19 @@ const buildNameIndex = (data) => {
             // On a name collision, keep the more prominent player (lower searchRank).
             if (!existing || rank < (existing.searchRank || 999999)) byName[key] = p;
         });
+
+        const initialKey = playerInitialKey(p.fn, p.ln);
+        if (initialKey) {
+            const seen = byInitial[initialKey];
+            if (!seen) byInitial[initialKey] = { player: p, count: 1 };
+            else seen.count += 1;
+        }
     });
+
+    Object.entries(byInitial).forEach(([key, { player, count }]) => {
+        if (count === 1) byName[`${INITIAL_KEY_PREFIX}${key}`] = player;
+    });
+
     return byName;
 };
 

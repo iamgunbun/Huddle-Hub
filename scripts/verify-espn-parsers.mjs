@@ -502,8 +502,10 @@ check('no swid -> false', isEspnLeagueManager(members, null), false);
 // created the league counts too.
 check('a member flagged only isLeagueCreator also counts as commissioner',
     isEspnLeagueManager([{ id: '{AAA}', isLeagueCreator: true }], '{AAA}'), true);
+// Two members, so the sole-member rule below doesn't apply: with a real
+// league to share, an unflagged member is not the manager.
 check('a member with neither flag does not',
-    isEspnLeagueManager([{ id: '{AAA}' }], '{AAA}'), false);
+    isEspnLeagueManager([{ id: '{AAA}' }, { id: '{BBB}' }], '{AAA}'), false);
 
 // --- SWID normalisation ---
 // ESPN brace-wraps the SWID it stores on members/owners, but a value copied
@@ -525,7 +527,7 @@ check('a brace-less stored swid finds its league manager',
 // member record. Any boolean whose KEY is about running/creating the league
 // counts, so the check doesn't hinge on one guess.
 check('an unexpected manager flag spelling still counts',
-    isEspnLeagueManager([{ id: '{A}', leagueManager: true }], '{A}'), true);
+    isEspnLeagueManager([{ id: '{A}', leagueManager: true }, { id: '{B}' }], '{A}'), true);
 check('a commissioner-shaped flag counts', memberHasManagerFlag({ isCommissioner: true }), true);
 check('an admin-shaped flag counts', memberHasManagerFlag({ isLeagueAdmin: true }), true);
 check('an unrelated true flag does not', memberHasManagerFlag({ isActive: true, hasPaid: true }), false);
@@ -537,11 +539,11 @@ check('no member -> no flag', memberHasManagerFlag(null), false);
 // Some responses name the managers in a list of their own rather than
 // flagging each member.
 check('a league-level manager list of bare swids is honoured',
-    isEspnLeagueManager([{ id: '{A}' }], '{A}', { leagueManagers: ['{A}'] }), true);
+    isEspnLeagueManager([{ id: '{A}' }, { id: '{B}' }], '{A}', { leagueManagers: ['{A}'] }), true);
 check('a league-level manager list of objects is honoured',
-    isEspnLeagueManager([{ id: '{A}' }], '{A}', { settings: { leagueManagers: [{ id: '{A}' }] } }), true);
+    isEspnLeagueManager([{ id: '{A}' }, { id: '{B}' }], '{A}', { settings: { leagueManagers: [{ id: '{A}' }] } }), true);
 check('a league-level list that does not name you grants nothing',
-    isEspnLeagueManager([{ id: '{A}' }], '{A}', { leagueManagers: ['{B}'] }), false);
+    isEspnLeagueManager([{ id: '{A}' }, { id: '{B}' }], '{A}', { leagueManagers: ['{B}'] }), false);
 check('manager ids are read off whichever list is present',
     espnLeagueManagerIds({ settings: { managers: ['{A}', '{B}'] } }), ['{A}', '{B}']);
 check('no list anywhere -> nothing', espnLeagueManagerIds({ settings: {} }), []);
@@ -551,5 +553,17 @@ const shape = describeEspnMemberFlags({ id: '{A}', displayName: 'Someone', isLea
 check('the diagnostic lists every field name', shape.keys, ['id', 'displayName', 'isLeagueManager', 'isActive']);
 check('and reports only the boolean values', shape.booleans, { isLeagueManager: false, isActive: true });
 check('no member -> nothing to describe', describeEspnMemberFlags(null), null);
+
+// Sole member: a league with exactly one member in it is run by that member,
+// whatever ESPN does or doesn't flag. ESPN returns every member (a 12-team
+// league reports 12), so a list of one is a league of one, not a truncation.
+check('the only member of a league is its manager',
+    isEspnLeagueManager([{ id: '{ME}' }], '{ME}'), true);
+check('but not when the sole member is someone else',
+    isEspnLeagueManager([{ id: '{THEM}' }], '{ME}'), false);
+check('and a full league still needs a real flag',
+    isEspnLeagueManager([{ id: '{ME}' }, { id: '{THEM}' }], '{ME}'), false);
+check('a flagged member in a full league is still found',
+    isEspnLeagueManager([{ id: '{ME}', isLeagueManager: true }, { id: '{THEM}' }], '{ME}'), true);
 
 console.log(`OK: ${checks} ESPN parser checks passed`);
