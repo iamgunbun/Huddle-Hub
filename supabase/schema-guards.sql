@@ -189,3 +189,22 @@ create policy league_rank_snapshots_insert_member on public.league_rank_snapshot
 create policy league_rank_snapshots_update_member on public.league_rank_snapshots
     for update using (league_id in (select public.current_user_league_ids()))
     with check (league_id in (select public.current_user_league_ids()));
+
+-- ---------------------------------------------------------------------------
+-- 5. profiles.email -- needed to sync a Resend unsubscribe back to the app.
+-- ---------------------------------------------------------------------------
+-- api/resend-webhook.js only ever gets an email address from Resend (that's
+-- all a contact object carries), and has to turn that into "whose
+-- newsletter_opt_in do I flip". profiles isn't otherwise queryable by email:
+-- auth.users isn't reachable from the client, and matching through the admin
+-- API means an extra round trip for every webhook delivery instead of one
+-- indexed lookup. New rows are written with this going forward (Login.jsx);
+-- this backfills every row that already exists.
+alter table public.profiles add column if not exists email text;
+
+update public.profiles p
+set email = u.email
+from auth.users u
+where p.id = u.id and p.email is null;
+
+create index if not exists profiles_email_idx on public.profiles (email);
