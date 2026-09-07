@@ -430,10 +430,10 @@ export default function AddLeague() {
             // and-forget so a slow or misconfigured mail provider never holds
             // up finishing the connection.
             if (session.user.email) {
-                fetch('/api/send-league-welcome-email', {
+                fetch('/api/resend', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: session.user.email, leagueName: league.name })
+                    body: JSON.stringify({ action: 'welcome', email: session.user.email, leagueName: league.name })
                 }).catch((err) => console.error("Welcome email error:", err));
             }
 
