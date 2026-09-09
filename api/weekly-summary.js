@@ -1,17 +1,22 @@
 // api/weekly-summary.js
 //
 // The Pro "Weekly Summary" feature: every Tuesday (see vercel.json's cron
-// entry), this generates one recap per Sleeper league that has at least one
-// Pro member, stores it (league_weekly_summaries -- read by
+// entry), this generates one recap per Sleeper or Yahoo league that has at
+// least one Pro member, stores it (league_weekly_summaries -- read by
 // src/pages/WeeklySummary.jsx), and emails it to every Pro member in that
-// league. Sleeper only for now -- Yahoo and ESPN need per-user OAuth/cookie
-// handling this endpoint doesn't have yet, so a league on either platform is
-// silently skipped rather than guessed at.
+// league. ESPN isn't supported yet -- it needs per-user cookie handling this
+// endpoint doesn't have, so an ESPN league is silently skipped rather than
+// guessed at.
 //
-// Every number in the email is computed here from Sleeper's own API
-// responses -- matchup scores, real per-player actual points, and real
-// weekly projections scored under the league's own rules (scoreStatLine,
-// same function the client already uses for this). Gemini is only ever
+// Every number in the email is computed here from the platform's own API
+// responses -- matchup scores, real per-player actual points where the
+// platform publishes them, and real weekly projections. Sleeper publishes
+// real per-player projections, scored under the league's own rules
+// (scoreStatLine, same function the client already uses for this). Yahoo
+// publishes NO per-player projection through its API -- only a per-TEAM
+// one -- so the Yahoo path (computeYahooWeekStats below) redefines
+// "biggest disappointment" at the team level instead of guessing a
+// player-level number Yahoo never actually gives out. Gemini is only ever
 // handed those already-verified facts and asked to narrate them -- the same
 // "give it real facts, let it write flavor" split api/evaluate.js's manager
 // report already uses -- specifically so it cannot invent a score, a name,
@@ -26,6 +31,17 @@
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, SchemaType } from '@google/generative-ai';
 import { scoreStatLine } from '../src/utils/yahooScoring.js';
+import {
+    yahooCollection,
+    yahooField,
+    yahooText,
+    findNode,
+    parseYahooScoreboard,
+    parseYahooStandings,
+    parseYahooTransactions,
+    parseYahooPlayers,
+    weekFromTimestamp,
+} from '../src/utils/yahooHistory.js';
 
 const supabase = createClient(
     process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL,
@@ -155,6 +171,187 @@ export const computeWeekStats = ({ matchups, rosters, users, transactions, playe
     return { week, games, blowout, closestCall, rivalry, mvpByPosition, biggestDisappointment, transactions: transactionSummary };
 };
 
+// --------------------------------------------------------------------------
+// Yahoo -- a fully separate stat pipeline, deliberately not sharing code
+// with computeWeekStats above. Yahoo's data shape is different enough
+// (team-level projections only, OAuth-gated requests, a season-long
+// transaction feed instead of a per-week one) that forcing it through the
+// same function would mean branching almost every line of that function --
+// and any bug introduced doing that could regress the already-verified,
+// already-shipping Sleeper path. Keeping them apart costs some duplication
+// and buys zero regression risk to Sleeper.
+// --------------------------------------------------------------------------
+
+export const teamNameForYahoo = (rosterId, standingsRows) => {
+    const row = standingsRows.find(r => r.rosterId === rosterId);
+    return row?.teamName || `Team ${rosterId}`;
+};
+
+const YAHOO_BENCH_SLOTS = new Set(['BN', 'IR', 'IR+', 'NA']);
+
+/**
+ * Per-team roster rows (name, position, actual points, starter/bench) out of
+ * a `teams;team_keys=.../roster;week=N/players/stats;type=week;week=N`
+ * response. parseYahooTeamPlayerPoints (yahooHistory.js) already reads this
+ * same shape but only keeps points -- name, position and selected_position
+ * are read here the same way (via yahooField/yahooCollection), since the
+ * weekly summary needs to say WHO the points belong to, not just the number.
+ *
+ * Returns { [teamKey]: [{ playerId, name, position, actual, isStarter }] }.
+ */
+export const extractYahooRosterPlayers = (data) => {
+    const byTeam = {};
+    const teamsNode = data?.fantasy_content?.teams
+        || findNode(data?.fantasy_content?.league, 'teams')
+        || findNode(data?.fantasy_content, 'teams');
+
+    yahooCollection(teamsNode).forEach(entry => {
+        const team = entry?.team;
+        if (!team) return;
+
+        const info = Array.isArray(team) ? team[0] : team;
+        const teamKey = yahooText(yahooField(info, 'team_key'));
+        if (!teamKey) return;
+
+        const roster = findNode(team, 'roster');
+        const playersNode = findNode(roster, 'players') || findNode(team, 'players');
+        const rows = [];
+
+        yahooCollection(playersNode).forEach(playerEntry => {
+            const player = playerEntry?.player;
+            if (!player) return;
+
+            const playerInfo = Array.isArray(player) ? player[0] : player;
+            const playerId = yahooText(yahooField(playerInfo, 'player_id'));
+            if (!playerId) return;
+
+            const pointsNode = Array.isArray(player)
+                ? player.find(x => x && x.player_points)?.player_points
+                : player.player_points;
+            const actual = pointsNode?.total !== undefined ? (parseFloat(pointsNode.total) || 0) : 0;
+
+            // selected_position is itself an entity (Yahoo's array-of-
+            // single-key-objects shape), so it's read with the same
+            // yahooField helper used for every other field here rather than
+            // a hand-rolled path into it.
+            const selectedPositionNode = yahooField(player, 'selected_position');
+            const selectedPosition = yahooText(yahooField(selectedPositionNode, 'position'));
+
+            const nameNode = yahooField(playerInfo, 'name');
+            const name = yahooText(nameNode?.full) || `Player #${playerId}`;
+            const position = yahooText(yahooField(playerInfo, 'display_position')) || selectedPosition || '';
+
+            rows.push({
+                playerId,
+                name,
+                position,
+                actual: Math.round(actual * 100) / 100,
+                // No selected_position read back is treated as bench --
+                // i.e. this player is left out of MVP consideration rather
+                // than risk crowning someone who never started.
+                isStarter: !!selectedPosition && !YAHOO_BENCH_SLOTS.has(selectedPosition),
+            });
+        });
+
+        if (rows.length) byTeam[teamKey] = rows;
+    });
+
+    return byTeam;
+};
+
+/**
+ * Yahoo's equivalent of computeWeekStats. Two real differences from
+ * Sleeper's version, both forced by what Yahoo's API actually publishes:
+ *
+ *  - biggestDisappointment is a TEAM (Yahoo's own team-level points vs.
+ *    team-level projected_points from the scoreboard), not a player --
+ *    Yahoo has no per-player projection to compare a player's actual
+ *    points against.
+ *  - starterPerf/mvpByPosition draws only from players extractYahooRosterPlayers
+ *    marked as started (selected_position outside the bench/IR slots), since
+ *    Yahoo's roster response includes the whole bench too.
+ */
+export const computeYahooWeekStats = ({ scoreboardWeek, standingsRows, transactions, rosterPlayersByTeamKey, playerMeta, week }) => {
+    const games = scoreboardWeek
+        .filter(m => m.teams?.length === 2)
+        .map(m => {
+            const [a, b] = m.teams;
+            const scoreA = a.points || 0;
+            const scoreB = b.points || 0;
+            const nameA = teamNameForYahoo(a.roster_id, standingsRows);
+            const nameB = teamNameForYahoo(b.roster_id, standingsRows);
+            return {
+                teamA: nameA, teamB: nameB, scoreA, scoreB,
+                margin: Math.round(Math.abs(scoreA - scoreB) * 100) / 100,
+                winner: scoreA === scoreB ? null : (scoreA > scoreB ? nameA : nameB),
+            };
+        });
+
+    const byMargin = [...games].sort((x, y) => y.margin - x.margin);
+    const blowout = byMargin[0] || null;
+    const closestCall = byMargin.length ? byMargin[byMargin.length - 1] : null;
+
+    const recordOf = (rosterId) => {
+        const row = standingsRows.find(r => r.rosterId === rosterId);
+        return (row?.wins || 0) - (row?.losses || 0);
+    };
+    let rivalry = null;
+    let smallestGap = Infinity;
+    scoreboardWeek.filter(m => m.teams?.length === 2).forEach(m => {
+        const [a, b] = m.teams;
+        const gap = Math.abs(recordOf(a.roster_id) - recordOf(b.roster_id));
+        if (gap < smallestGap) {
+            smallestGap = gap;
+            rivalry = { teamA: teamNameForYahoo(a.roster_id, standingsRows), teamB: teamNameForYahoo(b.roster_id, standingsRows), recordGap: gap };
+        }
+    });
+
+    const starterPerf = [];
+    Object.entries(rosterPlayersByTeamKey).forEach(([teamKey, rows]) => {
+        const rosterId = standingsRows.find(r => r.teamKey === teamKey)?.rosterId ?? null;
+        const teamName = rosterId != null ? teamNameForYahoo(rosterId, standingsRows) : teamKey;
+        rows.filter(r => r.isStarter).forEach(r => starterPerf.push({ ...r, team: teamName }));
+    });
+
+    const mvpByPosition = {};
+    POSITIONS.forEach(pos => {
+        const atPos = starterPerf.filter(p => p.position === pos);
+        if (atPos.length) mvpByPosition[pos] = [...atPos].sort((a, b) => b.actual - a.actual)[0];
+    });
+
+    const teamVariances = scoreboardWeek
+        .flatMap(m => m.teams || [])
+        .filter(t => t.projected_points != null)
+        .map(t => ({
+            team: teamNameForYahoo(t.roster_id, standingsRows),
+            actual: t.points,
+            projected: t.projected_points,
+            variance: Math.round((t.points - t.projected_points) * 100) / 100,
+        }));
+    const biggestDisappointment = teamVariances.length
+        ? [...teamVariances].sort((a, b) => a.variance - b.variance)[0]
+        : null;
+
+    const nameForPlayer = (playerId) => playerMeta[playerId] ? `${playerMeta[playerId].fn} ${playerMeta[playerId].ln}`.trim() : `Player #${playerId}`;
+    const waiverMoves = transactions.filter(t => t.type === 'waiver' || t.type === 'free_agent');
+    const trades = transactions.filter(t => t.type === 'trade');
+    const transactionSummary = {
+        waiverCount: waiverMoves.length,
+        tradeCount: trades.length,
+        notableAdds: waiverMoves.slice(0, 10).map(t => ({
+            team: teamNameForYahoo((t.roster_ids || [])[0], standingsRows),
+            added: Object.keys(t.adds || {}).map(nameForPlayer),
+            faab: t.settings?.waiver_bid ?? null,
+        })),
+        trades: trades.slice(0, 10).map(t => ({
+            teams: (t.roster_ids || []).map(rId => teamNameForYahoo(rId, standingsRows)),
+            playersMoved: Object.keys(t.adds || {}).map(nameForPlayer),
+        })),
+    };
+
+    return { week, games, blowout, closestCall, rivalry, mvpByPosition, biggestDisappointment, transactions: transactionSummary };
+};
+
 const buildNarrativePrompt = (leagueName, stats) => `You are writing a fun, banter-filled weekly recap email for the fantasy football league "${leagueName}", covering Week ${stats.week}. This goes out to every manager in the league, so the tone should read like a knowledgeable, slightly cheeky league commissioner's newsletter -- not a generic sports report.
 
 CRITICAL GROUNDING RULE: Every fact, score, name, and number below is real and verified. You must ONLY reference what's in this data. Never invent a score, a player, a team name, or a stat that isn't listed here.
@@ -166,7 +363,7 @@ Write a recap with these sections, each 1-3 sentences, punchy and specific (use 
 - headline: A punchy 5-10 word headline for the week.
 - matchupRecap: Cover the week's matchups, calling out the biggest blowout and the closest call by name and score.
 - mvpSpotlight: Call out the standout position MVPs (the highest scorer at each position) by name.
-- disappointmentOfTheWeek: Playfully roast the biggest disappointment (if one exists in the data), by name, comparing their actual score to what they were projected for.
+- disappointmentOfTheWeek: Playfully roast the biggest disappointment (if one exists in the data) -- by player name if the data has one, otherwise by team name -- comparing the actual score to what was projected.
 - rivalryWatch: Frame this week's most evenly-matched-by-record matchup as a rivalry, if one exists in the data.
 - waiverWireBuzz: Summarize the week's trades and waiver activity -- who made moves, and any FAAB bids worth calling out.
 
@@ -321,6 +518,126 @@ const generateForLeague = async ({ leagueDbId, sleeperLeagueId, leagueName, week
     return { leagueDbId, season: String(season), week, stats, narrative };
 };
 
+// --------------------------------------------------------------------------
+// Yahoo OAuth + fetching. Self-contained rather than imported from
+// api/yahoo-proxy.js -- this codebase's api/*.js files don't import each
+// other, each is its own deployed function -- but the token cache/refresh
+// logic below is otherwise the same as that file's getAccessToken, since
+// Yahoo's per-user OAuth already works there.
+// --------------------------------------------------------------------------
+
+const yahooTokenCache = new Map();
+const YAHOO_EXPIRY_SAFETY_MARGIN_MS = 60 * 1000;
+
+const getYahooAccessToken = async (userId) => {
+    const cached = yahooTokenCache.get(userId);
+    if (cached && Date.now() < cached.expiresAtMs - YAHOO_EXPIRY_SAFETY_MARGIN_MS) {
+        return cached.accessToken;
+    }
+
+    const { data: authData, error: authError } = await supabase
+        .from('user_integrations')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('provider', 'yahoo')
+        .single();
+    if (authError || !authData) {
+        throw new Error('Yahoo account not linked for this user.');
+    }
+
+    let accessToken = authData.access_token;
+    let expiresAtMs = new Date(authData.expires_at).getTime();
+
+    if (Date.now() >= expiresAtMs - YAHOO_EXPIRY_SAFETY_MARGIN_MS) {
+        const credentials = Buffer.from(`${process.env.YAHOO_CLIENT_ID}:${process.env.YAHOO_CLIENT_SECRET}`).toString('base64');
+        const tokenResponse = await fetch('https://api.login.yahoo.com/oauth2/get_token', {
+            method: 'POST',
+            headers: { 'Authorization': `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                grant_type: 'refresh_token',
+                redirect_uri: process.env.YAHOO_REDIRECT_URI,
+                refresh_token: authData.refresh_token,
+            }),
+        });
+        if (!tokenResponse.ok) {
+            const errBody = await tokenResponse.text().catch(() => '');
+            throw new Error(`Yahoo token refresh failed (HTTP ${tokenResponse.status}): ${errBody}`);
+        }
+        const tokenData = await tokenResponse.json();
+        accessToken = tokenData.access_token;
+        expiresAtMs = Date.now() + tokenData.expires_in * 1000;
+
+        await supabase.from('user_integrations').update({
+            access_token: accessToken,
+            refresh_token: tokenData.refresh_token,
+            expires_at: new Date(expiresAtMs).toISOString(),
+        }).eq('user_id', userId).eq('provider', 'yahoo');
+    }
+
+    yahooTokenCache.set(userId, { accessToken, expiresAtMs });
+    return accessToken;
+};
+
+const yahooApiRequest = async (accessToken, endpoint) => {
+    const response = await fetch(`https://fantasysports.yahooapis.com/fantasy/v2/${endpoint}?format=json`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+    });
+    if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        throw new Error(`Yahoo API ${endpoint} -> HTTP ${response.status}: ${body}`);
+    }
+    return response.json();
+};
+
+const YAHOO_PLAYER_KEY_BATCH = 25;
+
+const generateForYahooLeague = async ({ leagueDbId, yahooLeagueKey, leagueName, week, userId }) => {
+    const accessToken = await getYahooAccessToken(userId);
+
+    const [settingsData, scoreboardData, standingsData, transactionsData] = await Promise.all([
+        yahooApiRequest(accessToken, `league/${yahooLeagueKey}/settings`),
+        yahooApiRequest(accessToken, `league/${yahooLeagueKey}/scoreboard;week=${week}`),
+        yahooApiRequest(accessToken, `league/${yahooLeagueKey}/standings`),
+        yahooApiRequest(accessToken, `league/${yahooLeagueKey}/transactions`),
+    ]);
+
+    const leagueData = settingsData?.fantasy_content?.league?.[0];
+    const season = String(leagueData?.season || new Date().getFullYear());
+    const seasonStartMs = leagueData?.start_date ? Date.parse(`${leagueData.start_date}T00:00:00Z`) : null;
+    const startWeek = parseInt(leagueData?.start_week) || 1;
+
+    const standingsRows = parseYahooStandings(standingsData);
+    const scoreboardWeek = parseYahooScoreboard(scoreboardData, week);
+
+    const weekTransactions = parseYahooTransactions(transactionsData)
+        .filter(t => weekFromTimestamp(t.status_updated, seasonStartMs, startWeek) === week);
+
+    const playerKeys = [...new Set(weekTransactions.flatMap(t => t.player_keys || []))];
+    const playerMeta = {};
+    for (let i = 0; i < playerKeys.length; i += YAHOO_PLAYER_KEY_BATCH) {
+        const group = playerKeys.slice(i, i + YAHOO_PLAYER_KEY_BATCH);
+        const data = await yahooApiRequest(accessToken, `league/${yahooLeagueKey}/players;player_keys=${group.join(',')}`);
+        parseYahooPlayers(data).forEach(p => { playerMeta[p.id] = p; });
+    }
+
+    const teamKeys = [...new Set(scoreboardWeek.flatMap(m => (m.teams || []).map(t => t.team_key)).filter(Boolean))];
+    let rosterPlayersByTeamKey = {};
+    if (teamKeys.length) {
+        const rosterData = await yahooApiRequest(
+            accessToken,
+            `teams;team_keys=${teamKeys.join(',')}/roster;week=${week}/players/stats;type=week;week=${week}`
+        );
+        rosterPlayersByTeamKey = extractYahooRosterPlayers(rosterData);
+    }
+
+    const stats = computeYahooWeekStats({ scoreboardWeek, standingsRows, transactions: weekTransactions, rosterPlayersByTeamKey, playerMeta, week });
+
+    const narrative = await generateNarrative(leagueName, stats);
+    narrative.week = week;
+
+    return { leagueDbId, season, week, stats, narrative };
+};
+
 export default async function handler(req, res) {
     if (req.method !== 'GET' && req.method !== 'POST') {
         return res.status(405).json({ error: 'Method Not Allowed' });
@@ -351,7 +668,7 @@ export default async function handler(req, res) {
     // emailed -- everyone else's Pro status is ignored entirely for now, not
     // just skipped for email. Going public later is exactly one step:
     // delete this env var. Unset (the default), every Pro member of every
-    // Sleeper league is processed, same as before this existed.
+    // supported-platform league is processed, same as before this existed.
     const allowedEmails = (process.env.WEEKLY_SUMMARY_ALLOWED_EMAILS || '')
         .split(',')
         .map(e => e.trim().toLowerCase())
@@ -367,13 +684,19 @@ export default async function handler(req, res) {
         (memberships || []).forEach(row => {
             const league = row.leagues;
             const profile = row.profiles;
-            if (!league || league.platform !== 'sleeper') return;
+            // ESPN needs per-user cookie handling this endpoint doesn't have
+            // yet -- left out rather than guessed at.
+            if (!league || (league.platform !== 'sleeper' && league.platform !== 'yahoo')) return;
             if (onlyLeagueId && league.id !== onlyLeagueId) return;
             if (!profile?.is_premium || !profile?.email) return;
             if (allowedEmails.length && !allowedEmails.includes(profile.email.trim().toLowerCase())) return;
 
             if (!proLeagues.has(league.id)) {
-                proLeagues.set(league.id, { league, emails: new Set() });
+                // userId is only used for the Yahoo path (fetching a token
+                // to read the league with) -- Yahoo data is shared
+                // league-wide, so any Pro member's linked account works,
+                // and the first one seen is as good as any other.
+                proLeagues.set(league.id, { league, emails: new Set(), userId: row.user_id });
             }
             proLeagues.get(league.id).emails.add(profile.email);
         });
@@ -383,35 +706,47 @@ export default async function handler(req, res) {
                 processed: 0,
                 allowlistActive: allowedEmails.length > 0,
                 message: allowedEmails.length
-                    ? `No Sleeper league found where one of the allowed emails (${allowedEmails.join(', ')}) is a Pro member.`
-                    : 'No Sleeper leagues with a Pro member found.',
+                    ? `No Sleeper/Yahoo league found where one of the allowed emails (${allowedEmails.join(', ')}) is a Pro member.`
+                    : 'No Sleeper or Yahoo leagues with a Pro member found.',
             });
         }
 
-        const playersCache = await fetchJson('https://api.sleeper.app/v1/players/nfl');
+        const needsSleeper = [...proLeagues.values()].some(({ league }) => league.platform === 'sleeper');
+        const playersCache = needsSleeper ? await fetchJson('https://api.sleeper.app/v1/players/nfl') : null;
         const projectionsCache = new Map();
 
         const results = [];
-        for (const { league, emails } of proLeagues.values()) {
+        for (const { league, emails, userId } of proLeagues.values()) {
             try {
                 let week = weekOverride;
                 if (!week) {
+                    // NFL's own schedule pointer -- platform-agnostic, so
+                    // it's the shared source of "what week is it" for both
+                    // Sleeper and Yahoo leagues.
                     const nflState = await fetchJson('https://api.sleeper.app/v1/state/nfl');
                     const currentWeek = nflState.week || nflState.display_week || 1;
                     // "The week that just finished" -- by the time this cron
-                    // fires (Tuesday), Sleeper's own current-week pointer has
+                    // fires (Tuesday), the current-week pointer has
                     // typically already rolled forward to the upcoming week.
                     week = Math.max(1, currentWeek - 1);
                 }
 
-                const generated = await generateForLeague({
-                    leagueDbId: league.id,
-                    sleeperLeagueId: league.sleeper_league_id,
-                    leagueName: league.league_name || 'Your League',
-                    week,
-                    playersCache,
-                    projectionsCache,
-                });
+                const generated = league.platform === 'yahoo'
+                    ? await generateForYahooLeague({
+                        leagueDbId: league.id,
+                        yahooLeagueKey: league.sleeper_league_id,
+                        leagueName: league.league_name || 'Your League',
+                        week,
+                        userId,
+                    })
+                    : await generateForLeague({
+                        leagueDbId: league.id,
+                        sleeperLeagueId: league.sleeper_league_id,
+                        leagueName: league.league_name || 'Your League',
+                        week,
+                        playersCache,
+                        projectionsCache,
+                    });
 
                 if (!dryRun) {
                     const { error: upsertErr } = await supabase
