@@ -504,25 +504,28 @@ export default function Rosters() {
 
                 <div className={styles.teamProjBar}>
                     <div className={styles.teamProjText}>Wk {activeWeek} Projection</div>
-                    <div className={styles.teamProjRight}>
-                        <div className={styles.teamProjValue}>{teamProj.toFixed(2)} pts</div>
-                        {/* Only on the viewer's own team -- there's nothing to
-                            edit on someone else's roster, and this link always
-                            lands on the connected account's own team page
-                            regardless of which card it's clicked from. */}
-                        {String(rosterId) === String(myRosterId) && (
-                            <a
-                                className={styles.editLineupBtn}
-                                href={platformLink.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                            >
-                                <i className="material-icons">edit</i> Edit Lineup
-                            </a>
-                        )}
-                    </div>
+                    <div className={styles.teamProjValue}>{teamProj.toFixed(2)} pts</div>
                 </div>
+
+                {/* Only on the viewer's own team -- there's nothing to edit on
+                    someone else's roster, and this link always lands on the
+                    connected account's own team page regardless of which card
+                    it's clicked from. Its own row (not stacked under the
+                    points) so the projection bar stays a single line and this
+                    sits right above the Starting Lineup/Bench headers instead. */}
+                {String(rosterId) === String(myRosterId) && (
+                    <div className={styles.editLineupRow}>
+                        <a
+                            className={styles.editLineupBtn}
+                            href={platformLink.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <i className="material-icons">edit</i> Edit Lineup
+                        </a>
+                    </div>
+                )}
                 
                 {isTeamExpanded && (
                     <div className={isConsolidated ? styles.rosterGridConsolidated : styles.rosterGrid}>
