@@ -64,12 +64,12 @@ const players = {
     k1: { first_name: 'Kick', last_name: 'Er', position: 'K' },
 };
 
-// rb2 (actual 5) had the biggest projection -> actual shortfall (-10); every
-// other qualifying starter either beat or nearly met their projection. k1's
-// projection (6) sits below the 8-point qualifying floor, so it's excluded
-// even though its own variance would otherwise look worse than some.
+// Team Charlie (roster 3, rb2+wr2) is the only team whose combined starter
+// projection (100+12=112) exceeds its actual score (108.5) -- every other
+// team's actual score clears its own projected total by a wide margin, so
+// Charlie is the one, unambiguous biggest disappointment at the TEAM level.
 const projById = {
-    qb1: 28, qb2: 9, rb1: 18, rb2: 15, wr1: 20, wr2: 12, te1: 10, k1: 6,
+    qb1: 28, qb2: 9, rb1: 18, rb2: 100, wr1: 20, wr2: 12, te1: 10, k1: 6,
 };
 
 const transactions = [
@@ -101,10 +101,10 @@ check('TE MVP is the only TE starter', stats.mvpByPosition.TE.name, 'Tight End')
 check('K MVP is the only K starter', stats.mvpByPosition.K.name, 'Kick Er');
 check('no DEF starters this week means no DEF MVP entry', stats.mvpByPosition.DEF, undefined);
 
-// --- biggest disappointment ---
-check('the biggest disappointment is the worst projection shortfall among qualifying starters', stats.biggestDisappointment.name, 'Rusher Two');
-check('a starter below the qualifying projection floor is excluded even if its variance would look worse', stats.biggestDisappointment.name !== 'Kick Er', true);
-check('the reported variance is actual minus projected', stats.biggestDisappointment.variance, Math.round((5 - 15) * 100) / 100);
+// --- biggest disappointment is a TEAM, not a player ---
+check('the biggest disappointment is the team whose actual score fell short of its starters\' combined projection', stats.biggestDisappointment.team, 'Team Charlie');
+check('the reported variance is the team\'s actual total minus its projected total', stats.biggestDisappointment.variance, Math.round((108.5 - 112) * 100) / 100);
+check('the reported projected total is the sum of that team\'s own starters\' projections', stats.biggestDisappointment.projected, 112);
 
 // --- transactions summary ---
 check('waiver moves are counted separately from trades', stats.transactions.waiverCount, 1);
@@ -250,12 +250,11 @@ check('a trade lists both teams involved', yahooStats.transactions.trades[0].tea
 // ESPN -- reshaped into computeWeekStats' own input shape (buildEspnStatsInputs)
 // and run through that SAME already-tested function, rather than a separate
 // compute function -- ESPN publishes a real per-player projection alongside
-// the real actual, so there's nothing to redefine the way Yahoo's
-// team-only-projection path needed to. Same scores/players as the Sleeper
-// scenario at the top of this file (renamed), so the same stat picks
-// (blowout winner, MVPs, the disappointment/floor-exclusion pair) should
-// come out identically -- confirming the reshape preserves the numbers
-// rather than just matching computeWeekStats' shape.
+// the real actual, so there's nothing to redefine for ESPN specifically.
+// Same scores/players as the Sleeper scenario at the top of this file
+// (renamed), so the same stat picks (blowout winner, MVPs, the team-level
+// disappointment) should come out identically -- confirming the reshape
+// preserves the numbers rather than just matching computeWeekStats' shape.
 // ============================================================================
 
 const espnRosters = {
@@ -271,12 +270,11 @@ const espnPlayersMeta = {
     '201': { fn: 'Rusher', ln: 'One', pos: 'RB', actualPoints: 20, projectedPoints: 18 },
     '202': { fn: 'Wideout', ln: 'One', pos: 'WR', actualPoints: 15, projectedPoints: 20 },
     '203': { fn: 'Tight', ln: 'End', pos: 'TE', actualPoints: 8, projectedPoints: 10 },
-    // Biggest disappointment: worst projection shortfall (-10) among qualifiers.
-    '204': { fn: 'Rusher', ln: 'Two', pos: 'RB', actualPoints: 5, projectedPoints: 15 },
+    // 204+205's combined projection (112) is what pushes Team Charlie's
+    // actual (108.5) into the only negative team-level variance this week.
+    '204': { fn: 'Rusher', ln: 'Two', pos: 'RB', actualPoints: 5, projectedPoints: 100 },
     '205': { fn: 'Wideout', ln: 'Two', pos: 'WR', actualPoints: 25, projectedPoints: 12 },
     '206': { fn: 'Quinn', ln: 'Worst', pos: 'QB', actualPoints: 10, projectedPoints: 9 },
-    // Below the qualifying projection floor (8) -- must be excluded even
-    // though its own variance (+6) wouldn't have won anyway.
     '207': { fn: 'Kick', ln: 'Er', pos: 'K', actualPoints: 12, projectedPoints: 6 },
     '300': { fn: 'Add', ln: 'Ition', pos: 'WR', actualPoints: 0, projectedPoints: null },
     '301': { fn: 'Trade', ln: 'Away', pos: 'RB', actualPoints: 0, projectedPoints: null },
@@ -322,8 +320,8 @@ check('rivalry record gap is correct', espnStats.rivalry.recordGap, 10);
 check('QB MVP is the higher scorer', espnStats.mvpByPosition.QB.name, 'Ace Thrower');
 check('RB MVP is the higher scorer', espnStats.mvpByPosition.RB.name, 'Rusher One');
 check('WR MVP is the higher scorer', espnStats.mvpByPosition.WR.name, 'Wideout Two');
-check('the biggest disappointment is the worst qualifying projection shortfall', espnStats.biggestDisappointment.name, 'Rusher Two');
-check('a starter below the qualifying projection floor is excluded', espnStats.biggestDisappointment.name !== 'Kick Er', true);
+check('the biggest disappointment is a team, not a player, and matches the Sleeper scenario\'s pick', espnStats.biggestDisappointment.team, 'Team Charlie');
+check('the reported variance is the team\'s actual minus its starters\' combined projection', espnStats.biggestDisappointment.variance, Math.round((108.5 - 112) * 100) / 100);
 check('waiver and trade counts match the week-filtered transactions', [espnStats.transactions.waiverCount, espnStats.transactions.tradeCount], [1, 1]);
 check('a notable add resolves its team and FAAB bid', [espnStats.transactions.notableAdds[0].team, espnStats.transactions.notableAdds[0].faab], ['Team Charlie', 22]);
 

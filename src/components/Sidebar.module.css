@@ -121,17 +121,14 @@
     color: #eebf1c;
 }
 
-/* PREMIUM "PRO" BADGE FOR AI TOOLS */
+/* PREMIUM "PRO" BADGE FOR AI TOOLS -- pinned to the far right of its .link
+   row (margin-left: auto in a flex row) so every badge lines up on the same
+   right edge regardless of how long that row's own label text is, instead
+   of sitting wherever the text happens to end. */
 .proBadge {
-    background: rgba(238, 191, 28, 0.15);
-    color: #eebf1c;
-    border: 1px solid rgba(238, 191, 28, 0.3);
-    font-size: 0.65em;
-    font-weight: 900;
-    padding: 3px 6px;
-    border-radius: 4px;
-    letter-spacing: 0.5px;
-    margin-left: auto; /* Pushes badge to the far right */
+    height: 30px;
+    object-fit: contain;
+    margin-left: auto;
 }
 
 .dropdown {

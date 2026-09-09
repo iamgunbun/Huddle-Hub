@@ -155,15 +155,15 @@ export default function Sidebar({ isOpen, onClose }) {
                             </div>
                             <div className={styles.link} onClick={() => {navigate('/trade-analyzer'); if(onClose) onClose();}}>
                                 <i className="material-icons">query_stats</i> Trade Analyzer 
-                                <img src="/pro-banner.png" alt="PRO" style={{ height: '30px', marginLeft: '10px', verticalAlign: 'middle', objectFit: 'contain' }} />
+                                <img src="/pro-banner.png" alt="PRO" className={styles.proBadge} />
                             </div>
                             <div className={styles.link} onClick={() => {navigate('/draft-analyzer'); if(onClose) onClose();}}>
                                 <i className="material-icons">psychology</i> Draft Analyzer
-                                <img src="/pro-banner.png" alt="PRO" style={{ height: '30px', marginLeft: '10px', verticalAlign: 'middle', objectFit: 'contain' }} />
+                                <img src="/pro-banner.png" alt="PRO" className={styles.proBadge} />
                             </div>
                             <div className={styles.link} onClick={() => {navigate('/weekly-summary'); if(onClose) onClose();}}>
                                 <i className="material-icons">auto_awesome</i> Weekly Summary
-                                <img src="/pro-banner.png" alt="PRO" style={{ height: '30px', marginLeft: '10px', verticalAlign: 'middle', objectFit: 'contain' }} />
+                                <img src="/pro-banner.png" alt="PRO" className={styles.proBadge} />
                             </div>
                         </div>
 
