@@ -6,6 +6,7 @@ import { buildOwnedIndex, isPlayerOwned, isRosterableNflPlayer, playerNameKey } 
 import { fetchYahooAvailablePlayers } from '../utils/yahooService';
 import PlayerModal from '../components/PlayerModal';
 import { scoreStatLine } from '../utils/yahooScoring';
+import { getPlayerInjuryInfo } from '../utils/injuryStatus';
 import styles from './Players.module.css';
 import { isYahooLeagueId, isEspnLeagueId, isForeignPlatformLeague, sleeperFeedKey } from '../utils/platformIds';
 
@@ -405,14 +406,19 @@ export default function Players() {
         const playerId = player.player_id || pId;
         const matchup = getMatchupText(player);
         const proj = getProjPts(playerId);
+        const injury = getPlayerInjuryInfo(player);
 
         return (
             <div key={playerId} className={styles.playerRow} onClick={() => setSelectedPlayer(player)}>
                 <div className={styles.playerInfoGroup}>
                     <div className={styles.playerImg} style={{ backgroundImage: `url(${getAvatar(playerId, player.pos, player)}), url(https://sleepercdn.com/images/v2/icons/player_default.webp)` }}></div>
                     <div className={styles.playerMetaColLeft}>
-                        <div className={styles.pNameText}>{player.fn || player.first_name} {player.ln || player.last_name}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div className={styles.pNameText}>{player.fn || player.first_name} {player.ln || player.last_name}</div>
+                            {injury && <span className={[styles.injTag, styles['inj_' + injury.tone]].filter(Boolean).join(' ')} title={injury.label}>{injury.code}</span>}
+                        </div>
                         <div className={styles.posText}>{player.pos} • {player.t || player.team || 'FA'}</div>
+                        {injury?.reason && <div className={styles.injReasonText}>{injury.label}: {injury.reason}</div>}
                         <div className={styles.schedText}>{matchup}</div>
                     </div>
                 </div>

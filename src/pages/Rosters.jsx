@@ -11,6 +11,7 @@ import { isViewingLiveWeek, LIVE_SCORE_POLL_MS } from '../utils/liveScores';
 import { isYahooLeagueId, isEspnLeagueId, isForeignPlatformLeague, sleeperFeedKey } from '../utils/platformIds';
 import { resolveImageSrc, onImageError } from '../utils/imageFallback';
 import { getPlatformLink } from '../utils/platformLinks';
+import { getPlayerInjuryInfo } from '../utils/injuryStatus';
 import PlayerModal from '../components/PlayerModal';
 import styles from './Rosters.module.css';
 
@@ -371,18 +372,6 @@ export default function Rosters() {
         return isAway ? `@ ${cleanOpp}` : `VS ${cleanOpp}`;
     };
 
-    const getInjStatus = (status) => {
-        if (!status) return null;
-        const s = status.toLowerCase();
-        if (s === 'questionable') return 'Q';
-        if (s === 'out') return 'O';
-        if (s === 'doubtful') return 'D';
-        if (s === 'ir' || s === 'injured reserve') return 'IR';
-        if (s === 'pup') return 'PUP';
-        if (s === 'suspended') return 'SUS';
-        return null;
-    };
-
     const getAvatar = (pId, pMeta) => {
         // Yahoo player IDs don't correspond to sleepercdn's photo paths (which
         // are keyed by Sleeper's own IDs) -- prefer Yahoo's own headshot when
@@ -406,8 +395,8 @@ export default function Rosters() {
         const isPlaceholder = playerId === "0" || !player;
         
         const matchupText = getMatchupText(playerId);
-        const injTag = player ? getInjStatus(player.inj_status) : null;
-                 
+        const injury = player ? getPlayerInjuryInfo(player) : null;
+
         return (
             <div 
                 key={playerId + positionLabel + Math.random()} 
@@ -430,9 +419,10 @@ export default function Rosters() {
                             <div className={styles.playerMetaColLeft}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     <span className={styles.pNameText}>{player.fn} {player.ln}</span>
-                                    {injTag && <span className={styles.injTag}>{injTag}</span>}
+                                    {injury && <span className={[styles.injTag, styles['inj_' + injury.tone]].filter(Boolean).join(' ')} title={injury.label}>{injury.code}</span>}
                                 </div>
                                 <div className={styles.posText}>{player.pos} • {player.t || 'FA'}</div>
+                                {injury?.reason && <div className={styles.injReasonText}>{injury.label}: {injury.reason}</div>}
                                 <div className={styles.schedText}>{matchupText}</div>
                             </div>
                         </div>

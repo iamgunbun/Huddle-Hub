@@ -3,6 +3,7 @@ import { useLeague } from '../context/LeagueContext';
 import { getLeagueData } from '../utils/helper';
 import { scoreStatLine } from '../utils/yahooScoring';
 import { resolveSleeperStatsId, buildProjectedStatLine } from '../utils/playerStatLine';
+import { getPlayerInjuryInfo } from '../utils/injuryStatus';
 import styles from './PlayerModal.module.css';
 
 export default function PlayerModal({ player, week = 1, onClose }) {
@@ -51,6 +52,7 @@ export default function PlayerModal({ player, week = 1, onClose }) {
     };
 
     const team = normalizeTeam(player?.t || player?.team || 'FA');
+    const injury = getPlayerInjuryInfo(player);
 
     // 1. Initial Load of League Data & Season History
     useEffect(() => {
@@ -229,10 +231,11 @@ export default function PlayerModal({ player, week = 1, onClose }) {
         <div className={styles.overlay} onClick={handleOverlayClick}>
             <div className={styles.modalCard}>
                 
-                {player.inj_status && (
-                    <div className={styles.injuryBanner}>
+                {injury && (
+                    <div className={[styles.injuryBanner, styles['injuryBanner_' + injury.tone]].filter(Boolean).join(' ')}>
                         <i className="material-icons">help_outline</i>
-                        <span>{player.inj_status.toUpperCase()}</span>
+                        <span>{injury.label.toUpperCase()}</span>
+                        {injury.reason && <span className={styles.injuryReason}>— {injury.reason}</span>}
                     </div>
                 )}
 

@@ -50,6 +50,28 @@
     font-size: 0.75em;
     font-weight: 900;
     letter-spacing: 1px;
+    text-align: center;
+}
+
+/* Questionable/Doubtful read as a caution, not a certainty -- Out, IR,
+   Suspended etc. keep the more alarming red set above by default. */
+.injuryBanner_caution {
+    background: rgba(238, 191, 28, 0.2);
+    border-bottom-color: rgba(238, 191, 28, 0.4);
+    color: #eebf1c;
+}
+
+.injuryBanner_warning {
+    background: rgba(249, 115, 22, 0.2);
+    border-bottom-color: rgba(249, 115, 22, 0.4);
+    color: #fb923c;
+}
+
+.injuryReason {
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+    opacity: 0.85;
 }
 
 /* HERO HEADER CARD */
