@@ -325,13 +325,30 @@
 }
 
 .injTag {
-    background: #ef4444; 
+    background: #ef4444;
     color: #fff;
     font-size: 0.65em;
     font-weight: 800;
     padding: 1px 4px;
     border-radius: 4px;
     line-height: 1;
+}
+
+/* Questionable/Doubtful read as a caution, not a certainty -- Out, IR,
+   Suspended etc. keep the more alarming red .injTag already sets by default. */
+.inj_caution {
+    background: #eebf1c;
+    color: #1a1200;
+}
+
+.inj_warning {
+    background: #f97316;
+}
+
+.injReasonText {
+    color: #94a3b8;
+    font-size: 0.7em;
+    margin-top: 2px;
 }
 
 /* COMPACT SCORE STACKED BLOCK */

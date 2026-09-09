@@ -10,6 +10,7 @@ import { fetchAndNormalizeESPNMatchups, fetchAndNormalizeESPNRosters } from '../
 import { isViewingLiveWeek, LIVE_SCORE_POLL_MS } from '../utils/liveScores';
 import { isYahooLeagueId, isEspnLeagueId, isForeignPlatformLeague, sleeperFeedKey } from '../utils/platformIds';
 import { resolveImageSrc, onImageError } from '../utils/imageFallback';
+import { getPlayerInjuryInfo } from '../utils/injuryStatus';
 import PlayerModal from '../components/PlayerModal';
 import styles from './Matchups.module.css';
 
@@ -364,6 +365,22 @@ export default function Matchups() {
         return `${pObj.fn.charAt(0)}. ${pObj.ln}`;
     };
 
+    // Shared by all four starter/bench name cells (left/right x starters/bench)
+    // so the injury tag + reason only has to be built in one place.
+    const renderNameWithInjury = (pObj, emptyLabel) => {
+        if (!pObj) return <div className={styles.pNameText}>{emptyLabel}</div>;
+        const injury = getPlayerInjuryInfo(pObj);
+        return (
+            <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div className={styles.pNameText}>{formatShortName(pObj)}</div>
+                    {injury && <span className={[styles.injTag, styles['inj_' + injury.tone]].filter(Boolean).join(' ')} title={injury.label}>{injury.code}</span>}
+                </div>
+                {injury?.reason && <div className={styles.injReasonText}>{injury.label}: {injury.reason}</div>}
+            </>
+        );
+    };
+
     const toggleMatchupExpand = (mId) => {
         setExpandedMatchups(prev => ({ ...prev, [mId]: !prev[mId] }));
     };
@@ -471,7 +488,7 @@ export default function Matchups() {
                                     <div key={idx} className={styles.starterRow}>
                                         <div className={styles.leftPlayer} onClick={() => leftP && setSelectedPlayer(leftP)}>
                                             <div className={styles.playerMetaColLeft}>
-                                                <div className={styles.pNameText}>{leftP ? formatShortName(leftP) : 'Empty Slot'}</div>
+                                                {renderNameWithInjury(leftP, 'Empty Slot')}
                                                 {leftP && (
                                                     <>
                                                         <div className={styles.posText}>{leftP.pos} • {leftP.t || 'FA'}</div>
@@ -495,7 +512,7 @@ export default function Matchups() {
                                                 <span className={styles.playerProjSub}>{getPlayerProjPts(rightPId)}</span>
                                             </div>
                                             <div className={styles.playerMetaColRight}>
-                                                <div className={styles.pNameText}>{rightP ? formatShortName(rightP) : 'Empty Slot'}</div>
+                                                {renderNameWithInjury(rightP, 'Empty Slot')}
                                                 {rightP && (
                                                     <>
                                                         <div className={styles.posText}>{rightP.pos} • {rightP.t || 'FA'}</div>
@@ -527,7 +544,7 @@ export default function Matchups() {
                                             <div key={`bench-${idx}`} className={styles.starterRow}>
                                                 <div className={styles.leftPlayer} onClick={() => leftP && setSelectedPlayer(leftP)}>
                                                     <div className={styles.playerMetaColLeft}>
-                                                        <div className={styles.pNameText}>{leftP ? formatShortName(leftP) : 'Empty'}</div>
+                                                        {renderNameWithInjury(leftP, 'Empty')}
                                                         {leftP && (
                                                             <>
                                                                 <div className={styles.posText}>{leftP.pos} • {leftP.t || 'FA'}</div>
@@ -551,7 +568,7 @@ export default function Matchups() {
                                                         <span className={styles.playerProjSub}>{getPlayerProjPts(rightPId)}</span>
                                                     </div>
                                                     <div className={styles.playerMetaColRight}>
-                                                        <div className={styles.pNameText}>{rightP ? formatShortName(rightP) : 'Empty'}</div>
+                                                        {renderNameWithInjury(rightP, 'Empty')}
                                                         {rightP && (
                                                             <>
                                                                 <div className={styles.posText}>{rightP.pos} • {rightP.t || 'FA'}</div>
