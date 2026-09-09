@@ -304,10 +304,11 @@ export default function Managers() {
                 : nflState?.season_type === 'off' ? 'offseason'
                 : (nflState?.season_type === 'regular' ? 'in-season' : 'preseason');
 
-            const response = await fetch('/api/evaluate-manager', {
+            const response = await fetch('/api/evaluate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    action: 'manager',
                     managerId: manager.managerId,
                     leagueId,
                     teamName: manager.teamName,

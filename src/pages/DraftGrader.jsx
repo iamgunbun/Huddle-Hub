@@ -306,10 +306,10 @@ export default function DraftGrader() {
         `;
         
         try {
-            const response = await fetch('/api/evaluate-draft', {
+            const response = await fetch('/api/evaluate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: pipelinePrompt })
+                body: JSON.stringify({ action: 'draft', prompt: pipelinePrompt })
             });
 
             if (!response.ok) {
