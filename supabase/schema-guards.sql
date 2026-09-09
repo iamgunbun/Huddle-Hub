@@ -208,3 +208,43 @@ from auth.users u
 where p.id = u.id and p.email is null;
 
 create index if not exists profiles_email_idx on public.profiles (email);
+
+-- ---------------------------------------------------------------------------
+-- 6. Weekly Summaries -- the Pro recap generated every Tuesday.
+-- ---------------------------------------------------------------------------
+-- One row per league per week, not per user: the recap is the same objective
+-- account of what happened in that league's week regardless of which Pro
+-- member is reading it, so it's generated once (api/weekly-summary.js) and
+-- shared, the same reasoning league_rank_snapshots above already uses.
+-- `stats` holds the raw computed facts (matchup scores, blowout/closest
+-- call, position MVPs, transactions, etc.) that were handed to the AI to
+-- narrate -- kept alongside `narrative` so the app can render its own
+-- structured stat cards without re-parsing prose, and so a wrong narrative
+-- claim can be checked against the real numbers it was supposed to be
+-- grounded in.
+create table if not exists public.league_weekly_summaries (
+    league_id   uuid not null references public.leagues(id) on delete cascade,
+    season      text not null,
+    week        integer not null,
+    stats       jsonb not null,
+    narrative   text not null,
+    generated_at timestamptz not null default now(),
+    primary key (league_id, season, week)
+);
+
+alter table public.league_weekly_summaries enable row level security;
+
+drop policy if exists league_weekly_summaries_select_member on public.league_weekly_summaries;
+
+-- Read: any league member. Whether a given viewer is actually allowed to see
+-- the content is a Pro-subscription check the app makes (the same posture
+-- Trade Grader and the Managers scouting reports already use -- isPremium is
+-- an app-level gate, not an RLS one); RLS's job here is only "not some other
+-- league's data".
+create policy league_weekly_summaries_select_member on public.league_weekly_summaries
+    for select using (league_id in (select public.current_user_league_ids()));
+
+-- Write: nobody via the client, deliberately -- no insert/update policy for
+-- `authenticated` at all. Only api/weekly-summary.js writes these, using the
+-- service-role key (which bypasses RLS entirely), the same way every other
+-- server-only write in this app works.
