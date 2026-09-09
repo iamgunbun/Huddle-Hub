@@ -5,11 +5,10 @@ import BackButton from '../components/BackButton';
 import styles from './WeeklySummary.module.css';
 
 // Reads what api/weekly-summary.js already generated and stored -- this
-// page never talks to Gemini, Sleeper or Yahoo itself, it just renders the
+// page never talks to Gemini or any platform itself, it just renders the
 // shared row every Pro member of this league already has (RLS-gated by
-// league membership; see supabase/schema-guards.sql section 6). Sleeper and
-// Yahoo leagues only for now, matching that endpoint -- ESPN isn't
-// generated yet, so an ESPN league simply has no rows here.
+// league membership; see supabase/schema-guards.sql section 6). Covers
+// Sleeper, Yahoo, and ESPN leagues, matching that endpoint.
 export default function WeeklySummary() {
     const { activeLeague, isPremium, setShowPremiumModal } = useLeague();
     const [loading, setLoading] = useState(true);

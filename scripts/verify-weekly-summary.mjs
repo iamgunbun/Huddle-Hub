@@ -16,7 +16,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY ||= 'dummy-key-for-verify-script-only';
 // checked here -- this endpoint runs unattended on a Tuesday cron and emails
 // real Pro subscribers, so a wrong "biggest blowout" or "MVP" can't be caught
 // by a person looking at a screen before it ships the way a UI bug would be.
-const { computeWeekStats, teamNameFor, computeYahooWeekStats, teamNameForYahoo, extractYahooRosterPlayers } = await import('../api/weekly-summary.js');
+const { computeWeekStats, teamNameFor, computeYahooWeekStats, teamNameForYahoo, extractYahooRosterPlayers, buildEspnStatsInputs } = await import('../api/weekly-summary.js');
 
 let checks = 0;
 const check = (name, actual, expected) => {
@@ -245,5 +245,93 @@ check('a notable add is attributed to the right team', yahooStats.transactions.n
 check('a notable add carries its FAAB bid', yahooStats.transactions.notableAdds[0].faab, 22);
 check('a notable add resolves the player name via playerMeta', yahooStats.transactions.notableAdds[0].added, ['Add Ition']);
 check('a trade lists both teams involved', yahooStats.transactions.trades[0].teams.sort(), ['Team Alpha', 'Team Bravo'].sort());
+
+// ============================================================================
+// ESPN -- reshaped into computeWeekStats' own input shape (buildEspnStatsInputs)
+// and run through that SAME already-tested function, rather than a separate
+// compute function -- ESPN publishes a real per-player projection alongside
+// the real actual, so there's nothing to redefine the way Yahoo's
+// team-only-projection path needed to. Same scores/players as the Sleeper
+// scenario at the top of this file (renamed), so the same stat picks
+// (blowout winner, MVPs, the disappointment/floor-exclusion pair) should
+// come out identically -- confirming the reshape preserves the numbers
+// rather than just matching computeWeekStats' shape.
+// ============================================================================
+
+const espnRosters = {
+    1: { roster_id: 1, owner_id: 'owner1', team_name: 'Team Alpha', starters: ['200', '201'], settings: { wins: 8, losses: 2 } },
+    2: { roster_id: 2, owner_id: 'owner2', team_name: 'Team Bravo', starters: ['202', '203'], settings: { wins: 7, losses: 3 } },
+    3: { roster_id: 3, owner_id: 'owner3', team_name: 'Team Charlie', starters: ['204', '205'], settings: { wins: 2, losses: 8 } },
+    4: { roster_id: 4, owner_id: 'owner4', team_name: 'Team Delta', starters: ['206', '207'], settings: { wins: 1, losses: 9 } },
+};
+
+// actual/projected mirror the Sleeper fixture's qb1/rb1/wr1/te1/rb2/wr2/qb2/k1.
+const espnPlayersMeta = {
+    '200': { fn: 'Ace', ln: 'Thrower', pos: 'QB', actualPoints: 30, projectedPoints: 28 },
+    '201': { fn: 'Rusher', ln: 'One', pos: 'RB', actualPoints: 20, projectedPoints: 18 },
+    '202': { fn: 'Wideout', ln: 'One', pos: 'WR', actualPoints: 15, projectedPoints: 20 },
+    '203': { fn: 'Tight', ln: 'End', pos: 'TE', actualPoints: 8, projectedPoints: 10 },
+    // Biggest disappointment: worst projection shortfall (-10) among qualifiers.
+    '204': { fn: 'Rusher', ln: 'Two', pos: 'RB', actualPoints: 5, projectedPoints: 15 },
+    '205': { fn: 'Wideout', ln: 'Two', pos: 'WR', actualPoints: 25, projectedPoints: 12 },
+    '206': { fn: 'Quinn', ln: 'Worst', pos: 'QB', actualPoints: 10, projectedPoints: 9 },
+    // Below the qualifying projection floor (8) -- must be excluded even
+    // though its own variance (+6) wouldn't have won anyway.
+    '207': { fn: 'Kick', ln: 'Er', pos: 'K', actualPoints: 12, projectedPoints: 6 },
+    '300': { fn: 'Add', ln: 'Ition', pos: 'WR', actualPoints: 0, projectedPoints: null },
+    '301': { fn: 'Trade', ln: 'Away', pos: 'RB', actualPoints: 0, projectedPoints: null },
+};
+
+// Matchup 1 (Alpha vs Delta): the blowout. Matchup 2 (Bravo vs Charlie): the
+// closest call and (records 7-3 vs 2-8, gap 10 -- smaller than Alpha/Delta's 14)
+// the rivalry pick. Same scores as the Sleeper/Yahoo scenarios above.
+const espnByWeek = {
+    5: [
+        [
+            { roster_id: 1, points: 150.5, projected_points: 140 },
+            { roster_id: 4, points: 90.2, projected_points: 95 },
+        ],
+        [
+            { roster_id: 2, points: 110.0, projected_points: 100 },
+            { roster_id: 3, points: 108.5, projected_points: 130 },
+        ],
+    ],
+};
+
+const espnTransactions = [
+    { type: 'waiver', roster_ids: [3], adds: { '300': 3 }, settings: { waiver_bid: 22 }, leg: 5 },
+    { type: 'trade', roster_ids: [1, 2], adds: { '301': 2 }, leg: 5 },
+    // A different week's transaction -- must be excluded by the week filter.
+    { type: 'waiver', roster_ids: [4], adds: { '302': 4 }, settings: { waiver_bid: 5 }, leg: 4 },
+];
+
+const espnInputs = buildEspnStatsInputs({ byWeek: espnByWeek, week: 5, rosters: espnRosters, playersMeta: espnPlayersMeta, transactions: espnTransactions });
+
+// --- buildEspnStatsInputs' reshape itself ---
+check('each matchup pair becomes one row per team, sharing a matchup_id', espnInputs.matchups.filter(m => m.matchup_id === 1).map(m => m.roster_id).sort(), [1, 4]);
+check('starters_points is read off playersMeta.actualPoints in starter order', espnInputs.matchups.find(m => m.roster_id === 3).starters_points, [5, 25]);
+check('a synthetic user row carries the ESPN team name through as display_name', espnInputs.users.find(u => u.user_id === 'owner1').display_name, 'Team Alpha');
+check('transactions are filtered down to the requested week only', espnInputs.transactions.length, 2);
+
+// --- fed into the SAME computeWeekStats Sleeper uses -- same picks as the Sleeper scenario above ---
+const espnStats = computeWeekStats(espnInputs);
+
+check('the blowout is the largest-margin matchup', espnStats.blowout.winner, 'Team Alpha');
+check('the closest call / rivalry both land on the smaller-record-gap matchup', [espnStats.closestCall.teamA, espnStats.closestCall.teamB].sort(), ['Team Bravo', 'Team Charlie'].sort());
+check('rivalry record gap is correct', espnStats.rivalry.recordGap, 10);
+check('QB MVP is the higher scorer', espnStats.mvpByPosition.QB.name, 'Ace Thrower');
+check('RB MVP is the higher scorer', espnStats.mvpByPosition.RB.name, 'Rusher One');
+check('WR MVP is the higher scorer', espnStats.mvpByPosition.WR.name, 'Wideout Two');
+check('the biggest disappointment is the worst qualifying projection shortfall', espnStats.biggestDisappointment.name, 'Rusher Two');
+check('a starter below the qualifying projection floor is excluded', espnStats.biggestDisappointment.name !== 'Kick Er', true);
+check('waiver and trade counts match the week-filtered transactions', [espnStats.transactions.waiverCount, espnStats.transactions.tradeCount], [1, 1]);
+check('a notable add resolves its team and FAAB bid', [espnStats.transactions.notableAdds[0].team, espnStats.transactions.notableAdds[0].faab], ['Team Charlie', 22]);
+
+// --- a bye week (an unpaired team) doesn't crash the reshape ---
+const byeInputs = buildEspnStatsInputs({
+    byWeek: { 5: [[{ roster_id: 1, points: 100, projected_points: 90 }]] },
+    week: 5, rosters: espnRosters, playersMeta: espnPlayersMeta, transactions: [],
+});
+check('a bye-week pair with only one team produces one matchup row rather than throwing', byeInputs.matchups.length, 1);
 
 console.log(`OK: ${checks} weekly-summary checks passed`);

@@ -1,26 +1,29 @@
 // api/weekly-summary.js
 //
 // The Pro "Weekly Summary" feature: every Tuesday (see vercel.json's cron
-// entry), this generates one recap per Sleeper or Yahoo league that has at
-// least one Pro member, stores it (league_weekly_summaries -- read by
+// entry), this generates one recap per Sleeper, Yahoo, or ESPN league that
+// has at least one Pro member, stores it (league_weekly_summaries -- read by
 // src/pages/WeeklySummary.jsx), and emails it to every Pro member in that
-// league. ESPN isn't supported yet -- it needs per-user cookie handling this
-// endpoint doesn't have, so an ESPN league is silently skipped rather than
-// guessed at.
+// league.
 //
 // Every number in the email is computed here from the platform's own API
 // responses -- matchup scores, real per-player actual points where the
-// platform publishes them, and real weekly projections. Sleeper publishes
-// real per-player projections, scored under the league's own rules
-// (scoreStatLine, same function the client already uses for this). Yahoo
-// publishes NO per-player projection through its API -- only a per-TEAM
-// one -- so the Yahoo path (computeYahooWeekStats below) redefines
-// "biggest disappointment" at the team level instead of guessing a
-// player-level number Yahoo never actually gives out. Gemini is only ever
-// handed those already-verified facts and asked to narrate them -- the same
-// "give it real facts, let it write flavor" split api/evaluate.js's manager
-// report already uses -- specifically so it cannot invent a score, a name,
-// or a stat that didn't happen.
+// platform publishes them, and real weekly projections. Sleeper and ESPN
+// both publish real per-player projections (Sleeper's scored here under the
+// league's own rules via scoreStatLine, ESPN's read directly off its own
+// boxscore response), so both are fed through the SAME computeWeekStats
+// below -- ESPN's data is just reshaped into that same input shape first
+// (buildEspnStatsInputs) rather than given its own compute function, since
+// there's no real difference in what's available to redefine anything for.
+// Yahoo publishes NO per-player projection through its API -- only a
+// per-TEAM one -- so the Yahoo path (computeYahooWeekStats below) is a
+// genuinely separate pipeline that redefines "biggest disappointment" at
+// the team level instead of guessing a player-level number Yahoo never
+// actually gives out. Gemini is only ever handed those already-verified
+// facts and asked to narrate them -- the same "give it real facts, let it
+// write flavor" split api/evaluate.js's manager report already uses --
+// specifically so it cannot invent a score, a name, or a stat that didn't
+// happen.
 //
 // Manual testing, since this runs unattended and there's no way to exercise
 // a Tuesday cron trigger directly: GET this endpoint (same auth as the real
@@ -42,6 +45,14 @@ import {
     parseYahooPlayers,
     weekFromTimestamp,
 } from '../src/utils/yahooHistory.js';
+import {
+    parseEspnLeagueRosters,
+    parseEspnSchedule,
+    parseEspnTransactions,
+    parseEspnAthleteResponse,
+    espnDefenseMetaFromId,
+} from '../src/utils/espnParsers.js';
+import { fromEspnLeagueId } from '../src/utils/platformIds.js';
 
 const supabase = createClient(
     process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL,
@@ -169,6 +180,60 @@ export const computeWeekStats = ({ matchups, rosters, users, transactions, playe
     };
 
     return { week, games, blowout, closestCall, rivalry, mvpByPosition, biggestDisappointment, transactions: transactionSummary };
+};
+
+// --------------------------------------------------------------------------
+// ESPN -- reshaped into computeWeekStats' own input shape and run through
+// THAT function, rather than a separate compute function of its own. Unlike
+// Yahoo, ESPN's boxscore response carries a real per-player projection
+// alongside the real actual (parseEspnRosterEntry's projectedPoints/
+// actualPoints), so there's nothing about "biggest disappointment" or any
+// other stat here that needs to be defined differently for ESPN -- only the
+// shape of the response needs converting.
+// --------------------------------------------------------------------------
+
+/**
+ * Turns already-parsed ESPN data (parseEspnSchedule's byWeek, parseEspnLeagueRosters's
+ * rosters/playersMeta, parseEspnTransactions' rows) into exactly the shape
+ * computeWeekStats expects from Sleeper. Kept as its own pure, exported
+ * function -- separate from the network calls in generateForEspnLeague below --
+ * so this reshape (the one genuinely new piece of logic in the ESPN path) can
+ * be checked directly instead of only through a live request.
+ */
+export const buildEspnStatsInputs = ({ byWeek, week, rosters, playersMeta, transactions }) => {
+    const pairs = byWeek[week] || [];
+    const matchups = [];
+    pairs.forEach((teams, idx) => {
+        teams.forEach(t => {
+            const roster = rosters[t.roster_id];
+            const starters = roster?.starters || [];
+            matchups.push({
+                matchup_id: idx + 1,
+                roster_id: t.roster_id,
+                points: t.points || 0,
+                starters,
+                starters_points: starters.map(pid => playersMeta[pid]?.actualPoints ?? 0),
+            });
+        });
+    });
+
+    const rostersList = Object.values(rosters);
+    // computeWeekStats resolves a team's name via a users[] row keyed by
+    // owner_id (Sleeper's shape, one account per team) -- ESPN's roster
+    // already carries its team name directly, so each roster gets a
+    // matching synthetic "user" row instead of a real lookup.
+    const users = rostersList.map(r => ({ user_id: r.owner_id, display_name: r.team_name, metadata: {} }));
+
+    const players = {};
+    const projById = {};
+    Object.entries(playersMeta).forEach(([id, meta]) => {
+        players[id] = { first_name: meta.fn, last_name: meta.ln, position: meta.pos };
+        if (meta.projectedPoints != null) projById[id] = meta.projectedPoints;
+    });
+
+    const weekTransactions = transactions.filter(t => t.leg === week);
+
+    return { matchups, rosters: rostersList, users, transactions: weekTransactions, players, projById, week };
 };
 
 // --------------------------------------------------------------------------
@@ -519,6 +584,88 @@ const generateForLeague = async ({ leagueDbId, sleeperLeagueId, leagueName, week
 };
 
 // --------------------------------------------------------------------------
+// ESPN fetching. Self-contained rather than imported from api/espn-proxy.js
+// (same no-cross-imports convention as the Yahoo section below) -- but
+// unlike Yahoo, ESPN's own auth is just two stored cookies with no refresh
+// flow, so there's no token cache/expiry logic needed here at all. A public
+// league has no cookies stored at all and works fine without them; a
+// private one with missing or expired cookies fails with a 401, surfaced
+// as a per-league error in the results the same way any other failure is.
+// --------------------------------------------------------------------------
+
+const espnApiRequest = async (espnLeagueId, season, views, scoringPeriodId, cookies) => {
+    const viewParams = views.map(v => `view=${v}`).join('&');
+    const scoringPeriodParam = scoringPeriodId ? `&scoringPeriodId=${scoringPeriodId}` : '';
+    const url = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${espnLeagueId}?${viewParams}${scoringPeriodParam}`;
+    const headers = {};
+    if (cookies?.espnS2 && cookies?.swid) {
+        headers['Cookie'] = `espn_s2=${cookies.espnS2}; SWID=${cookies.swid};`;
+    }
+    const response = await fetch(url, { headers });
+    if (response.status === 401) {
+        throw new Error('Private ESPN league: missing or expired espn_s2/SWID cookies.');
+    }
+    if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        throw new Error(`ESPN API -> HTTP ${response.status}: ${body}`);
+    }
+    return response.json();
+};
+
+const getEspnCookies = async (userId) => {
+    const { data } = await supabase
+        .from('user_integrations')
+        .select('access_token, refresh_token')
+        .eq('user_id', userId)
+        .eq('provider', 'espn')
+        .maybeSingle();
+    // No stored row just means a public league that was never given cookies --
+    // proceed without them, same as api/espn-proxy.js does.
+    return data ? { espnS2: data.access_token, swid: data.refresh_token } : {};
+};
+
+const generateForEspnLeague = async ({ leagueDbId, espnLeagueId, season, leagueName, week, userId }) => {
+    const cookies = await getEspnCookies(userId);
+    const data = await espnApiRequest(espnLeagueId, season, ['mTeam', 'mRoster', 'mMatchup', 'mTransactions2'], week, cookies);
+
+    const { rosters, yahooPlayersMeta: playersMeta } = parseEspnLeagueRosters(data, { week, resolvedSwid: null });
+    const byWeek = parseEspnSchedule(data.schedule);
+    const transactions = parseEspnTransactions(data.transactions);
+
+    // The transaction feed carries a bare player id, not a name -- current
+    // rosters cover most of them, but a player dropped earlier and rostered
+    // by nobody right now needs a best-effort name from ESPN's public
+    // (cookie-free) athlete lookup, the same fallback fetchESPNTransactions
+    // already uses client-side.
+    const weekPlayerIds = new Set(
+        transactions.filter(t => t.leg === week).flatMap(t => [...Object.keys(t.adds || {}), ...Object.keys(t.drops || {})])
+    );
+    for (const id of weekPlayerIds) {
+        if (playersMeta[id]) continue;
+        const defenseMeta = espnDefenseMetaFromId(id);
+        if (defenseMeta) { playersMeta[id] = defenseMeta; continue; }
+        try {
+            const res = await fetch(`https://site.api.espn.com/apis/common/v3/sports/football/nfl/athletes/${id}`);
+            if (res.ok) {
+                const meta = parseEspnAthleteResponse(await res.json());
+                if (meta) playersMeta[id] = meta;
+            }
+        } catch {
+            // Best-effort -- this player just stays unresolved, same as the
+            // client-side fallback degrades when ESPN's public API doesn't answer.
+        }
+    }
+
+    const inputs = buildEspnStatsInputs({ byWeek, week, rosters, playersMeta, transactions });
+    const stats = computeWeekStats(inputs);
+
+    const narrative = await generateNarrative(leagueName, stats);
+    narrative.week = week;
+
+    return { leagueDbId, season: String(season), week, stats, narrative };
+};
+
+// --------------------------------------------------------------------------
 // Yahoo OAuth + fetching. Self-contained rather than imported from
 // api/yahoo-proxy.js -- this codebase's api/*.js files don't import each
 // other, each is its own deployed function -- but the token cache/refresh
@@ -684,18 +831,17 @@ export default async function handler(req, res) {
         (memberships || []).forEach(row => {
             const league = row.leagues;
             const profile = row.profiles;
-            // ESPN needs per-user cookie handling this endpoint doesn't have
-            // yet -- left out rather than guessed at.
-            if (!league || (league.platform !== 'sleeper' && league.platform !== 'yahoo')) return;
+            if (!league || !['sleeper', 'yahoo', 'espn'].includes(league.platform)) return;
             if (onlyLeagueId && league.id !== onlyLeagueId) return;
             if (!profile?.is_premium || !profile?.email) return;
             if (allowedEmails.length && !allowedEmails.includes(profile.email.trim().toLowerCase())) return;
 
             if (!proLeagues.has(league.id)) {
-                // userId is only used for the Yahoo path (fetching a token
-                // to read the league with) -- Yahoo data is shared
-                // league-wide, so any Pro member's linked account works,
-                // and the first one seen is as good as any other.
+                // userId is only used for the Yahoo and ESPN paths (fetching
+                // a token / stored cookies to read the league with) -- both
+                // platforms' league data is shared league-wide, so any Pro
+                // member's linked account works, and the first one seen is
+                // as good as any other.
                 proLeagues.set(league.id, { league, emails: new Set(), userId: row.user_id });
             }
             proLeagues.get(league.id).emails.add(profile.email);
@@ -706,8 +852,8 @@ export default async function handler(req, res) {
                 processed: 0,
                 allowlistActive: allowedEmails.length > 0,
                 message: allowedEmails.length
-                    ? `No Sleeper/Yahoo league found where one of the allowed emails (${allowedEmails.join(', ')}) is a Pro member.`
-                    : 'No Sleeper or Yahoo leagues with a Pro member found.',
+                    ? `No league found where one of the allowed emails (${allowedEmails.join(', ')}) is a Pro member.`
+                    : 'No leagues with a Pro member found.',
             });
         }
 
@@ -721,8 +867,8 @@ export default async function handler(req, res) {
                 let week = weekOverride;
                 if (!week) {
                     // NFL's own schedule pointer -- platform-agnostic, so
-                    // it's the shared source of "what week is it" for both
-                    // Sleeper and Yahoo leagues.
+                    // it's the shared source of "what week is it" across
+                    // Sleeper, Yahoo, and ESPN leagues alike.
                     const nflState = await fetchJson('https://api.sleeper.app/v1/state/nfl');
                     const currentWeek = nflState.week || nflState.display_week || 1;
                     // "The week that just finished" -- by the time this cron
@@ -735,6 +881,15 @@ export default async function handler(req, res) {
                     ? await generateForYahooLeague({
                         leagueDbId: league.id,
                         yahooLeagueKey: league.sleeper_league_id,
+                        leagueName: league.league_name || 'Your League',
+                        week,
+                        userId,
+                    })
+                    : league.platform === 'espn'
+                    ? await generateForEspnLeague({
+                        leagueDbId: league.id,
+                        espnLeagueId: fromEspnLeagueId(league.sleeper_league_id),
+                        season: league.season,
                         leagueName: league.league_name || 'Your League',
                         week,
                         userId,
