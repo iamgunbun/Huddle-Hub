@@ -10,11 +10,17 @@ import { fetchAndNormalizeESPNMatchups, fetchAndNormalizeESPNRosters } from '../
 import { isViewingLiveWeek, LIVE_SCORE_POLL_MS } from '../utils/liveScores';
 import { isYahooLeagueId, isEspnLeagueId, isForeignPlatformLeague, sleeperFeedKey } from '../utils/platformIds';
 import { resolveImageSrc, onImageError } from '../utils/imageFallback';
+import { getPlatformLink } from '../utils/platformLinks';
 import PlayerModal from '../components/PlayerModal';
 import styles from './Rosters.module.css';
 
 export default function Rosters() {
     const { activeLeague } = useLeague();
+    // Same link Sidebar.jsx's "Go to <platform>" already uses -- on every
+    // platform this lands on the connected account's own team page, which is
+    // where lineup editing actually lives (none of the three has a separate
+    // "edit lineup" URL apart from the team page itself).
+    const platformLink = getPlatformLink(activeLeague);
     // On Yahoo/ESPN the dictionary is keyed by that platform's player ids, which
     // must never be used against Sleeper's own stat feeds (see sleeperFeedKey).
     const foreignPlatform = isForeignPlatformLeague(activeLeague?.sleeper_league_id);
@@ -498,7 +504,24 @@ export default function Rosters() {
 
                 <div className={styles.teamProjBar}>
                     <div className={styles.teamProjText}>Wk {activeWeek} Projection</div>
-                    <div className={styles.teamProjValue}>{teamProj.toFixed(2)} pts</div>
+                    <div className={styles.teamProjRight}>
+                        <div className={styles.teamProjValue}>{teamProj.toFixed(2)} pts</div>
+                        {/* Only on the viewer's own team -- there's nothing to
+                            edit on someone else's roster, and this link always
+                            lands on the connected account's own team page
+                            regardless of which card it's clicked from. */}
+                        {String(rosterId) === String(myRosterId) && (
+                            <a
+                                className={styles.editLineupBtn}
+                                href={platformLink.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <i className="material-icons">edit</i> Edit Lineup
+                            </a>
+                        )}
+                    </div>
                 </div>
                 
                 {isTeamExpanded && (
