@@ -22,6 +22,7 @@ import Messages from './pages/Messages';
 import StartSit from './pages/StartSit';
 import TradeGrader from './pages/TradeGrader';
 import DraftGrader from './pages/DraftGrader';
+import WeeklySummary from './pages/WeeklySummary';
 
 // League Info & History
 import Rosters from './pages/Rosters';
@@ -89,6 +90,7 @@ function App() {
                         <Route path="/start-sit" element={<StartSit />} />
                         <Route path="/trade-analyzer" element={<TradeGrader />} />
                         <Route path="/draft-analyzer" element={<DraftGrader />} />
+                        <Route path="/weekly-summary" element={<WeeklySummary />} />
                         
                         <Route path="/rosters" element={<Rosters />} />
                         <Route path="/add-league" element={<AddLeague />} />

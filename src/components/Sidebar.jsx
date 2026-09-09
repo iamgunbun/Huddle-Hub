@@ -158,7 +158,11 @@ export default function Sidebar({ isOpen, onClose }) {
                                 <img src="/pro-banner.png" alt="PRO" style={{ height: '30px', marginLeft: '10px', verticalAlign: 'middle', objectFit: 'contain' }} />
                             </div>
                             <div className={styles.link} onClick={() => {navigate('/draft-analyzer'); if(onClose) onClose();}}>
-                                <i className="material-icons">psychology</i> Draft Analyzer 
+                                <i className="material-icons">psychology</i> Draft Analyzer
+                                <img src="/pro-banner.png" alt="PRO" style={{ height: '30px', marginLeft: '10px', verticalAlign: 'middle', objectFit: 'contain' }} />
+                            </div>
+                            <div className={styles.link} onClick={() => {navigate('/weekly-summary'); if(onClose) onClose();}}>
+                                <i className="material-icons">auto_awesome</i> Weekly Summary
                                 <img src="/pro-banner.png" alt="PRO" style={{ height: '30px', marginLeft: '10px', verticalAlign: 'middle', objectFit: 'contain' }} />
                             </div>
                         </div>
