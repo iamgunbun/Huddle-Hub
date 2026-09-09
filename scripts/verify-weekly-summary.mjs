@@ -16,7 +16,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY ||= 'dummy-key-for-verify-script-only';
 // checked here -- this endpoint runs unattended on a Tuesday cron and emails
 // real Pro subscribers, so a wrong "biggest blowout" or "MVP" can't be caught
 // by a person looking at a screen before it ships the way a UI bug would be.
-const { computeWeekStats, teamNameFor, computeYahooWeekStats, teamNameForYahoo, extractYahooRosterPlayers, buildEspnStatsInputs } = await import('../api/weekly-summary.js');
+const { computeWeekStats, teamNameFor, computeYahooWeekStats, teamNameForYahoo, extractYahooRosterPlayers, buildEspnStatsInputs, buildDigestEmailHtml } = await import('../api/weekly-summary.js');
 
 let checks = 0;
 const check = (name, actual, expected) => {
@@ -333,5 +333,23 @@ const byeInputs = buildEspnStatsInputs({
     week: 5, rosters: espnRosters, playersMeta: espnPlayersMeta, transactions: [],
 });
 check('a bye-week pair with only one team produces one matchup row rather than throwing', byeInputs.matchups.length, 1);
+
+// ============================================================================
+// Digest email -- ONE email per recipient covering every league of theirs
+// that's ready, not one full-recap email per league. A Pro member in 6
+// leagues used to get 6 separate emails every Tuesday; this checks the
+// digest lists all of them with a working per-league link instead.
+// ============================================================================
+
+const digestLeagues = [
+    { leagueId: 'league-a', leagueName: 'Dynasty Warriors', headline: 'Alpha survives a shootout', week: 5 },
+    { leagueId: 'league-b', leagueName: 'Redraft Rumble', headline: 'Bravo squeaks by', week: 5 },
+];
+const digestHtml = buildDigestEmailHtml(digestLeagues);
+
+check('the digest names every league it covers', ['Dynasty Warriors', 'Redraft Rumble'].every(name => digestHtml.includes(name)), true);
+check('each league gets its own View Summary link, deep-linked by id', digestHtml.includes('/weekly-summary?league=league-a') && digestHtml.includes('/weekly-summary?league=league-b'), true);
+check('the digest headline is plural for more than one league', digestHtml.includes('Your Weekly Summaries Are Ready'), true);
+check('a single-league digest uses the singular headline instead', buildDigestEmailHtml([digestLeagues[0]]).includes('Your Weekly Summary Is Ready'), true);
 
 console.log(`OK: ${checks} weekly-summary checks passed`);

@@ -2,9 +2,13 @@
 //
 // The Pro "Weekly Summary" feature: every Tuesday (see vercel.json's cron
 // entry), this generates one recap per Sleeper, Yahoo, or ESPN league that
-// has at least one Pro member, stores it (league_weekly_summaries -- read by
-// src/pages/WeeklySummary.jsx), and emails it to every Pro member in that
-// league.
+// has at least one Pro member, and stores it (league_weekly_summaries --
+// read by src/pages/WeeklySummary.jsx). The full recap only ever lives in
+// the app: each Pro member gets ONE short "your recaps are ready" digest
+// email afterward (buildDigestEmailHtml/sendDigestEmail below), listing
+// every league of theirs that's ready with a button straight into each --
+// not one full-recap email per league, which is what a member in several
+// leagues used to get flooded with every Tuesday.
 //
 // Every number in the email is computed here from the platform's own API
 // responses -- matchup scores, real per-player actual points where the
@@ -471,12 +475,20 @@ const escapeHtml = (str) => String(str ?? '')
 
 const APP_URL = 'https://huddleff.app';
 
-const buildEmailHtml = (leagueName, narrative) => {
-    const section = (title, body) => `
+// One email per RECIPIENT, not per league -- a Pro member in several
+// leagues used to get one full-recap email per league, every Tuesday. This
+// is a short "your recaps are ready" notice with one button per league
+// (linking straight to that league's recap -- see the ?league= handling in
+// WeeklySummary.jsx) instead, however many leagues that person is Pro in.
+// The full narrative only ever lives in the app.
+export const buildDigestEmailHtml = (leagues) => {
+    const rows = leagues.map(l => `
         <tr><td style="padding: 16px 0; border-bottom: 1px solid #eee;">
-            <div style="font-weight: 700; font-size: 14px; color: #111; margin-bottom: 4px;">${escapeHtml(title)}</div>
-            <div style="font-size: 14px; color: #444; line-height: 1.5;">${escapeHtml(body)}</div>
-        </td></tr>`;
+            <div style="font-weight: 700; font-size: 14px; color: #111; margin-bottom: 2px;">${escapeHtml(l.leagueName)}</div>
+            <div style="font-size: 13px; color: #666; line-height: 1.5; margin-bottom: 10px;">${escapeHtml(l.headline)}</div>
+            <a href="${APP_URL}/weekly-summary?league=${encodeURIComponent(l.leagueId)}" style="display: inline-block; padding: 10px 22px; background: #eebf1c; color: #111; text-decoration: none; font-weight: 700; font-size: 13px; border-radius: 8px;">View Summary</a>
+        </td></tr>`).join('');
+
     return `
     <div style="background:#0b0f16; padding: 32px 16px; font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden;">
@@ -488,26 +500,17 @@ const buildEmailHtml = (leagueName, narrative) => {
             </tr>
             <tr>
                 <td style="padding: 28px 32px 8px;">
-                    <h1 style="margin: 0 0 4px; font-size: 20px; color: #111;">${escapeHtml(narrative.headline)}</h1>
-                    <p style="margin: 0 0 8px; font-size: 13px; color: #888;">${escapeHtml(leagueName)}</p>
+                    <h1 style="margin: 0 0 4px; font-size: 20px; color: #111;">${leagues.length === 1 ? 'Your Weekly Summary Is Ready' : 'Your Weekly Summaries Are Ready'}</h1>
+                    <p style="margin: 0 0 8px; font-size: 13px; color: #888;">${leagues.length} league${leagues.length === 1 ? '' : 's'} recapped -- tap in to see the damage.</p>
                 </td>
             </tr>
             <tr><td style="padding: 0 32px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                ${section('Matchup Recap', narrative.matchupRecap)}
-                ${section('MVP Spotlight', narrative.mvpSpotlight)}
-                ${section('Disappointment of the Week', narrative.disappointmentOfTheWeek)}
-                ${section('Rivalry Watch', narrative.rivalryWatch)}
-                ${section('Waiver Wire Buzz', narrative.waiverWireBuzz)}
+                ${rows}
             </table></td></tr>
-            <tr>
-                <td style="padding: 24px 32px; text-align: center;">
-                    <a href="${APP_URL}/weekly-summary" style="display: inline-block; padding: 12px 28px; background: #eebf1c; color: #111; text-decoration: none; font-weight: 700; font-size: 14px; border-radius: 8px;">See the Full Summary</a>
-                </td>
-            </tr>
             <tr>
                 <td style="padding: 20px 32px; background: #f7f7f8; text-align: center;">
                     <p style="margin: 0; font-size: 12px; color: #888;">
-                        You're getting this because you're a Huddle Pro subscriber in ${escapeHtml(leagueName)}.
+                        You're getting this because you're a Huddle Pro subscriber.
                         Manage your subscription in <a href="${APP_URL}/account" style="color: #888;">Account Settings</a>.
                     </p>
                 </td>
@@ -516,24 +519,28 @@ const buildEmailHtml = (leagueName, narrative) => {
     </div>`;
 };
 
-const sendSummaryEmail = async (email, leagueName, narrative) => {
+const sendDigestEmail = async (email, leagues) => {
     if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
-        console.error('Resend is not configured -- skipping weekly summary email send.');
+        console.error('Resend is not configured -- skipping weekly summary digest email.');
         return { sent: false, reason: 'not_configured' };
     }
+    const week = leagues[0]?.week;
+    const subject = leagues.length === 1
+        ? `${leagues[0].leagueName} Week ${week ?? ''} Recap Is Ready`
+        : `Your Week ${week ?? ''} Weekly Summaries Are Ready (${leagues.length} leagues)`;
     const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
             from: process.env.RESEND_FROM_EMAIL,
             to: email,
-            subject: `${leagueName} Week ${narrative.week || ''} Recap: ${narrative.headline}`,
-            html: buildEmailHtml(leagueName, narrative),
+            subject,
+            html: buildDigestEmailHtml(leagues),
         }),
     });
     if (!response.ok) {
         const errBody = await response.json().catch(() => ({}));
-        console.error('Weekly summary email failed:', errBody);
+        console.error('Weekly summary digest email failed:', errBody);
         return { sent: false, reason: 'send_failed' };
     }
     return { sent: true };
@@ -862,6 +869,12 @@ export default async function handler(req, res) {
         const projectionsCache = new Map();
 
         const results = [];
+        // Built up as leagues succeed, then flushed as ONE digest email per
+        // recipient after the whole batch is done -- not per league as it's
+        // computed -- so a Pro member in several leagues gets one email
+        // listing all of them, not one email per league.
+        const digestByEmail = new Map();
+
         for (const { league, emails, userId } of proLeagues.values()) {
             try {
                 let week = weekOverride;
@@ -917,18 +930,32 @@ export default async function handler(req, res) {
                     if (upsertErr) throw upsertErr;
 
                     for (const email of emails) {
-                        await sendSummaryEmail(email, league.league_name || 'Your League', generated.narrative);
+                        if (!digestByEmail.has(email)) digestByEmail.set(email, []);
+                        digestByEmail.get(email).push({
+                            leagueId: league.id,
+                            leagueName: league.league_name || 'Your League',
+                            headline: generated.narrative.headline,
+                            week: generated.week,
+                        });
                     }
                 }
 
-                results.push({ leagueId: league.id, leagueName: league.league_name, week: generated.week, emailsSent: dryRun ? 0 : emails.size, ...(dryRun ? { stats: generated.stats, narrative: generated.narrative } : {}) });
+                results.push({ leagueId: league.id, leagueName: league.league_name, week: generated.week, recipients: dryRun ? 0 : emails.size, ...(dryRun ? { stats: generated.stats, narrative: generated.narrative } : {}) });
             } catch (leagueErr) {
                 console.error(`Weekly summary failed for league ${league.id}:`, leagueErr);
                 results.push({ leagueId: league.id, leagueName: league.league_name, error: leagueErr.message });
             }
         }
 
-        return res.status(200).json({ processed: results.length, dryRun, allowlistActive: allowedEmails.length > 0, results });
+        let digestsSent = 0;
+        if (!dryRun) {
+            for (const [email, leagues] of digestByEmail) {
+                const sendResult = await sendDigestEmail(email, leagues);
+                if (sendResult.sent) digestsSent++;
+            }
+        }
+
+        return res.status(200).json({ processed: results.length, dryRun, allowlistActive: allowedEmails.length > 0, digestsSent, results });
     } catch (error) {
         console.error('weekly-summary handler error:', error);
         return res.status(500).json({ error: error.toString() });
