@@ -19,15 +19,18 @@
 // below -- ESPN's data is just reshaped into that same input shape first
 // (buildEspnStatsInputs) rather than given its own compute function, since
 // there's no real difference in what's available to redefine anything for.
-// Yahoo publishes NO per-player projection through its API -- only a
-// per-TEAM one -- so the Yahoo path (computeYahooWeekStats below) is a
-// genuinely separate pipeline that redefines "biggest disappointment" at
-// the team level instead of guessing a player-level number Yahoo never
-// actually gives out. Gemini is only ever handed those already-verified
-// facts and asked to narrate them -- the same "give it real facts, let it
-// write flavor" split api/evaluate.js's manager report already uses --
-// specifically so it cannot invent a score, a name, or a stat that didn't
-// happen.
+// "Biggest disappointment" is a TEAM there too, not one player -- a whole
+// roster no-showing roasts better than singling someone out -- which is
+// also all Yahoo ever had to work with (it publishes no per-player
+// projection through its API, only a per-team one). Yahoo's roster/points
+// data still arrives in a genuinely different shape than Sleeper's/ESPN's
+// though (a separate scoreboard-vs-roster fetch, selected_position-based
+// starter filtering), so it keeps its own pipeline (computeYahooWeekStats
+// below) rather than being reshaped into computeWeekStats too. Gemini is
+// only ever handed those already-verified facts and asked to narrate them
+// -- the same "give it real facts, let it write flavor" split
+// api/evaluate.js's manager report already uses -- specifically so it
+// cannot invent a score, a name, or a stat that didn't happen.
 //
 // Manual testing, since this runs unattended and there's no way to exercise
 // a Tuesday cron trigger directly: GET this endpoint (same auth as the real
@@ -64,12 +67,6 @@ const supabase = createClient(
 );
 
 const POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
-// A starter has to have been a real, rosterable factor for a low score to
-// read as a "disappointment" rather than just a bench-caliber player doing
-// bench-caliber-player things -- gated on a real weekly projection instead
-// of a arbitrary points floor, since a projection already accounts for who
-// this specific player was expected to be this specific week.
-const DISAPPOINTMENT_MIN_PROJECTION = 8;
 
 export const teamNameFor = (rosterId, rosters, users) => {
     const roster = rosters.find(r => r.roster_id === rosterId);
@@ -154,11 +151,24 @@ export const computeWeekStats = ({ matchups, rosters, users, transactions, playe
         }
     });
 
-    const disappointments = starterPerf
-        .filter(p => p.projected != null && p.projected >= DISAPPOINTMENT_MIN_PROJECTION)
-        .map(p => ({ ...p, variance: Math.round((p.actual - p.projected) * 100) / 100 }))
-        .sort((a, b) => a.variance - b.variance);
-    const biggestDisappointment = disappointments[0] || null;
+    // Biggest disappointment is a TEAM'S shortfall against its own
+    // projected total (the sum of its starters' individual projections),
+    // not one player's -- roasting "your whole roster no-showed" reads
+    // funnier than singling out one guy, and it's what puts Sleeper/ESPN on
+    // the same footing as Yahoo, which only ever had a team-level number to
+    // work with in the first place (see computeYahooWeekStats below).
+    const teamVariances = matchups.map(m => {
+        const projectedTotal = (m.starters || []).reduce((sum, pid) => sum + (projById[pid] ?? 0), 0);
+        return {
+            team: teamNameFor(m.roster_id, rosters, users),
+            actual: Math.round((m.points || 0) * 100) / 100,
+            projected: Math.round(projectedTotal * 100) / 100,
+            variance: Math.round(((m.points || 0) - projectedTotal) * 100) / 100,
+        };
+    }).filter(t => t.projected > 0);
+    const biggestDisappointment = teamVariances.length
+        ? [...teamVariances].sort((a, b) => a.variance - b.variance)[0]
+        : null;
 
     const waiverMoves = transactions.filter(t => t.type === 'waiver' || t.type === 'free_agent');
     const trades = transactions.filter(t => t.type === 'trade');
@@ -329,16 +339,15 @@ export const extractYahooRosterPlayers = (data) => {
 };
 
 /**
- * Yahoo's equivalent of computeWeekStats. Two real differences from
- * Sleeper's version, both forced by what Yahoo's API actually publishes:
- *
- *  - biggestDisappointment is a TEAM (Yahoo's own team-level points vs.
- *    team-level projected_points from the scoreboard), not a player --
- *    Yahoo has no per-player projection to compare a player's actual
- *    points against.
- *  - starterPerf/mvpByPosition draws only from players extractYahooRosterPlayers
- *    marked as started (selected_position outside the bench/IR slots), since
- *    Yahoo's roster response includes the whole bench too.
+ * Yahoo's equivalent of computeWeekStats. biggestDisappointment is a team
+ * here (Yahoo's own team-level points vs. team-level projected_points from
+ * the scoreboard) the same way computeWeekStats' now is for Sleeper/ESPN --
+ * Yahoo just never had a player-level projection to begin with, so this was
+ * always the one platform this had to be true for. The real, Yahoo-specific
+ * difference is starterPerf/mvpByPosition, which draws only from players
+ * extractYahooRosterPlayers marked as started (selected_position outside
+ * the bench/IR slots), since Yahoo's roster response includes the whole
+ * bench too.
  */
 export const computeYahooWeekStats = ({ scoreboardWeek, standingsRows, transactions, rosterPlayersByTeamKey, playerMeta, week }) => {
     const games = scoreboardWeek
@@ -432,7 +441,7 @@ Write a recap with these sections, each 1-3 sentences, punchy and specific (use 
 - headline: A punchy 5-10 word headline for the week.
 - matchupRecap: Cover the week's matchups, calling out the biggest blowout and the closest call by name and score.
 - mvpSpotlight: Call out the standout position MVPs (the highest scorer at each position) by name.
-- disappointmentOfTheWeek: Playfully roast the biggest disappointment (if one exists in the data) -- by player name if the data has one, otherwise by team name -- comparing the actual score to what was projected.
+- disappointmentOfTheWeek: Roast the biggest disappointment (if one exists in the data) -- it's always a TEAM, not a player, so go after the whole roster/manager, not one guy. Really lean into it: compare their actual score to what they were projected for and let them have it.
 - rivalryWatch: Frame this week's most evenly-matched-by-record matchup as a rivalry, if one exists in the data.
 - waiverWireBuzz: Summarize the week's trades and waiver activity -- who made moves, and any FAAB bids worth calling out.
 
