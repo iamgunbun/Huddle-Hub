@@ -38,7 +38,7 @@ export const yahooField = (entity, field) => {
 };
 
 /** Finds a named sub-node among the values of a wrapper object/array. */
-const findNode = (node, key) => {
+export const findNode = (node, key) => {
     for (const value of yahooCollection(node)) {
         if (value && typeof value === 'object' && value[key] !== undefined) return value[key];
     }

@@ -16,7 +16,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY ||= 'dummy-key-for-verify-script-only';
 // checked here -- this endpoint runs unattended on a Tuesday cron and emails
 // real Pro subscribers, so a wrong "biggest blowout" or "MVP" can't be caught
 // by a person looking at a screen before it ships the way a UI bug would be.
-const { computeWeekStats, teamNameFor } = await import('../api/weekly-summary.js');
+const { computeWeekStats, teamNameFor, computeYahooWeekStats, teamNameForYahoo, extractYahooRosterPlayers } = await import('../api/weekly-summary.js');
 
 let checks = 0;
 const check = (name, actual, expected) => {
@@ -118,5 +118,132 @@ const lonelyStats = computeWeekStats({
     rosters, users, transactions: [], players, projById, week: 1,
 });
 check('a matchup with no paired opponent produces no blowout/closest-call/rivalry rather than throwing', [lonelyStats.blowout, lonelyStats.closestCall, lonelyStats.rivalry], [null, null, null]);
+
+// ============================================================================
+// Yahoo -- a fully separate pipeline (computeYahooWeekStats), built because
+// Yahoo's API gives team-level projections only (no per-player projection),
+// so "biggest disappointment" is redefined at the team level there. Same
+// 4-team shape as the Sleeper scenario above so the two are easy to compare.
+// ============================================================================
+
+const standingsRows = [
+    { rosterId: 1, teamKey: '461.l.999.t.1', teamName: 'Team Alpha', wins: 8, losses: 2 },
+    { rosterId: 2, teamKey: '461.l.999.t.2', teamName: 'Team Bravo', wins: 7, losses: 3 },
+    { rosterId: 3, teamKey: '461.l.999.t.3', teamName: 'Team Charlie', wins: 2, losses: 8 },
+    { rosterId: 4, teamKey: '461.l.999.t.4', teamName: 'Team Delta', wins: 1, losses: 9 },
+];
+
+// Matchup 1 (Alpha vs Delta): the blowout. Matchup 2 (Bravo vs Charlie): the
+// closest call AND the smaller record gap (10 vs 14) -- the rivalry pick.
+// Charlie's team score (108.5) came in well under its own Yahoo-reported
+// projection (130) -- the biggest team-level shortfall, and Yahoo's own
+// projection is the only one this path has to compare against.
+const scoreboardWeek = [
+    { week: 5, teams: [
+        { roster_id: 1, team_key: '461.l.999.t.1', points: 150.5, projected_points: 130 },
+        { roster_id: 4, team_key: '461.l.999.t.4', points: 90.2, projected_points: 95 },
+    ] },
+    { week: 5, teams: [
+        { roster_id: 2, team_key: '461.l.999.t.2', points: 110.0, projected_points: 100 },
+        { roster_id: 3, team_key: '461.l.999.t.3', points: 108.5, projected_points: 130 },
+    ] },
+];
+
+// Raw Yahoo shape (array-of-single-key-objects entities), the same quirks
+// yahooHistory.js's own parsers navigate -- built by hand rather than through
+// parseYahooScoreboard/parseYahooStandings above specifically to exercise
+// extractYahooRosterPlayers' own reading of that shape, including
+// selected_position, which no other parser in this codebase reads yet.
+const yahooPlayerEntity = ({ id, name, position, points, selectedPosition }) => ({
+    player: [
+        [
+            { player_key: `461.p.${id}` },
+            { player_id: String(id) },
+            { name: { full: name } },
+            { display_position: position },
+            { editorial_team_abbr: 'kc' },
+        ],
+        { player_points: { coverage_type: 'week', week: '5', total: String(points) } },
+        ...(selectedPosition === undefined ? [] : [{ selected_position: [{ coverage_type: 'week' }, { position: selectedPosition }] }]),
+    ],
+});
+
+const rosterData = {
+    fantasy_content: {
+        teams: {
+            0: {
+                team: [
+                    [{ team_key: '461.l.999.t.1' }, { team_id: '1' }, { name: 'Team Alpha' }],
+                    { roster: { 0: { players: {
+                        0: yahooPlayerEntity({ id: 100, name: 'Ace Thrower', position: 'QB', points: 32.4, selectedPosition: 'QB' }),
+                        // A huge score, but benched -- must not win the QB/RB MVP race it would otherwise take.
+                        1: yahooPlayerEntity({ id: 101, name: 'Benchwarmer', position: 'RB', points: 40, selectedPosition: 'BN' }),
+                        count: 2,
+                    } } } },
+                ],
+            },
+            1: {
+                team: [
+                    [{ team_key: '461.l.999.t.2' }, { team_id: '2' }, { name: 'Team Bravo' }],
+                    { roster: { 0: { players: {
+                        0: yahooPlayerEntity({ id: 102, name: 'Rusher Prime', position: 'RB', points: 25.0, selectedPosition: 'RB' }),
+                        // No selected_position node at all -- must default to NOT a starter rather than guessing.
+                        1: yahooPlayerEntity({ id: 103, name: 'No Pos Data', position: 'WR', points: 10 }),
+                        count: 2,
+                    } } } },
+                ],
+            },
+            count: 2,
+        },
+    },
+};
+
+const rosterPlayersByTeamKey = extractYahooRosterPlayers(rosterData);
+
+// --- extractYahooRosterPlayers ---
+check('roster extraction keys players by team_key', Object.keys(rosterPlayersByTeamKey).sort(), ['461.l.999.t.1', '461.l.999.t.2']);
+check('actual points are read from player_points.total', rosterPlayersByTeamKey['461.l.999.t.1'].find(p => p.playerId === '100').actual, 32.4);
+check('a starter is flagged as a starter', rosterPlayersByTeamKey['461.l.999.t.1'].find(p => p.playerId === '100').isStarter, true);
+check('a high-scoring benched player is not flagged as a starter', rosterPlayersByTeamKey['461.l.999.t.1'].find(p => p.playerId === '101').isStarter, false);
+check('a player missing selected_position defaults to not-a-starter rather than guessing', rosterPlayersByTeamKey['461.l.999.t.2'].find(p => p.playerId === '103').isStarter, false);
+
+const yahooTransactions = [
+    { type: 'waiver', roster_ids: [3], adds: { '500': 3 }, settings: { waiver_bid: 22 } },
+    { type: 'trade', roster_ids: [1, 2], adds: { '501': 2 } },
+];
+const playerMeta = {
+    '500': { fn: 'Add', ln: 'Ition' },
+    '501': { fn: 'Trade', ln: 'Away' },
+};
+
+const yahooStats = computeYahooWeekStats({ scoreboardWeek, standingsRows, transactions: yahooTransactions, rosterPlayersByTeamKey, playerMeta, week: 5 });
+
+// --- teamNameForYahoo ---
+check('resolves a team name from standings rows', teamNameForYahoo(1, standingsRows), 'Team Alpha');
+check('falls back to a generic label for an unknown roster', teamNameForYahoo(99, standingsRows), 'Team 99');
+
+// --- blowout / closest call / rivalry (same logic as Sleeper's, fed team-level scoreboard rows) ---
+check('the blowout is the largest-margin matchup', yahooStats.blowout.winner, 'Team Alpha');
+check('the blowout margin is the real score difference', yahooStats.blowout.margin, Math.round((150.5 - 90.2) * 100) / 100);
+check('the closest call is the smallest-margin matchup', [yahooStats.closestCall.teamA, yahooStats.closestCall.teamB].sort(), ['Team Bravo', 'Team Charlie'].sort());
+check('rivalry picks the matchup with the smaller record gap', [yahooStats.rivalry.teamA, yahooStats.rivalry.teamB].sort(), ['Team Bravo', 'Team Charlie'].sort());
+check('the reported record gap is correct', yahooStats.rivalry.recordGap, 10);
+
+// --- position MVPs (starters only) ---
+check('QB MVP is the only QB starter', yahooStats.mvpByPosition.QB.name, 'Ace Thrower');
+check('RB MVP is the only RB starter (the benched higher scorer is excluded)', yahooStats.mvpByPosition.RB.name, 'Rusher Prime');
+check('no WR starter this week means no WR MVP entry', yahooStats.mvpByPosition.WR, undefined);
+
+// --- biggest disappointment is a TEAM here, not a player -- Yahoo has no per-player projection to compare against ---
+check('the biggest disappointment is the team with the worst team-level projection shortfall', yahooStats.biggestDisappointment.team, 'Team Charlie');
+check('the reported variance is actual minus Yahoo\'s own team projection', yahooStats.biggestDisappointment.variance, Math.round((108.5 - 130) * 100) / 100);
+
+// --- transactions summary ---
+check('waiver moves are counted separately from trades', yahooStats.transactions.waiverCount, 1);
+check('trades are counted separately from waiver moves', yahooStats.transactions.tradeCount, 1);
+check('a notable add is attributed to the right team', yahooStats.transactions.notableAdds[0].team, 'Team Charlie');
+check('a notable add carries its FAAB bid', yahooStats.transactions.notableAdds[0].faab, 22);
+check('a notable add resolves the player name via playerMeta', yahooStats.transactions.notableAdds[0].added, ['Add Ition']);
+check('a trade lists both teams involved', yahooStats.transactions.trades[0].teams.sort(), ['Team Alpha', 'Team Bravo'].sort());
 
 console.log(`OK: ${checks} weekly-summary checks passed`);
