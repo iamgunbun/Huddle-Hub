@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useLeague } from '../context/LeagueContext';
 import { supabase } from '../supabaseClient';
 import BackButton from '../components/BackButton';
@@ -10,10 +11,21 @@ import styles from './WeeklySummary.module.css';
 // league membership; see supabase/schema-guards.sql section 6). Covers
 // Sleeper, Yahoo, and ESPN leagues, matching that endpoint.
 export default function WeeklySummary() {
-    const { activeLeague, isPremium, setShowPremiumModal } = useLeague();
+    const { activeLeague, isPremium, setShowPremiumModal, loading: leagueLoading, switchActiveLeague } = useLeague();
+    const [searchParams] = useSearchParams();
     const [loading, setLoading] = useState(true);
     const [summaries, setSummaries] = useState([]);
     const [selectedKey, setSelectedKey] = useState(null);
+
+    // The digest email links straight into a specific league's recap
+    // (?league=<id>) rather than making the reader hunt for it in the
+    // sidebar switcher -- this is what makes that link land on the right
+    // league instead of whichever one happened to be active last.
+    useEffect(() => {
+        const targetLeagueId = searchParams.get('league');
+        if (!targetLeagueId || leagueLoading || activeLeague?.id === targetLeagueId) return;
+        switchActiveLeague(targetLeagueId);
+    }, [searchParams, leagueLoading, activeLeague?.id, switchActiveLeague]);
 
     useEffect(() => {
         let isMounted = true;
@@ -64,7 +76,8 @@ export default function WeeklySummary() {
                     <p>
                         Every Tuesday, Huddle Pro members get an AI-written recap of their league's week --
                         every blowout, close call, position MVP, disappointment, and rivalry matchup, plus a
-                        summary of the week's trades and waiver moves. Delivered by email and right here in the app.
+                        summary of the week's trades and waiver moves. You'll get a quick email letting you
+                        know it's ready, with a link straight to it -- the full recap lives right here.
                     </p>
                     <button className={styles.upgradeBtn} onClick={() => setShowPremiumModal(true)}>
                         Upgrade to Pro
