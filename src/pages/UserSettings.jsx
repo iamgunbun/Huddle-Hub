@@ -21,6 +21,9 @@ export default function UserSettings() {
     const [updatingNewsletter, setUpdatingNewsletter] = useState(false);
     const [newsletterMessage, setNewsletterMessage] = useState('');
 
+    const [sendingProBackfill, setSendingProBackfill] = useState(false);
+    const [proBackfillMessage, setProBackfillMessage] = useState('');
+
     useEffect(() => {
         const fetchUser = async () => {
             const { data: { user } } = await supabase.auth.getUser();
@@ -106,6 +109,61 @@ export default function UserSettings() {
     const handleLogout = async () => {
         await supabase.auth.signOut();
         navigate('/login');
+    };
+
+    // Admin-only: emails every CURRENT Pro subscriber the Pro thank-you/
+    // feature-tour email (api/resend.js's 'pro-welcome-backfill' action).
+    // The button below only renders for this account, but the real gate is
+    // server-side -- that action verifies this session's own Supabase token
+    // rather than trusting anything the client asserts. Always previews the
+    // recipient count and asks for a native confirm() before actually
+    // sending, since this is real mail to every paying customer and there's
+    // no undo.
+    const handleSendProWelcomeBackfill = async () => {
+        setSendingProBackfill(true);
+        setProBackfillMessage('');
+
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const accessToken = session?.access_token;
+            if (!accessToken) throw new Error('Not logged in.');
+
+            const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` };
+
+            const previewRes = await fetch('/api/resend', {
+                method: 'POST',
+                headers: authHeaders,
+                body: JSON.stringify({ action: 'pro-welcome-backfill', dryRun: true }),
+            });
+            const preview = await previewRes.json();
+            if (!previewRes.ok) throw new Error(preview.error || 'Could not check the Pro subscriber count.');
+
+            if (!preview.count) {
+                setProBackfillMessage('No current Pro subscribers with an email on file.');
+                return;
+            }
+            const confirmed = window.confirm(
+                `Send the Pro thank-you email to ${preview.count} current Pro subscriber${preview.count === 1 ? '' : 's'}? This can't be undone.`
+            );
+            if (!confirmed) return;
+
+            const sendRes = await fetch('/api/resend', {
+                method: 'POST',
+                headers: authHeaders,
+                body: JSON.stringify({ action: 'pro-welcome-backfill', dryRun: false }),
+            });
+            const result = await sendRes.json();
+            if (!sendRes.ok) throw new Error(result.error || 'Send failed.');
+
+            setProBackfillMessage(
+                `Sent to ${result.sent} of ${result.total} Pro subscribers.` + (result.failed ? ` ${result.failed} failed.` : '')
+            );
+        } catch (err) {
+            console.error('Pro welcome backfill error:', err);
+            setProBackfillMessage(err.message || 'Something went wrong.');
+        } finally {
+            setSendingProBackfill(false);
+        }
     };
 
     return (
@@ -214,6 +272,22 @@ export default function UserSettings() {
                 </button>
 
                 <div className={styles.divider}></div>
+
+                {userEmail?.toLowerCase() === 'ammonsgunner@gmail.com' && (
+                    <>
+                        <h2 className={styles.subHeading}>Admin</h2>
+                        <button
+                            className={styles.saveBtn}
+                            style={{ marginTop: '12px', marginBottom: '10px' }}
+                            onClick={handleSendProWelcomeBackfill}
+                            disabled={sendingProBackfill}
+                        >
+                            {sendingProBackfill ? 'Sending...' : 'Email Current Pro Subscribers'}
+                        </button>
+                        {proBackfillMessage && <div className={styles.message}>{proBackfillMessage}</div>}
+                        <div className={styles.divider}></div>
+                    </>
+                )}
 
                 <button className={styles.logoutBtn} onClick={handleLogout}>
                     <i className="material-icons">logout</i>

@@ -63,8 +63,30 @@ export default async function handler(req, res) {
                 console.error('Error updating user in Supabase:', error);
                 return res.status(500).json({ error: 'Database update failed' });
             }
-            
+
             console.log(`Successfully upgraded user: ${userId}`);
+
+            // Thank-you email is a courtesy on top of what already succeeded
+            // above -- a failure here is only ever logged, never turned into
+            // a webhook failure (which would just make Stripe retry the
+            // whole event, re-running an already-successful DB update for
+            // nothing). Routed through api/resend.js's own 'pro-welcome'
+            // action rather than duplicated here, since that's the one place
+            // this app's Resend-sending code lives.
+            const purchaserEmail = session.customer_details?.email || session.customer_email;
+            if (purchaserEmail) {
+                try {
+                    await fetch('https://huddleff.app/api/resend', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'pro-welcome', email: purchaserEmail }),
+                    });
+                } catch (mailErr) {
+                    console.error('Pro welcome email trigger failed:', mailErr);
+                }
+            } else {
+                console.error('No purchaser email found on Stripe session -- skipping Pro welcome email.');
+            }
         } else {
             console.error('No client_reference_id found in Stripe session.');
         }
