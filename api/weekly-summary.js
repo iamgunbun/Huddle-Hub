@@ -344,6 +344,19 @@ export default async function handler(req, res) {
     // Sleeper's own `week` can already reflect the upcoming week by then).
     const weekOverride = query.week ? parseInt(query.week, 10) : null;
 
+    // Soft-launch allowlist: while this is being validated against a real
+    // week before opening it up to every Pro subscriber, set this to a
+    // comma-separated list of emails (e.g. just your own) in Vercel and only
+    // leagues where an ALLOWED email is the Pro member get processed or
+    // emailed -- everyone else's Pro status is ignored entirely for now, not
+    // just skipped for email. Going public later is exactly one step:
+    // delete this env var. Unset (the default), every Pro member of every
+    // Sleeper league is processed, same as before this existed.
+    const allowedEmails = (process.env.WEEKLY_SUMMARY_ALLOWED_EMAILS || '')
+        .split(',')
+        .map(e => e.trim().toLowerCase())
+        .filter(Boolean);
+
     try {
         const { data: memberships, error: memErr } = await supabase
             .from('user_leagues')
@@ -357,6 +370,7 @@ export default async function handler(req, res) {
             if (!league || league.platform !== 'sleeper') return;
             if (onlyLeagueId && league.id !== onlyLeagueId) return;
             if (!profile?.is_premium || !profile?.email) return;
+            if (allowedEmails.length && !allowedEmails.includes(profile.email.trim().toLowerCase())) return;
 
             if (!proLeagues.has(league.id)) {
                 proLeagues.set(league.id, { league, emails: new Set() });
@@ -365,7 +379,13 @@ export default async function handler(req, res) {
         });
 
         if (proLeagues.size === 0) {
-            return res.status(200).json({ processed: 0, message: 'No Sleeper leagues with a Pro member found.' });
+            return res.status(200).json({
+                processed: 0,
+                allowlistActive: allowedEmails.length > 0,
+                message: allowedEmails.length
+                    ? `No Sleeper league found where one of the allowed emails (${allowedEmails.join(', ')}) is a Pro member.`
+                    : 'No Sleeper leagues with a Pro member found.',
+            });
         }
 
         const playersCache = await fetchJson('https://api.sleeper.app/v1/players/nfl');
@@ -418,7 +438,7 @@ export default async function handler(req, res) {
             }
         }
 
-        return res.status(200).json({ processed: results.length, dryRun, results });
+        return res.status(200).json({ processed: results.length, dryRun, allowlistActive: allowedEmails.length > 0, results });
     } catch (error) {
         console.error('weekly-summary handler error:', error);
         return res.status(500).json({ error: error.toString() });
