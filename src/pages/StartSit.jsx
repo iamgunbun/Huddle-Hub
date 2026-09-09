@@ -402,10 +402,10 @@ export default function StartSit() {
         `;
         
         try {
-            const response = await fetch('/api/evaluate-start-sit', {
+            const response = await fetch('/api/evaluate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: pipelinePrompt })
+                body: JSON.stringify({ action: 'start-sit', prompt: pipelinePrompt })
             });
 
             if (!response.ok) {

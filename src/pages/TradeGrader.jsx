@@ -238,10 +238,10 @@ export default function TradeGrader() {
         `;
         
         try {
-            const response = await fetch('/api/evaluate-trade', {
+            const response = await fetch('/api/evaluate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: pipelinePrompt })
+                body: JSON.stringify({ action: 'trade', prompt: pipelinePrompt })
             });
 
             if (!response.ok) {

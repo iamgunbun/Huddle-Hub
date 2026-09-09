@@ -2,10 +2,7 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
-import evaluateManagerHandler from './api/evaluate-manager.js';
-import evaluateStartSitHandler from './api/evaluate-start-sit.js';
-import evaluateTradeHandler from './api/evaluate-trade.js';
-import evaluateDraftHandler from './api/evaluate-draft.js';
+import evaluateHandler from './api/evaluate.js';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -18,39 +15,29 @@ export default defineConfig(({ mode }) => {
         name: 'local-api-middleware',
         configureServer(server) {
           server.middlewares.use(async (req, res, next) => {
-            if (req.method === 'POST') {
-              const isManager = req.url === '/api/evaluate-manager';
-              const isStartSit = req.url === '/api/evaluate-start-sit';
-              const isTrade = req.url === '/api/evaluate-trade';
-              const isDraft = req.url === '/api/evaluate-draft';
+            if (req.method === 'POST' && req.url === '/api/evaluate') {
+              let body = '';
+              req.on('data', chunk => { body += chunk; });
+              req.on('end', async () => {
+                try {
+                  req.body = body ? JSON.parse(body) : {};
 
-              if (isManager || isStartSit || isTrade || isDraft) {
-                let body = '';
-                req.on('data', chunk => { body += chunk; });
-                req.on('end', async () => {
-                  try {
-                    req.body = body ? JSON.parse(body) : {};
-                    
-                    res.status = (code) => {
-                      res.statusCode = code;
-                      return res;
-                    };
-                    res.json = (data) => {
-                      res.setHeader('Content-Type', 'application/json');
-                      res.end(JSON.stringify(data));
-                    };
+                  res.status = (code) => {
+                    res.statusCode = code;
+                    return res;
+                  };
+                  res.json = (data) => {
+                    res.setHeader('Content-Type', 'application/json');
+                    res.end(JSON.stringify(data));
+                  };
 
-                    if (isManager) await evaluateManagerHandler(req, res);
-                    if (isStartSit) await evaluateStartSitHandler(req, res);
-                    if (isTrade) await evaluateTradeHandler(req, res);
-                    if (isDraft) await evaluateDraftHandler(req, res);
-                  } catch (err) {
-                    res.statusCode = 500;
-                    res.end(JSON.stringify({ error: err.message }));
-                  }
-                });
-                return;
-              }
+                  await evaluateHandler(req, res);
+                } catch (err) {
+                  res.statusCode = 500;
+                  res.end(JSON.stringify({ error: err.message }));
+                }
+              });
+              return;
             }
             next();
           });
