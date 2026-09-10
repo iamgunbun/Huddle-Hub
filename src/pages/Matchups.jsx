@@ -413,8 +413,21 @@ export default function Matchups() {
         const leftStarters = leftRoster?.starters || [];
         const rightStarters = rightRoster?.starters || [];
 
-        const leftLiveScore = leftTeamMatchup?.points || 0;
-        const rightLiveScore = rightTeamMatchup?.points || 0;
+        // ESPN's own mMatchup "totalPoints" field doesn't reliably track a
+        // game in progress -- it lags behind the per-player boxscore stats
+        // getPlayerLivePts already reads correctly (from the roster fetch),
+        // so an ESPN team's live total is summed from its own starters
+        // instead of trusted off the schedule response, the same way
+        // leftProjTotal/rightProjTotal below are already summed rather than
+        // read off a single field. Sleeper/Yahoo's own team totals already
+        // update live as-is, so they're left reading straight off `.points`.
+        const isEspnMatchup = isEspnLeagueId(activeLeague?.sleeper_league_id);
+        let leftLiveScore = leftTeamMatchup?.points || 0;
+        let rightLiveScore = rightTeamMatchup?.points || 0;
+        if (isEspnMatchup) {
+            leftLiveScore = leftStarters.reduce((sum, id) => sum + parseFloat(getPlayerLivePts(id, leftTeamMatchup) || 0), 0);
+            rightLiveScore = rightStarters.reduce((sum, id) => sum + parseFloat(getPlayerLivePts(id, rightTeamMatchup) || 0), 0);
+        }
 
         let leftProjTotal = 0;
         leftStarters.forEach(id => leftProjTotal += parseFloat(getPlayerProjPts(id)));
