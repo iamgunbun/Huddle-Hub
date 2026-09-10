@@ -345,7 +345,23 @@
     background: #f97316;
 }
 
-.injReasonText {
+.liveBadge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 5px;
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: 800;
+    text-transform: none;
+    letter-spacing: normal;
+    line-height: 1.4;
+    vertical-align: middle;
+}
+
+.liveStatLine {
     color: #94a3b8;
     font-size: 0.7em;
     margin-top: 2px;

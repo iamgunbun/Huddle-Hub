@@ -11,6 +11,7 @@ import { isViewingLiveWeek, LIVE_SCORE_POLL_MS } from '../utils/liveScores';
 import { isYahooLeagueId, isEspnLeagueId, isForeignPlatformLeague, sleeperFeedKey } from '../utils/platformIds';
 import { resolveImageSrc, onImageError } from '../utils/imageFallback';
 import { getPlayerInjuryInfo } from '../utils/injuryStatus';
+import { buildLiveStatLine } from '../utils/playerStatLine';
 import PlayerModal from '../components/PlayerModal';
 import styles from './Matchups.module.css';
 
@@ -33,8 +34,13 @@ export default function Matchups() {
     
     const [weeklyMatchups, setWeeklyMatchups] = useState([]);
     const [weeklyProjections, setWeeklyProjections] = useState({});
-    const [weeklyStats, setWeeklyStats] = useState({}); 
+    const [weeklyStats, setWeeklyStats] = useState({});
     const [nflScheduleMap, setNflScheduleMap] = useState({});
+    // Per-NFL-team game state ('pre'|'in'|'post' + a short clock string),
+    // keyed the same way as nflScheduleMap -- built from the same ESPN
+    // scoreboard poll, just reading its status field too instead of only
+    // the matchup for the opponent label.
+    const [nflLiveMap, setNflLiveMap] = useState({});
     // The real current NFL week -- used both to land on the right week by
     // default and to decide whether the viewed week is even worth polling for
     // live updates (a past or future week's data never changes).
@@ -255,6 +261,7 @@ export default function Matchups() {
                 .then(data => {
                     if (isMounted && data?.events) {
                         const map = {};
+                        const liveMap = {};
                         data.events.forEach(event => {
                             const comp = event.competitions?.[0];
                             if (comp && comp.competitors) {
@@ -266,10 +273,22 @@ export default function Matchups() {
                                     const away = normalizeTeam(awayTeam);
                                     map[home] = `VS ${away}`;
                                     map[away] = `@ ${home}`;
+
+                                    // Same event, just its status this time -- 'in' is
+                                    // the only state worth a live badge over ('pre'/
+                                    // 'post' are already implied by the opponent line
+                                    // and the final score respectively).
+                                    const statusType = event.status?.type || comp.status?.type;
+                                    if (statusType) {
+                                        const info = { state: statusType.state, detail: statusType.shortDetail || '' };
+                                        liveMap[home] = info;
+                                        liveMap[away] = info;
+                                    }
                                 }
                             }
                         });
                         setNflScheduleMap(map);
+                        setNflLiveMap(liveMap);
                     }
                 })
                 .catch(err => console.error("ESPN Schedule fetch err:", err));
@@ -359,6 +378,40 @@ export default function Matchups() {
         return isAway ? `@ ${cleanOpp}` : `VS ${cleanOpp}`;
     };
 
+    // Only 'in' is worth surfacing -- a not-yet-started or already-final game
+    // is already implied by the opponent line and the score itself.
+    const getLiveGameStatus = (pId) => {
+        const playerObj = getPlayerObj(pId);
+        const team = normalizeTeam(playerObj?.t || playerObj?.team);
+        const info = team ? nflLiveMap[team] : null;
+        return info?.state === 'in' ? info : null;
+    };
+
+    const getLiveStatLine = (pId) => {
+        const playerObj = getPlayerObj(pId);
+        const feedKey = sleeperFeedKey(playerObj, pId, foreignPlatform);
+        const stats = feedKey ? weeklyStats[feedKey] : null;
+        return buildLiveStatLine(playerObj?.pos, stats);
+    };
+
+    // Shared by all four starter/bench cells: the opponent line (with a live
+    // badge appended while that game is in progress) plus, right under it,
+    // the player's real stat line so far -- same place the injury reason
+    // used to sit before that got dropped for clutter.
+    const renderScheduleAndStats = (pId) => {
+        const liveStatus = getLiveGameStatus(pId);
+        const statLine = getLiveStatLine(pId);
+        return (
+            <>
+                <div className={styles.schedText}>
+                    {getMatchupOpp(pId)}
+                    {liveStatus && <span className={styles.liveBadge}>{liveStatus.detail || 'LIVE'}</span>}
+                </div>
+                {statLine && <div className={styles.liveStatLine}>{statLine}</div>}
+            </>
+        );
+    };
+
     const formatShortName = (pObj) => {
         if (!pObj) return 'Empty';
         if (!pObj.fn || !pObj.ln) return pObj.name || 'Player';
@@ -366,18 +419,18 @@ export default function Matchups() {
     };
 
     // Shared by all four starter/bench name cells (left/right x starters/bench)
-    // so the injury tag + reason only has to be built in one place.
+    // so the injury tag only has to be built in one place. Just the short
+    // code (Q/O/D/IR/...) -- the full reason is one tap away in the player
+    // modal, and printing it here on every dense tile was more clutter than
+    // signal.
     const renderNameWithInjury = (pObj, emptyLabel) => {
         if (!pObj) return <div className={styles.pNameText}>{emptyLabel}</div>;
         const injury = getPlayerInjuryInfo(pObj);
         return (
-            <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div className={styles.pNameText}>{formatShortName(pObj)}</div>
-                    {injury && <span className={[styles.injTag, styles['inj_' + injury.tone]].filter(Boolean).join(' ')} title={injury.label}>{injury.code}</span>}
-                </div>
-                {injury?.reason && <div className={styles.injReasonText}>{injury.label}: {injury.reason}</div>}
-            </>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div className={styles.pNameText}>{formatShortName(pObj)}</div>
+                {injury && <span className={[styles.injTag, styles['inj_' + injury.tone]].filter(Boolean).join(' ')} title={injury.label}>{injury.code}</span>}
+            </div>
         );
     };
 
@@ -505,7 +558,7 @@ export default function Matchups() {
                                                 {leftP && (
                                                     <>
                                                         <div className={styles.posText}>{leftP.pos} • {leftP.t || 'FA'}</div>
-                                                        <div className={styles.schedText}>{getMatchupOpp(leftPId)}</div>
+                                                        {renderScheduleAndStats(leftPId)}
                                                     </>
                                                 )}
                                             </div>
@@ -529,7 +582,7 @@ export default function Matchups() {
                                                 {rightP && (
                                                     <>
                                                         <div className={styles.posText}>{rightP.pos} • {rightP.t || 'FA'}</div>
-                                                        <div className={styles.schedText}>{getMatchupOpp(rightPId)}</div>
+                                                        {renderScheduleAndStats(rightPId)}
                                                     </>
                                                 )}
                                             </div>
@@ -561,7 +614,7 @@ export default function Matchups() {
                                                         {leftP && (
                                                             <>
                                                                 <div className={styles.posText}>{leftP.pos} • {leftP.t || 'FA'}</div>
-                                                                <div className={styles.schedText}>{getMatchupOpp(leftPId)}</div>
+                                                                {renderScheduleAndStats(leftPId)}
                                                             </>
                                                         )}
                                                     </div>
@@ -585,7 +638,7 @@ export default function Matchups() {
                                                         {rightP && (
                                                             <>
                                                                 <div className={styles.posText}>{rightP.pos} • {rightP.t || 'FA'}</div>
-                                                                <div className={styles.schedText}>{getMatchupOpp(rightPId)}</div>
+                                                                {renderScheduleAndStats(rightPId)}
                                                             </>
                                                         )}
                                                     </div>

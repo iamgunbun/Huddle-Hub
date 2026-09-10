@@ -36,3 +36,64 @@ export const buildProjectedStatLine = (statGroups, projStats) => {
 
     return cols;
 };
+
+/**
+ * A short, single-line summary of a player's REAL stat line for the week so
+ * far -- "18/25, 245 YD, 2 TD" for a QB, "12 CAR, 68 YD, 1 TD" for a rusher
+ * -- built from the same raw category keys Sleeper's stats feed already
+ * uses (weeklyStats in Matchups.jsx/Rosters.jsx). A stat group (passing,
+ * rushing, receiving, ...) is only included once the player has a genuine
+ * non-zero count in it -- a QB who hasn't been sacked into negative rushing
+ * yards yet doesn't need a "0 CAR, 0 YD" line, and this is meant to sit
+ * quietly at the bottom of a compact tile, not list every category a
+ * position could theoretically produce. Returns null (never a fabricated
+ * placeholder) once there is nothing real to show yet.
+ */
+export const buildLiveStatLine = (pos, rawStats) => {
+    if (!rawStats) return null;
+    const s = rawStats.stats || rawStats;
+    const num = (key) => (typeof s[key] === 'number' ? s[key] : null);
+    const parts = [];
+
+    if (pos === 'QB') {
+        const att = num('pass_att');
+        const cmp = num('pass_cmp');
+        if (att || cmp) {
+            parts.push(`${cmp || 0}/${att || 0}`, `${num('pass_yd') || 0} YD`);
+            if (num('pass_td')) parts.push(`${num('pass_td')} TD`);
+            if (num('pass_int')) parts.push(`${num('pass_int')} INT`);
+        }
+        const rushAtt = num('rush_att');
+        if (rushAtt) {
+            parts.push(`${num('rush_yd') || 0} RUSH YD`);
+            if (num('rush_td')) parts.push(`${num('rush_td')} RUSH TD`);
+        }
+    } else if (pos === 'RB' || pos === 'WR' || pos === 'TE') {
+        const car = num('rush_att');
+        if (car) {
+            parts.push(`${car} CAR`, `${num('rush_yd') || 0} YD`);
+            if (num('rush_td')) parts.push(`${num('rush_td')} TD`);
+        }
+        const rec = num('rec');
+        if (rec) {
+            parts.push(`${rec} REC`, `${num('rec_yd') || 0} YD`);
+            if (num('rec_td')) parts.push(`${num('rec_td')} TD`);
+        }
+    } else if (pos === 'K') {
+        const fga = num('fga');
+        const fgm = num('fgm');
+        if (fga || fgm) parts.push(`${fgm || 0}/${fga || 0} FG`);
+        const xpa = num('xpa');
+        const xpm = num('xpm');
+        if (xpa || xpm) parts.push(`${xpm || 0}/${xpa || 0} XP`);
+    } else if (pos === 'DEF') {
+        if (num('sack')) parts.push(`${num('sack')} SACK`);
+        if (num('int')) parts.push(`${num('int')} INT`);
+        if (num('fum_rec')) parts.push(`${num('fum_rec')} FR`);
+        if (num('ff')) parts.push(`${num('ff')} FF`);
+        if (num('def_td')) parts.push(`${num('def_td')} TD`);
+        if (Number.isFinite(num('pts_allow'))) parts.push(`${num('pts_allow')} PA`);
+    }
+
+    return parts.length ? parts.join(', ') : null;
+};
