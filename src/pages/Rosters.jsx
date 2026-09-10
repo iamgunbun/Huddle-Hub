@@ -12,6 +12,7 @@ import { isYahooLeagueId, isEspnLeagueId, isForeignPlatformLeague, sleeperFeedKe
 import { resolveImageSrc, onImageError } from '../utils/imageFallback';
 import { getPlatformLink } from '../utils/platformLinks';
 import { getPlayerInjuryInfo } from '../utils/injuryStatus';
+import { buildLiveStatLine } from '../utils/playerStatLine';
 import PlayerModal from '../components/PlayerModal';
 import styles from './Rosters.module.css';
 
@@ -44,6 +45,9 @@ export default function Rosters() {
     const [weeklyProjections, setWeeklyProjections] = useState({});
     const [weeklyStats, setWeeklyStats] = useState({});
     const [nflScheduleMap, setNflScheduleMap] = useState({});
+    // Per-NFL-team game state ('pre'|'in'|'post' + a short clock string),
+    // built from the same ESPN scoreboard poll as nflScheduleMap.
+    const [nflLiveMap, setNflLiveMap] = useState({});
     // The real current NFL week -- used both to land on the right week by
     // default and to decide whether the viewed week is worth polling live.
     const [nflState, setNflState] = useState(null);
@@ -240,6 +244,7 @@ export default function Rosters() {
                 .then(data => {
                     if (isMounted && data?.events) {
                         const map = {};
+                        const liveMap = {};
                         data.events.forEach(event => {
                             const comp = event.competitions?.[0];
                             if (comp && comp.competitors) {
@@ -251,10 +256,20 @@ export default function Rosters() {
                                     const away = normalizeTeam(awayTeam);
                                     map[home] = `VS ${away}`;
                                     map[away] = `@ ${home}`;
+
+                                    // Same event, just its status this time -- 'in'
+                                    // is the only state worth a live badge over.
+                                    const statusType = event.status?.type || comp.status?.type;
+                                    if (statusType) {
+                                        const info = { state: statusType.state, detail: statusType.shortDetail || '' };
+                                        liveMap[home] = info;
+                                        liveMap[away] = info;
+                                    }
                                 }
                             }
                         });
                         setNflScheduleMap(map);
+                        setNflLiveMap(liveMap);
                     }
                 })
                 .catch(err => console.error("ESPN Schedule fetch err:", err));
@@ -372,6 +387,22 @@ export default function Rosters() {
         return isAway ? `@ ${cleanOpp}` : `VS ${cleanOpp}`;
     };
 
+    // Only 'in' is worth surfacing -- a not-yet-started or already-final
+    // game is already implied by the opponent line and the score itself.
+    const getLiveGameStatus = (playerId) => {
+        const playerObj = getPlayerObj(playerId);
+        const team = normalizeTeam(playerObj?.t || playerObj?.team);
+        const info = team ? nflLiveMap[team] : null;
+        return info?.state === 'in' ? info : null;
+    };
+
+    const getLiveStatLine = (playerId) => {
+        const playerObj = getPlayerObj(playerId);
+        const feedKey = sleeperFeedKey(playerObj, playerId, foreignPlatform);
+        const stats = feedKey ? weeklyStats[feedKey] : null;
+        return buildLiveStatLine(playerObj?.pos, stats);
+    };
+
     const getAvatar = (pId, pMeta) => {
         // Yahoo player IDs don't correspond to sleepercdn's photo paths (which
         // are keyed by Sleeper's own IDs) -- prefer Yahoo's own headshot when
@@ -396,6 +427,8 @@ export default function Rosters() {
         
         const matchupText = getMatchupText(playerId);
         const injury = player ? getPlayerInjuryInfo(player) : null;
+        const liveStatus = getLiveGameStatus(playerId);
+        const liveStatLine = getLiveStatLine(playerId);
 
         return (
             <div 
@@ -422,8 +455,11 @@ export default function Rosters() {
                                     {injury && <span className={[styles.injTag, styles['inj_' + injury.tone]].filter(Boolean).join(' ')} title={injury.label}>{injury.code}</span>}
                                 </div>
                                 <div className={styles.posText}>{player.pos} • {player.t || 'FA'}</div>
-                                {injury?.reason && <div className={styles.injReasonText}>{injury.label}: {injury.reason}</div>}
-                                <div className={styles.schedText}>{matchupText}</div>
+                                <div className={styles.schedText}>
+                                    {matchupText}
+                                    {liveStatus && <span className={styles.liveBadge}>{liveStatus.detail || 'LIVE'}</span>}
+                                </div>
+                                {liveStatLine && <div className={styles.liveStatLine}>{liveStatLine}</div>}
                             </div>
                         </div>
                         <div className={styles.scoreBlock}>
