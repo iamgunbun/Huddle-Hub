@@ -346,9 +346,11 @@
 }
 
 .liveBadge {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     margin-left: 6px;
-    padding: 1px 5px;
+    padding: 1px 6px 1px 5px;
     background: rgba(239, 68, 68, 0.15);
     color: #ef4444;
     border: 1px solid rgba(239, 68, 68, 0.35);
@@ -359,6 +361,21 @@
     letter-spacing: normal;
     line-height: 1.4;
     vertical-align: middle;
+}
+
+.liveBadge::before {
+    content: '';
+    flex: 0 0 auto;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ef4444;
+    animation: liveDotPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes liveDotPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.35; transform: scale(0.7); }
 }
 
 .liveStatLine {
