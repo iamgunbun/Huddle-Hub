@@ -7,7 +7,7 @@ import { resolvePlayerFromMeta, entryOwnsLookupId } from '../utils/playerPool';
 import { scoreStatLine } from '../utils/yahooScoring';
 import { fetchAndNormalizeYahooMatchups } from '../utils/yahooService';
 import { fetchAndNormalizeESPNMatchups, fetchAndNormalizeESPNRosters } from '../utils/espnService';
-import { isViewingLiveWeek, LIVE_SCORE_POLL_MS } from '../utils/liveScores';
+import { isViewingLiveWeek, LIVE_SCORE_POLL_MS, formatKickoffTime } from '../utils/liveScores';
 import { isYahooLeagueId, isEspnLeagueId, isForeignPlatformLeague, sleeperFeedKey } from '../utils/platformIds';
 import { resolveImageSrc, onImageError } from '../utils/imageFallback';
 import { getPlatformLink } from '../utils/platformLinks';
@@ -257,11 +257,13 @@ export default function Rosters() {
                                     map[home] = `VS ${away}`;
                                     map[away] = `@ ${home}`;
 
-                                    // Same event, just its status this time -- 'in'
-                                    // is the only state worth a live badge over.
+                                    // Same event, just its status (and kickoff time)
+                                    // this time -- 'in' is the only state worth a
+                                    // live badge over; 'pre' is what the kickoff
+                                    // time itself is for.
                                     const statusType = event.status?.type || comp.status?.type;
                                     if (statusType) {
-                                        const info = { state: statusType.state, detail: statusType.shortDetail || '' };
+                                        const info = { state: statusType.state, detail: statusType.shortDetail || '', date: event.date || null };
                                         liveMap[home] = info;
                                         liveMap[away] = info;
                                     }
@@ -396,6 +398,15 @@ export default function Rosters() {
         return info?.state === 'in' ? info : null;
     };
 
+    // The kickoff time, in the viewer's own local timezone, for a player
+    // whose game hasn't started yet.
+    const getKickoffLabel = (playerId) => {
+        const playerObj = getPlayerObj(playerId);
+        const team = normalizeTeam(playerObj?.t || playerObj?.team);
+        const info = team ? nflLiveMap[team] : null;
+        return info?.state === 'pre' ? formatKickoffTime(info.date) : null;
+    };
+
     const getLiveStatLine = (playerId) => {
         const playerObj = getPlayerObj(playerId);
         const feedKey = sleeperFeedKey(playerObj, playerId, foreignPlatform);
@@ -428,6 +439,7 @@ export default function Rosters() {
         const matchupText = getMatchupText(playerId);
         const injury = player ? getPlayerInjuryInfo(player) : null;
         const liveStatus = getLiveGameStatus(playerId);
+        const kickoff = getKickoffLabel(playerId);
         const liveStatLine = getLiveStatLine(playerId);
 
         return (
@@ -458,6 +470,7 @@ export default function Rosters() {
                                 <div className={styles.schedText}>
                                     {matchupText}
                                     {liveStatus && <span className={styles.liveBadge}>{liveStatus.detail || 'LIVE'}</span>}
+                                    {!liveStatus && kickoff && <span className={styles.kickoffTime}>{kickoff}</span>}
                                 </div>
                                 {liveStatLine && <div className={styles.liveStatLine}>{liveStatLine}</div>}
                             </div>

@@ -7,7 +7,7 @@ import { resolvePlayerFromMeta, entryOwnsLookupId } from '../utils/playerPool';
 import { scoreStatLine } from '../utils/yahooScoring';
 import { fetchAndNormalizeYahooMatchups } from '../utils/yahooService';
 import { fetchAndNormalizeESPNMatchups, fetchAndNormalizeESPNRosters } from '../utils/espnService';
-import { isViewingLiveWeek, LIVE_SCORE_POLL_MS } from '../utils/liveScores';
+import { isViewingLiveWeek, LIVE_SCORE_POLL_MS, formatKickoffTime } from '../utils/liveScores';
 import { isYahooLeagueId, isEspnLeagueId, isForeignPlatformLeague, sleeperFeedKey } from '../utils/platformIds';
 import { resolveImageSrc, onImageError } from '../utils/imageFallback';
 import { getPlayerInjuryInfo } from '../utils/injuryStatus';
@@ -274,13 +274,14 @@ export default function Matchups() {
                                     map[home] = `VS ${away}`;
                                     map[away] = `@ ${home}`;
 
-                                    // Same event, just its status this time -- 'in' is
-                                    // the only state worth a live badge over ('pre'/
-                                    // 'post' are already implied by the opponent line
-                                    // and the final score respectively).
+                                    // Same event, just its status (and kickoff time)
+                                    // this time -- 'in' is the only state worth a
+                                    // live badge over ('post' is already implied by
+                                    // the final score); 'pre' is what the kickoff
+                                    // time itself is for.
                                     const statusType = event.status?.type || comp.status?.type;
                                     if (statusType) {
-                                        const info = { state: statusType.state, detail: statusType.shortDetail || '' };
+                                        const info = { state: statusType.state, detail: statusType.shortDetail || '', date: event.date || null };
                                         liveMap[home] = info;
                                         liveMap[away] = info;
                                     }
@@ -387,6 +388,17 @@ export default function Matchups() {
         return info?.state === 'in' ? info : null;
     };
 
+    // The kickoff time, in the viewer's own local timezone, for a player
+    // whose game hasn't started yet -- once it's live the badge/clock above
+    // is the more useful thing to show instead, and once it's final the
+    // score already says everything the time would have.
+    const getKickoffLabel = (pId) => {
+        const playerObj = getPlayerObj(pId);
+        const team = normalizeTeam(playerObj?.t || playerObj?.team);
+        const info = team ? nflLiveMap[team] : null;
+        return info?.state === 'pre' ? formatKickoffTime(info.date) : null;
+    };
+
     const getLiveStatLine = (pId) => {
         const playerObj = getPlayerObj(pId);
         const feedKey = sleeperFeedKey(playerObj, pId, foreignPlatform);
@@ -394,18 +406,21 @@ export default function Matchups() {
         return buildLiveStatLine(playerObj?.pos, stats);
     };
 
-    // Shared by all four starter/bench cells: the opponent line (with a live
-    // badge appended while that game is in progress) plus, right under it,
-    // the player's real stat line so far -- same place the injury reason
-    // used to sit before that got dropped for clutter.
+    // Shared by all four starter/bench cells: the opponent line -- with a
+    // live badge appended while that game is in progress, or the local
+    // kickoff time while it hasn't started yet -- plus, right under it, the
+    // player's real stat line so far. Same place the injury reason used to
+    // sit before that got dropped for clutter.
     const renderScheduleAndStats = (pId) => {
         const liveStatus = getLiveGameStatus(pId);
+        const kickoff = getKickoffLabel(pId);
         const statLine = getLiveStatLine(pId);
         return (
             <>
                 <div className={styles.schedText}>
                     {getMatchupOpp(pId)}
                     {liveStatus && <span className={styles.liveBadge}>{liveStatus.detail || 'LIVE'}</span>}
+                    {!liveStatus && kickoff && <span className={styles.kickoffTime}>{kickoff}</span>}
                 </div>
                 {statLine && <div className={styles.liveStatLine}>{statLine}</div>}
             </>

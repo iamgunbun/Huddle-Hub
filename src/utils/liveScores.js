@@ -22,3 +22,17 @@ export const isViewingLiveWeek = (nflState, viewedWeek) => {
 // platform's API (or, for Yahoo, the proxy's per-call Supabase/Yahoo round
 // trip) once every viewer's tab is doing this at once.
 export const LIVE_SCORE_POLL_MS = 30000;
+
+/**
+ * A game's kickoff time in the VIEWER's own local timezone -- "1:00 PM" --
+ * from the ISO timestamp ESPN's scoreboard already carries per event.
+ * Always derived from the browser's own locale/timezone (Intl via
+ * toLocaleTimeString), never a fixed one, so a manager on the road sees
+ * their own local kickoff, not the league's or the server's.
+ */
+export const formatKickoffTime = (isoDate) => {
+    if (!isoDate) return null;
+    const d = new Date(isoDate);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+};

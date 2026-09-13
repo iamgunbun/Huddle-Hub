@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { isViewingLiveWeek, LIVE_SCORE_POLL_MS } from '../src/utils/liveScores.js';
+import { isViewingLiveWeek, LIVE_SCORE_POLL_MS, formatKickoffTime } from '../src/utils/liveScores.js';
 
 let checks = 0;
 const check = (name, actual, expected) => {
@@ -60,6 +60,27 @@ check(
 check(
     'the poll interval is a sane, non-zero cadence',
     LIVE_SCORE_POLL_MS > 0 && LIVE_SCORE_POLL_MS <= 60000,
+    true
+);
+
+// --- formatKickoffTime -- deliberately not asserting an exact clock string,
+// since that's a function of whichever timezone this happens to run in
+// (CI vs. a laptop). Checked structurally instead: never a fabricated value
+// for bad input, and derived from the real Date parse rather than a stub.
+check('no timestamp at all -> null', formatKickoffTime(null), null);
+check('an unparseable string -> null', formatKickoffTime('not-a-date'), null);
+check('an empty string -> null', formatKickoffTime(''), null);
+
+const kickoff = formatKickoffTime('2026-09-14T17:00:00Z');
+check('a valid ISO timestamp produces a non-empty local time string', typeof kickoff === 'string' && kickoff.length > 0, true);
+check(
+    'the formatted time matches a direct toLocaleTimeString call on the same instant (same options, whatever the local timezone is)',
+    kickoff,
+    new Date('2026-09-14T17:00:00Z').toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+);
+check(
+    'two different kickoff times format to two different strings, not a hardcoded constant',
+    formatKickoffTime('2026-09-14T17:00:00Z') !== formatKickoffTime('2026-09-15T01:00:00Z'),
     true
 );
 
