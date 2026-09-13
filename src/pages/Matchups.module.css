@@ -334,6 +334,15 @@
     margin-top: 2px;
 }
 
+.kickoffTime {
+    display: inline-block;
+    margin-left: 6px;
+    color: #64748b;
+    font-weight: 700;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
 /* COMPACT SCORE BLOCK (NO "Proj" LABEL) */
 .scoreBlock {
     display: flex;
