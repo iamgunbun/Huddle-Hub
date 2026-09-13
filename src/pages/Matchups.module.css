@@ -222,7 +222,14 @@
 /* NO SIDE BORDERS / PUSH TO EDGE */
 .starterRow {
     display: flex;
-    align-items: center;
+    /* flex-start, not center: the live badge/kickoff time/real stat line are
+       all conditional, so the two players in a row (and the position badge
+       between them) can now be genuinely different heights depending on
+       what each one has to show. Centering a row like that pulls names and
+       scores out of line with their opposite number the moment either side
+       gets an extra line -- top-aligning keeps the name/score row itself
+       consistent regardless of what grows underneath it. */
+    align-items: flex-start;
     justify-content: space-between;
     background: #0f172a;
     border: 1px solid rgba(255, 255, 255, 0.04);
@@ -234,7 +241,7 @@
 .leftPlayer, .rightPlayer {
     flex: 1;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     cursor: pointer;
     min-width: 0;
@@ -377,7 +384,10 @@
     font-size: 0.75em;
     font-weight: 900;
     flex-shrink: 0;
-    margin: 0 4px;
+    /* A couple px down from the row's new top edge so it sits level with the
+       name line instead of the row's outer edge, now that .starterRow no
+       longer centers everything vertically. */
+    margin: 2px 4px 0;
 }
 
 .benchToggleBtn {
@@ -408,5 +418,5 @@
     .teamLiveScore { font-size: 1.3em; }
     .pNameText { font-size: 0.85em; }
     .playerLivePts { font-size: 0.95em; }
-    .centerPosBadge { width: 34px; margin: 0 2px; }
+    .centerPosBadge { width: 34px; margin: 2px 2px 0; }
 }
