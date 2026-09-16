@@ -967,6 +967,14 @@ export default async function handler(req, res) {
         return res.status(200).json({ processed: results.length, dryRun, allowlistActive: allowedEmails.length > 0, digestsSent, results });
     } catch (error) {
         console.error('weekly-summary handler error:', error);
-        return res.status(500).json({ error: error.toString() });
+        // A thrown Supabase/Postgrest error is a plain object, not an Error
+        // instance -- error.toString() on one of those collapses to the
+        // useless literal string "[object Object]" instead of its real
+        // .message, which is exactly what happens when e.g. the initial
+        // user_leagues query above fails. Fall back through .message, then
+        // a full JSON dump, so whatever actually broke is visible in the
+        // response instead of swallowed.
+        const message = error?.message || (typeof error === 'string' ? error : JSON.stringify(error));
+        return res.status(500).json({ error: message });
     }
 }
