@@ -846,7 +846,7 @@ export default async function handler(req, res) {
         // and joined manually instead.
         const { data: memberships, error: memErr } = await supabase
             .from('user_leagues')
-            .select('league_id, user_id, leagues!inner(id, sleeper_league_id, platform, league_name, season)');
+            .select('league_id, user_id, leagues!inner(id, sleeper_league_id, platform, league_name)');
         if (memErr) throw memErr;
 
         const membershipUserIds = [...new Set((memberships || []).map(row => row.user_id).filter(Boolean))];
@@ -894,6 +894,17 @@ export default async function handler(req, res) {
         const playersCache = needsSleeper ? await fetchJson('https://api.sleeper.app/v1/players/nfl') : null;
         const projectionsCache = new Map();
 
+        // NFL's own schedule pointer -- platform-agnostic, so it's the
+        // shared source of both "what week is it" (below) and "what season
+        // is it" for the ESPN path, which needs a season to even build its
+        // league API URL. The `leagues` table itself carries no season
+        // column (`leagues!inner(...season)` above is what 400'd with
+        // "column leagues_1.season does not exist" until this was fixed) --
+        // Sleeper and Yahoo don't need this since both read their own
+        // season back off their own league-settings response instead.
+        const nflState = await fetchJson('https://api.sleeper.app/v1/state/nfl');
+        const currentSeason = String(nflState.season || new Date().getFullYear());
+
         const results = [];
         // Built up as leagues succeed, then flushed as ONE digest email per
         // recipient after the whole batch is done -- not per league as it's
@@ -905,10 +916,6 @@ export default async function handler(req, res) {
             try {
                 let week = weekOverride;
                 if (!week) {
-                    // NFL's own schedule pointer -- platform-agnostic, so
-                    // it's the shared source of "what week is it" across
-                    // Sleeper, Yahoo, and ESPN leagues alike.
-                    const nflState = await fetchJson('https://api.sleeper.app/v1/state/nfl');
                     const currentWeek = nflState.week || nflState.display_week || 1;
                     // "The week that just finished" -- by the time this cron
                     // fires (Tuesday), the current-week pointer has
@@ -928,7 +935,7 @@ export default async function handler(req, res) {
                     ? await generateForEspnLeague({
                         leagueDbId: league.id,
                         espnLeagueId: fromEspnLeagueId(league.sleeper_league_id),
-                        season: league.season,
+                        season: currentSeason,
                         leagueName: league.league_name || 'Your League',
                         week,
                         userId,
