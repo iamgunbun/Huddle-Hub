@@ -170,6 +170,13 @@ export const computeWeekStats = ({ matchups, rosters, users, transactions, playe
         ? [...teamVariances].sort((a, b) => a.variance - b.variance)[0]
         : null;
 
+    // Whether an added player actually started and produced this same week
+    // -- drawn from starterPerf, already computed above, so "impact" is a
+    // real number this league's own data backs up rather than something
+    // Gemini has to invent or guess at from just a name.
+    const actualById = {};
+    starterPerf.forEach(p => { actualById[p.playerId] = p.actual; });
+
     const waiverMoves = transactions.filter(t => t.type === 'waiver' || t.type === 'free_agent');
     const trades = transactions.filter(t => t.type === 'trade');
     const transactionSummary = {
@@ -180,7 +187,13 @@ export const computeWeekStats = ({ matchups, rosters, users, transactions, playe
             const addedIds = Object.keys(t.adds || {});
             return {
                 team: teamNameFor(rosterId, rosters, users),
-                added: addedIds.map(id => players[id] ? `${players[id].first_name} ${players[id].last_name}`.trim() : `Player #${id}`),
+                added: addedIds.map(id => ({
+                    name: players[id] ? `${players[id].first_name} ${players[id].last_name}`.trim() : `Player #${id}`,
+                    // null means they didn't start this week (or there's no
+                    // data yet) -- not zero, which would misread as "started
+                    // and scored nothing."
+                    pointsThisWeek: actualById[id] ?? null,
+                })),
                 faab: t.settings?.waiver_bid ?? null,
             };
         }),
@@ -194,6 +207,28 @@ export const computeWeekStats = ({ matchups, rosters, users, transactions, playe
     };
 
     return { week, games, blowout, closestCall, rivalry, mvpByPosition, biggestDisappointment, transactions: transactionSummary };
+};
+
+/**
+ * Real opponent pairings for a FUTURE week, off Sleeper's own matchups
+ * response for that week -- Sleeper publishes the pairing (which roster_id
+ * faces which) well before kickoff, just with zeroed-out scores, so this
+ * is real schedule data, not a guess. Same matchup_id-pairing shape
+ * computeWeekStats already groups above, reused here since it's the exact
+ * same problem one week ahead.
+ */
+export const nextWeekMatchupPreview = (nextMatchups, rosters, users) => {
+    const byMatchup = {};
+    (nextMatchups || []).forEach(m => {
+        if (!byMatchup[m.matchup_id]) byMatchup[m.matchup_id] = [];
+        byMatchup[m.matchup_id].push(m);
+    });
+    return Object.values(byMatchup)
+        .filter(pair => pair.length === 2)
+        .map(([a, b]) => ({
+            teamA: teamNameFor(a.roster_id, rosters, users),
+            teamB: teamNameFor(b.roster_id, rosters, users),
+        }));
 };
 
 // --------------------------------------------------------------------------
@@ -248,6 +283,21 @@ export const buildEspnStatsInputs = ({ byWeek, week, rosters, playersMeta, trans
     const weekTransactions = transactions.filter(t => t.leg === week);
 
     return { matchups, rosters: rostersList, users, transactions: weekTransactions, players, projById, week };
+};
+
+/**
+ * Same idea as nextWeekMatchupPreview above, off ESPN's shape instead --
+ * byWeek already covers the whole season in one fetch (parseEspnSchedule),
+ * so a future week's pairing is already sitting in memory, no extra
+ * request needed.
+ */
+export const espnNextWeekMatchupPreview = (nextWeekPairs, rosters) => {
+    return (nextWeekPairs || [])
+        .filter(pair => pair?.length === 2)
+        .map(([a, b]) => ({
+            teamA: rosters[a.roster_id]?.team_name || `Team ${a.roster_id}`,
+            teamB: rosters[b.roster_id]?.team_name || `Team ${b.roster_id}`,
+        }));
 };
 
 // --------------------------------------------------------------------------
@@ -411,6 +461,12 @@ export const computeYahooWeekStats = ({ scoreboardWeek, standingsRows, transacti
         : null;
 
     const nameForPlayer = (playerId) => playerMeta[playerId] ? `${playerMeta[playerId].fn} ${playerMeta[playerId].ln}`.trim() : `Player #${playerId}`;
+
+    // Same real-impact lookup as computeWeekStats above, off Yahoo's own
+    // starterPerf (playerId keyed the same way transactions' adds are).
+    const actualById = {};
+    starterPerf.forEach(p => { actualById[p.playerId] = p.actual; });
+
     const waiverMoves = transactions.filter(t => t.type === 'waiver' || t.type === 'free_agent');
     const trades = transactions.filter(t => t.type === 'trade');
     const transactionSummary = {
@@ -418,7 +474,10 @@ export const computeYahooWeekStats = ({ scoreboardWeek, standingsRows, transacti
         tradeCount: trades.length,
         notableAdds: waiverMoves.slice(0, 10).map(t => ({
             team: teamNameForYahoo((t.roster_ids || [])[0], standingsRows),
-            added: Object.keys(t.adds || {}).map(nameForPlayer),
+            added: Object.keys(t.adds || {}).map(id => ({
+                name: nameForPlayer(id),
+                pointsThisWeek: actualById[id] ?? null,
+            })),
             faab: t.settings?.waiver_bid ?? null,
         })),
         trades: trades.slice(0, 10).map(t => ({
@@ -428,6 +487,16 @@ export const computeYahooWeekStats = ({ scoreboardWeek, standingsRows, transacti
     };
 
     return { week, games, blowout, closestCall, rivalry, mvpByPosition, biggestDisappointment, transactions: transactionSummary };
+};
+
+/** Same idea again, off Yahoo's scoreboard shape. */
+export const yahooNextWeekMatchupPreview = (nextScoreboardWeek, standingsRows) => {
+    return (nextScoreboardWeek || [])
+        .filter(m => m.teams?.length === 2)
+        .map(m => ({
+            teamA: teamNameForYahoo(m.teams[0].roster_id, standingsRows),
+            teamB: teamNameForYahoo(m.teams[1].roster_id, standingsRows),
+        }));
 };
 
 const buildNarrativePrompt = (leagueName, stats) => `You are writing a fun, banter-filled weekly recap email for the fantasy football league "${leagueName}", covering Week ${stats.week}. This goes out to every manager in the league, so the tone should read like a knowledgeable, slightly cheeky league commissioner's newsletter -- not a generic sports report.
@@ -443,7 +512,8 @@ Write a recap with these sections, each 1-3 sentences, punchy and specific (use 
 - mvpSpotlight: Call out the standout position MVPs (the highest scorer at each position) by name.
 - disappointmentOfTheWeek: Roast the biggest disappointment (if one exists in the data) -- it's always a TEAM, not a player, so go after the whole roster/manager, not one guy. Really lean into it: compare their actual score to what they were projected for and let them have it.
 - rivalryWatch: Frame this week's most evenly-matched-by-record matchup as a rivalry, if one exists in the data.
-- waiverWireBuzz: Summarize the week's trades and waiver activity -- who made moves, and any FAAB bids worth calling out.
+- waiverWireBuzz: Analyze the week's trades and waiver activity, not just list it. For each notable add, transactions.notableAdds[].added[] carries pointsThisWeek -- a real number if that player actually started and scored for their new team this week, or null if they didn't start. Grade the move on that: a pickup that started and scored well is a smart, real-impact add worth praising by name and points; one that sat the bench or scored little is fair game to call out as premature or a stash. Never invent a point total that isn't in the data, and never claim "impact" for a null pointsThisWeek -- say they haven't started yet instead.
+- nextWeekPreview: Only write this if stats.nextWeekMatchups is present and non-empty -- if it's missing or empty, return an empty string, don't guess at next week. When present, preview 1-2 of next week's real matchups by the real team names listed there -- which pairing looks like the week's best game, purely based on this week's results/records already in the data. Never invent an opponent, a projection, or a score for a game that hasn't happened.
 
 If a section's underlying data is empty or missing (e.g. no trades happened, or no disappointment qualified), say so briefly and move on -- never fabricate content to fill a section.`;
 
@@ -456,8 +526,9 @@ const NARRATIVE_SCHEMA = {
         disappointmentOfTheWeek: { type: SchemaType.STRING },
         rivalryWatch: { type: SchemaType.STRING },
         waiverWireBuzz: { type: SchemaType.STRING },
+        nextWeekPreview: { type: SchemaType.STRING },
     },
-    required: ['headline', 'matchupRecap', 'mvpSpotlight', 'disappointmentOfTheWeek', 'rivalryWatch', 'waiverWireBuzz'],
+    required: ['headline', 'matchupRecap', 'mvpSpotlight', 'disappointmentOfTheWeek', 'rivalryWatch', 'waiverWireBuzz', 'nextWeekPreview'],
 };
 
 const generateNarrative = async (leagueName, stats) => {
@@ -593,6 +664,14 @@ const generateForLeague = async ({ leagueDbId, sleeperLeagueId, leagueName, week
         week,
     });
 
+    // Best-effort -- next week's pairing not being available yet (e.g. the
+    // very last week of the regular season) just means no preview section,
+    // never a failed recap over it.
+    const nextWeekMatchups = await fetchJson(`https://api.sleeper.app/v1/league/${sleeperLeagueId}/matchups/${week + 1}`)
+        .then(m => nextWeekMatchupPreview(Array.isArray(m) ? m : [], Array.isArray(rosters) ? rosters : [], Array.isArray(users) ? users : []))
+        .catch(() => []);
+    if (nextWeekMatchups.length) stats.nextWeekMatchups = nextWeekMatchups;
+
     const narrative = await generateNarrative(leagueName, stats);
     narrative.week = week;
 
@@ -674,6 +753,11 @@ const generateForEspnLeague = async ({ leagueDbId, espnLeagueId, season, leagueN
 
     const inputs = buildEspnStatsInputs({ byWeek, week, rosters, playersMeta, transactions });
     const stats = computeWeekStats(inputs);
+
+    // byWeek already covers the whole season (parseEspnSchedule), so next
+    // week's pairing -- if the season has one -- is already sitting here.
+    const nextWeekMatchups = espnNextWeekMatchupPreview(byWeek[week + 1], rosters);
+    if (nextWeekMatchups.length) stats.nextWeekMatchups = nextWeekMatchups;
 
     const narrative = await generateNarrative(leagueName, stats);
     narrative.week = week;
@@ -794,6 +878,14 @@ const generateForYahooLeague = async ({ leagueDbId, yahooLeagueKey, leagueName, 
     }
 
     const stats = computeYahooWeekStats({ scoreboardWeek, standingsRows, transactions: weekTransactions, rosterPlayersByTeamKey, playerMeta, week });
+
+    // Best-effort, same reasoning as generateForLeague's Sleeper version --
+    // no pairing published yet (e.g. season's last week) just means no
+    // preview section, never a failed recap.
+    const nextWeekMatchups = await yahooApiRequest(accessToken, `league/${yahooLeagueKey}/scoreboard;week=${week + 1}`)
+        .then(data => yahooNextWeekMatchupPreview(parseYahooScoreboard(data, week + 1), standingsRows))
+        .catch(() => []);
+    if (nextWeekMatchups.length) stats.nextWeekMatchups = nextWeekMatchups;
 
     const narrative = await generateNarrative(leagueName, stats);
     narrative.week = week;
