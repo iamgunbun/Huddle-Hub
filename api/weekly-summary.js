@@ -838,15 +838,32 @@ export default async function handler(req, res) {
         .filter(Boolean);
 
     try {
+        // No FK from user_leagues.user_id to profiles.id is registered in
+        // Supabase's schema cache (every other query in this codebase that
+        // needs both -- e.g. Managers.jsx -- fetches them separately and
+        // joins in JS for the same reason), so a `profiles!inner(...)`
+        // embed here 400s with "Could not find a relationship". Fetched
+        // and joined manually instead.
         const { data: memberships, error: memErr } = await supabase
             .from('user_leagues')
-            .select('league_id, user_id, leagues!inner(id, sleeper_league_id, platform, league_name, season), profiles!inner(is_premium, email)');
+            .select('league_id, user_id, leagues!inner(id, sleeper_league_id, platform, league_name, season)');
         if (memErr) throw memErr;
+
+        const membershipUserIds = [...new Set((memberships || []).map(row => row.user_id).filter(Boolean))];
+        const profilesById = new Map();
+        if (membershipUserIds.length) {
+            const { data: profiles, error: profErr } = await supabase
+                .from('profiles')
+                .select('id, is_premium, email')
+                .in('id', membershipUserIds);
+            if (profErr) throw profErr;
+            (profiles || []).forEach(p => profilesById.set(p.id, p));
+        }
 
         const proLeagues = new Map();
         (memberships || []).forEach(row => {
             const league = row.leagues;
-            const profile = row.profiles;
+            const profile = profilesById.get(row.user_id);
             if (!league || !['sleeper', 'yahoo', 'espn'].includes(league.platform)) return;
             if (onlyLeagueId && league.id !== onlyLeagueId) return;
             if (!profile?.is_premium || !profile?.email) return;
