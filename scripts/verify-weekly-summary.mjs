@@ -16,7 +16,12 @@ process.env.SUPABASE_SERVICE_ROLE_KEY ||= 'dummy-key-for-verify-script-only';
 // checked here -- this endpoint runs unattended on a Tuesday cron and emails
 // real Pro subscribers, so a wrong "biggest blowout" or "MVP" can't be caught
 // by a person looking at a screen before it ships the way a UI bug would be.
-const { computeWeekStats, teamNameFor, computeYahooWeekStats, teamNameForYahoo, extractYahooRosterPlayers, buildEspnStatsInputs, buildDigestEmailHtml } = await import('../api/weekly-summary.js');
+const {
+    computeWeekStats, teamNameFor, nextWeekMatchupPreview,
+    computeYahooWeekStats, teamNameForYahoo, extractYahooRosterPlayers, yahooNextWeekMatchupPreview,
+    buildEspnStatsInputs, espnNextWeekMatchupPreview,
+    buildDigestEmailHtml,
+} = await import('../api/weekly-summary.js');
 
 let checks = 0;
 const check = (name, actual, expected) => {
@@ -111,6 +116,19 @@ check('waiver moves are counted separately from trades', stats.transactions.waiv
 check('trades are counted separately from waiver moves', stats.transactions.tradeCount, 1);
 check('a notable add is attributed to the right team', stats.transactions.notableAdds[0].team, 'Team Charlie');
 check('a notable add carries its FAAB bid', stats.transactions.notableAdds[0].faab, 15);
+check('a notable add that started this week carries its real points', stats.transactions.notableAdds[0].added, [{ name: 'Rusher Two', pointsThisWeek: 5 }]);
+
+// --- nextWeekMatchupPreview: real pairings for a future week, off Sleeper's own matchup shape ---
+const futureMatchups = [
+    { matchup_id: 1, roster_id: 1, points: 0, starters: [], starters_points: [] },
+    { matchup_id: 1, roster_id: 2, points: 0, starters: [], starters_points: [] },
+    // A bye-week team with no paired opponent -- must be dropped, not crashed on.
+    { matchup_id: 2, roster_id: 3, points: 0, starters: [], starters_points: [] },
+];
+const nextWeek = nextWeekMatchupPreview(futureMatchups, rosters, users);
+check('next week pairing resolves both real team names', [nextWeek[0].teamA, nextWeek[0].teamB].sort(), ['Team Alpha', 'Team Bravo'].sort());
+check('an unpaired (bye) team produces no extra pairing', nextWeek.length, 1);
+check('no future matchups at all produces an empty list rather than throwing', nextWeekMatchupPreview([], rosters, users), []);
 
 // --- an unresolvable pair (no matching opponent this week) is dropped, not crashed on ---
 const lonelyStats = computeWeekStats({
@@ -243,8 +261,26 @@ check('waiver moves are counted separately from trades', yahooStats.transactions
 check('trades are counted separately from waiver moves', yahooStats.transactions.tradeCount, 1);
 check('a notable add is attributed to the right team', yahooStats.transactions.notableAdds[0].team, 'Team Charlie');
 check('a notable add carries its FAAB bid', yahooStats.transactions.notableAdds[0].faab, 22);
-check('a notable add resolves the player name via playerMeta', yahooStats.transactions.notableAdds[0].added, ['Add Ition']);
+check(
+    'a notable add resolves the player name via playerMeta, with null points since they never started',
+    yahooStats.transactions.notableAdds[0].added,
+    [{ name: 'Add Ition', pointsThisWeek: null }]
+);
 check('a trade lists both teams involved', yahooStats.transactions.trades[0].teams.sort(), ['Team Alpha', 'Team Bravo'].sort());
+
+// --- yahooNextWeekMatchupPreview ---
+const yahooFutureScoreboard = [
+    { week: 6, teams: [
+        { roster_id: 1, team_key: '461.l.999.t.1', points: 0 },
+        { roster_id: 2, team_key: '461.l.999.t.2', points: 0 },
+    ] },
+];
+check(
+    'resolves next week\'s real Yahoo team names from standings',
+    yahooNextWeekMatchupPreview(yahooFutureScoreboard, standingsRows).map(m => [m.teamA, m.teamB].sort()),
+    [['Team Alpha', 'Team Bravo'].sort()]
+);
+check('no future scoreboard at all produces an empty list rather than throwing', yahooNextWeekMatchupPreview([], standingsRows), []);
 
 // ============================================================================
 // ESPN -- reshaped into computeWeekStats' own input shape (buildEspnStatsInputs)
@@ -324,6 +360,26 @@ check('the biggest disappointment is a team, not a player, and matches the Sleep
 check('the reported variance is the team\'s actual minus its starters\' combined projection', espnStats.biggestDisappointment.variance, Math.round((108.5 - 112) * 100) / 100);
 check('waiver and trade counts match the week-filtered transactions', [espnStats.transactions.waiverCount, espnStats.transactions.tradeCount], [1, 1]);
 check('a notable add resolves its team and FAAB bid', [espnStats.transactions.notableAdds[0].team, espnStats.transactions.notableAdds[0].faab], ['Team Charlie', 22]);
+check(
+    'a notable add that did not start this week carries null points, not zero',
+    espnStats.transactions.notableAdds[0].added,
+    [{ name: 'Add Ition', pointsThisWeek: null }]
+);
+
+// --- espnNextWeekMatchupPreview: pairing off byWeek, no extra fetch needed ---
+const espnFutureWeek = [
+    [
+        { roster_id: 1, points: 0 },
+        { roster_id: 2, points: 0 },
+    ],
+];
+check(
+    'resolves next week\'s real ESPN team names from the rosters map',
+    espnNextWeekMatchupPreview(espnFutureWeek, espnRosters).map(m => [m.teamA, m.teamB].sort()),
+    [['Team Alpha', 'Team Bravo'].sort()]
+);
+check('a bye-week (unpaired) entry is dropped rather than crashing', espnNextWeekMatchupPreview([[{ roster_id: 1, points: 0 }]], espnRosters), []);
+check('no future week at all produces an empty list rather than throwing', espnNextWeekMatchupPreview(undefined, espnRosters), []);
 
 // --- a bye week (an unpaired team) doesn't crash the reshape ---
 const byeInputs = buildEspnStatsInputs({
