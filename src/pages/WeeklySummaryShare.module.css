@@ -1,0 +1,87 @@
+.page {
+    min-height: 100vh;
+    padding: 32px 16px 60px;
+}
+
+.container {
+    max-width: 640px;
+    margin: 0 auto;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    text-decoration: none;
+    color: #eebf1c;
+    font-weight: 800;
+    letter-spacing: 1px;
+    font-size: 0.95em;
+    margin-bottom: 28px;
+}
+
+.brandLogo {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    object-fit: cover;
+}
+
+.status {
+    text-align: center;
+    color: #94a3b8;
+    padding: 60px 20px;
+}
+
+.status i {
+    font-size: 40px;
+    color: #eebf1c;
+    margin-bottom: 10px;
+}
+
+.leagueHeader {
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.leagueName {
+    color: #f8fafc;
+    font-size: 1.3em;
+    font-weight: 800;
+}
+
+.weekLabel {
+    color: #64748b;
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+    margin-top: 4px;
+}
+
+.cta {
+    text-align: center;
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cta p {
+    color: #94a3b8;
+    font-size: 0.9em;
+    margin: 0 0 14px;
+}
+
+.ctaBtn {
+    display: inline-block;
+    background: #eebf1c;
+    color: #121212;
+    padding: 12px 28px;
+    border-radius: 8px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-decoration: none;
+    font-size: 0.9em;
+}

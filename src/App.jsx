@@ -9,6 +9,7 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import Invite from './pages/Invite';
 import Onboarding from './pages/Onboarding';
+import WeeklySummaryShare from './pages/WeeklySummaryShare';
 
 // Main App Pages
 import Home from './pages/Home';
@@ -78,6 +79,7 @@ function App() {
                     <Route path="/onboarding" element={<Onboarding />} />
                     <Route path="/login" element={<RequireOnboarding><Login /></RequireOnboarding>} />
                     <Route path="/invite/:league_id" element={<RequireOnboarding><Invite /></RequireOnboarding>} />
+                    <Route path="/weekly-summary/share/:leagueId/:season/:week" element={<WeeklySummaryShare />} />
                     
                     <Route element={<Layout />}>
                         <Route path="/" element={<Home />} />

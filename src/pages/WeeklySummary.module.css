@@ -81,6 +81,15 @@
     letter-spacing: 0.5px;
 }
 
+.controlsRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
 .weekDropdown {
     padding: 10px 16px;
     background: #1e2530;
@@ -91,112 +100,34 @@
     font-size: 0.9em;
     outline: none;
     cursor: pointer;
-    margin-bottom: 20px;
 }
 
 .weekDropdown:focus {
     border-color: #eebf1c;
 }
 
-.recapCard {
-    background: #1e2530;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 12px;
-    padding: 24px;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
-}
-
-.headline {
+.shareBtn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    background: transparent;
+    border: 1px solid #eebf1c;
     color: #eebf1c;
-    font-size: 1.3em;
-    font-weight: 800;
-    margin: 0 0 20px;
-}
-
-.statRow {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 10px;
-    margin-bottom: 24px;
-}
-
-.statTile {
-    background: rgba(0, 0, 0, 0.2);
     border-radius: 8px;
-    padding: 12px 14px;
-}
-
-.statLabel {
-    color: #64748b;
-    text-transform: uppercase;
-    font-size: 0.7em;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    margin-bottom: 4px;
-}
-
-.statValue {
-    color: #f8fafc;
-    font-weight: 700;
-    font-size: 0.95em;
-}
-
-.statSub {
-    color: #94a3b8;
-    font-size: 0.8em;
-    margin-top: 2px;
-}
-
-.section {
-    margin-bottom: 18px;
-}
-
-.sectionTitle {
-    color: #eebf1c;
-    text-transform: uppercase;
-    font-size: 0.75em;
-    letter-spacing: 1px;
-    font-weight: 700;
-    margin: 0 0 6px;
-}
-
-.sectionBody {
-    color: #cbd5e1;
-    font-size: 0.9em;
-    line-height: 1.6;
-    margin: 0;
-}
-
-.mvpGrid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-    gap: 10px;
-}
-
-.mvpTile {
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 8px;
-    padding: 10px;
-    text-align: center;
-}
-
-.mvpPos {
-    color: #64748b;
-    text-transform: uppercase;
-    font-size: 0.7em;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-}
-
-.mvpName {
-    color: #f8fafc;
     font-weight: 700;
     font-size: 0.85em;
-    margin: 4px 0 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
 }
 
-.mvpPts {
-    color: #eebf1c;
-    font-weight: 800;
-    font-size: 0.85em;
+.shareBtn i {
+    font-size: 18px;
+}
+
+.shareBtn:hover {
+    background: #eebf1c;
+    color: #121212;
 }

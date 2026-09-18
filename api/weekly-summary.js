@@ -801,9 +801,58 @@ const generateForYahooLeague = async ({ leagueDbId, yahooLeagueKey, leagueName, 
     return { leagueDbId, season, week, stats, narrative };
 };
 
+// Public, unauthenticated read of exactly one already-generated recap --
+// the Share button on WeeklySummary.jsx hands out a link built from these
+// three values (leagueId/season/week), the same "anyone with the link"
+// model Docs/Sheets use. league_id is an unguessable uuid, so knowing it
+// (plus the season/week it was already shown for) is the only "credential"
+// this needs; nothing here is listable or enumerable, and nothing beyond
+// the recap itself (no emails, no user ids, no other weeks) is returned.
+// Client-side Supabase reads can't serve this: league_weekly_summaries'
+// RLS requires a real signed-in session (see schema-guards.sql section 6),
+// which a link opened by a logged-out leaguemate never has -- so this has
+// to go through the service-role client here instead.
+const handlePublicShare = async (req, res) => {
+    const { leagueId, season, week } = req.query || {};
+    const weekNum = parseInt(week, 10);
+    if (!leagueId || !season || !Number.isFinite(weekNum)) {
+        return res.status(400).json({ error: 'Missing or invalid leagueId, season, or week.' });
+    }
+
+    const { data, error } = await supabase
+        .from('league_weekly_summaries')
+        .select('season, week, stats, narrative, generated_at, leagues!inner(league_name, platform)')
+        .eq('league_id', leagueId)
+        .eq('season', String(season))
+        .eq('week', weekNum)
+        .maybeSingle();
+
+    if (error) {
+        console.error('weekly-summary public share error:', error);
+        return res.status(500).json({ error: 'Could not load this summary.' });
+    }
+    if (!data) {
+        return res.status(404).json({ error: 'Summary not found.' });
+    }
+
+    return res.status(200).json({
+        leagueName: data.leagues?.league_name || 'A Huddle Hub League',
+        platform: data.leagues?.platform || null,
+        season: data.season,
+        week: data.week,
+        stats: data.stats,
+        narrative: data.narrative,
+        generatedAt: data.generated_at,
+    });
+};
+
 export default async function handler(req, res) {
     if (req.method !== 'GET' && req.method !== 'POST') {
         return res.status(405).json({ error: 'Method Not Allowed' });
+    }
+
+    if (req.method === 'GET' && req.query?.share === '1') {
+        return handlePublicShare(req, res);
     }
 
     // Vercel attaches this exact header to its own cron-triggered requests
