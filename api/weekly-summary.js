@@ -838,6 +838,17 @@ const yahooApiRequest = async (accessToken, endpoint) => {
 
 const YAHOO_PLAYER_KEY_BATCH = 25;
 
+// Yahoo's players/stats;type=week endpoint silently comes back with NO
+// player_points for any team at all once too many team_keys are requested
+// in one call -- not an error, just an empty result, which is why every
+// player in this Yahoo path was reading 0 regardless of league size.
+// src/utils/yahooService.js's fetchYahooPlayerPoints already worked around
+// this exact quirk (see its comment) by chunking to a few teams per
+// request with a per-team fallback when a chunk comes back empty --
+// mirrored here since this endpoint hits Yahoo directly rather than
+// through that client-side helper.
+const YAHOO_TEAM_POINTS_CHUNK = 4;
+
 const generateForYahooLeague = async ({ leagueDbId, yahooLeagueKey, leagueName, week, userId }) => {
     const accessToken = await getYahooAccessToken(userId);
 
@@ -868,13 +879,28 @@ const generateForYahooLeague = async ({ leagueDbId, yahooLeagueKey, leagueName, 
     }
 
     const teamKeys = [...new Set(scoreboardWeek.flatMap(m => (m.teams || []).map(t => t.team_key)).filter(Boolean))];
-    let rosterPlayersByTeamKey = {};
-    if (teamKeys.length) {
+    const rosterPlayersByTeamKey = {};
+    for (let i = 0; i < teamKeys.length; i += YAHOO_TEAM_POINTS_CHUNK) {
+        const group = teamKeys.slice(i, i + YAHOO_TEAM_POINTS_CHUNK);
         const rosterData = await yahooApiRequest(
             accessToken,
-            `teams;team_keys=${teamKeys.join(',')}/roster;week=${week}/players/stats;type=week;week=${week}`
+            `teams;team_keys=${group.join(',')}/roster;week=${week}/players/stats;type=week;week=${week}`
         );
-        rosterPlayersByTeamKey = extractYahooRosterPlayers(rosterData);
+        const parsed = extractYahooRosterPlayers(rosterData);
+        if (Object.keys(parsed).length) {
+            Object.assign(rosterPlayersByTeamKey, parsed);
+            continue;
+        }
+        // The batched form came back empty for this whole group -- fall
+        // back to one team at a time, same recovery fetchYahooPlayerPoints
+        // already relies on for this exact quirk.
+        for (const teamKey of group) {
+            const single = await yahooApiRequest(
+                accessToken,
+                `teams;team_keys=${teamKey}/roster;week=${week}/players/stats;type=week;week=${week}`
+            );
+            Object.assign(rosterPlayersByTeamKey, extractYahooRosterPlayers(single));
+        }
     }
 
     const stats = computeYahooWeekStats({ scoreboardWeek, standingsRows, transactions: weekTransactions, rosterPlayersByTeamKey, playerMeta, week });
