@@ -503,7 +503,7 @@ export const buildDigestEmailHtml = (leagues) => {
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden;">
             <tr>
                 <td style="background: #111318; padding: 28px 32px; text-align: center;">
-                    <img src="${APP_URL}/brand.png" alt="Huddle" width="64" height="64" style="display:block; margin: 0 auto 8px;" />
+                    <img src="${APP_URL}/mobile.png" alt="Huddle" width="64" height="64" style="display:block; margin: 0 auto 8px;" />
                     <div style="color: #eebf1c; font-weight: 800; letter-spacing: 1px; font-size: 14px;">HUDDLE WEEKLY SUMMARY</div>
                 </td>
             </tr>
