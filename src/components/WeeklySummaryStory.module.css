@@ -70,6 +70,9 @@
     animation: slideIn 0.45s ease both;
     position: relative;
     z-index: 1;
+    /* Purely visual -- the tap zones above it own every pointer event, so
+       a tap on the headline still advances the story. */
+    pointer-events: none;
 }
 
 @keyframes slideIn {
@@ -220,12 +223,17 @@
     flex-shrink: 0;
 }
 
-/* Tap zones sit behind the content so buttons/text stay clickable. */
+/* Tap zones cover the card and sit ABOVE the slide content, so a tap
+   anywhere advances instead of landing on text. They stop short of the
+   footer and the progress/close row so those stay reachable. */
 .navZones {
     position: absolute;
-    inset: 0;
+    top: 40px;
+    left: 0;
+    right: 0;
+    bottom: 84px;
     display: flex;
-    z-index: 0;
+    z-index: 2;
 }
 
 .navPrev, .navNext {
@@ -233,13 +241,50 @@
     background: transparent;
     border: none;
     cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .navPrev { flex: 0 0 30%; }
 
+.footer {
+    position: relative;
+    z-index: 3;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.tapHint {
+    color: #475569;
+    font-size: 0.72em;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+.versus {
+    color: #94a3b8;
+    font-size: 1em;
+    font-weight: 700;
+    margin-top: 8px;
+    animation: slideIn 0.5s ease both;
+    animation-delay: 180ms;
+}
+
+.meta {
+    color: #64748b;
+    font-size: 0.82em;
+    font-weight: 600;
+    margin-top: 4px;
+    animation: slideIn 0.5s ease both;
+    animation-delay: 320ms;
+}
+
 .skipBtn {
     position: relative;
-    z-index: 2;
+    z-index: 3;
     background: transparent;
     border: 1px solid rgba(255, 255, 255, 0.2);
     color: #94a3b8;
@@ -266,7 +311,7 @@
 /* A reader who asked for less motion still gets the story, just without
    things flying in -- the content is the point, the movement is decoration. */
 @media (prefers-reduced-motion: reduce) {
-    .slide, .kicker, .headline, .statBlock, .sub, .mvpGrid, .rankList {
+    .slide, .kicker, .headline, .statBlock, .sub, .mvpGrid, .rankList, .versus, .meta {
         animation: none;
     }
 }
