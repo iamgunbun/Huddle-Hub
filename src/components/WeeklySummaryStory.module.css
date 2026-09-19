@@ -1,0 +1,272 @@
+.overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    background: radial-gradient(circle at top, #16202e 0%, #05070b 75%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 14px 16px 28px;
+    overflow: hidden;
+}
+
+/* Stories-style progress bars, one per slide. */
+.progressRow {
+    display: flex;
+    gap: 4px;
+    width: 100%;
+    max-width: 620px;
+    flex-shrink: 0;
+}
+
+.progressTrack {
+    flex: 1;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progressFill {
+    height: 100%;
+    width: 0;
+    background: #eebf1c;
+}
+
+.progressActive {
+    animation: storyProgress linear forwards;
+}
+
+@keyframes storyProgress {
+    from { width: 0; }
+    to { width: 100%; }
+}
+
+.closeBtn {
+    position: absolute;
+    top: 28px;
+    right: 16px;
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 4px;
+    z-index: 2;
+}
+
+.closeBtn i {
+    font-size: 26px;
+}
+
+.slide {
+    flex: 1;
+    width: 100%;
+    max-width: 620px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    text-align: center;
+    padding: 24px 8px;
+    animation: slideIn 0.45s ease both;
+    position: relative;
+    z-index: 1;
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateY(16px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.kicker {
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-size: 0.75em;
+    font-weight: 800;
+    margin-bottom: 14px;
+    animation: slideIn 0.45s ease both;
+    animation-delay: 60ms;
+}
+
+.headline {
+    color: #f8fafc;
+    font-size: 2em;
+    font-weight: 900;
+    line-height: 1.15;
+    animation: slideIn 0.5s ease both;
+    animation-delay: 140ms;
+}
+
+.statBlock {
+    margin: 26px 0 8px;
+    animation: slideIn 0.5s ease both;
+    animation-delay: 260ms;
+}
+
+.statValue {
+    font-size: 4.2em;
+    font-weight: 900;
+    line-height: 1;
+    color: #eebf1c;
+    text-shadow: 0 0 40px rgba(238, 191, 28, 0.35);
+}
+
+.statLabel {
+    color: #94a3b8;
+    font-size: 0.85em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 10px;
+}
+
+/* Tone accents -- the roast slides should not read the same as a win. */
+.red .statValue {
+    color: #ef4444;
+    text-shadow: 0 0 40px rgba(239, 68, 68, 0.35);
+}
+
+.blue .statValue {
+    color: #60a5fa;
+    text-shadow: 0 0 40px rgba(96, 165, 250, 0.35);
+}
+
+.sub {
+    color: #cbd5e1;
+    font-size: 0.95em;
+    line-height: 1.6;
+    margin: 22px auto 0;
+    max-width: 460px;
+    animation: slideIn 0.5s ease both;
+    animation-delay: 380ms;
+}
+
+.mvpGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 10px;
+    margin-top: 26px;
+    animation: slideIn 0.5s ease both;
+    animation-delay: 260ms;
+}
+
+.mvpCard {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(238, 191, 28, 0.2);
+    border-radius: 10px;
+    padding: 12px 8px;
+}
+
+.mvpPos {
+    color: #eebf1c;
+    font-size: 0.7em;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+
+.mvpName {
+    color: #f8fafc;
+    font-weight: 700;
+    font-size: 0.85em;
+    margin: 6px 0 4px;
+}
+
+.mvpPts {
+    color: #94a3b8;
+    font-size: 0.8em;
+    font-weight: 700;
+}
+
+.rankList {
+    margin-top: 26px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    animation: slideIn 0.5s ease both;
+    animation-delay: 260ms;
+}
+
+.rankRow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 8px;
+    padding: 10px 14px;
+    text-align: left;
+}
+
+.rankNum {
+    color: #eebf1c;
+    font-weight: 900;
+    width: 22px;
+    flex-shrink: 0;
+}
+
+.rankTeam {
+    color: #f8fafc;
+    font-weight: 700;
+    flex: 1;
+    font-size: 0.9em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rankRecord {
+    color: #94a3b8;
+    font-weight: 700;
+    font-size: 0.85em;
+    flex-shrink: 0;
+}
+
+/* Tap zones sit behind the content so buttons/text stay clickable. */
+.navZones {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    z-index: 0;
+}
+
+.navPrev, .navNext {
+    flex: 1;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+}
+
+.navPrev { flex: 0 0 30%; }
+
+.skipBtn {
+    position: relative;
+    z-index: 2;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #94a3b8;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-weight: 700;
+    font-size: 0.8em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.skipBtn:hover {
+    color: #f8fafc;
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+@media (max-width: 600px) {
+    .headline { font-size: 1.6em; }
+    .statValue { font-size: 3.2em; }
+}
+
+/* A reader who asked for less motion still gets the story, just without
+   things flying in -- the content is the point, the movement is decoration. */
+@media (prefers-reduced-motion: reduce) {
+    .slide, .kicker, .headline, .statBlock, .sub, .mvpGrid, .rankList {
+        animation: none;
+    }
+}

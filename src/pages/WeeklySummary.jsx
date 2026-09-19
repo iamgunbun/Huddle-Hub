@@ -4,7 +4,31 @@ import { useLeague } from '../context/LeagueContext';
 import { supabase } from '../supabaseClient';
 import BackButton from '../components/BackButton';
 import WeeklySummaryRecap from '../components/WeeklySummaryRecap';
+import WeeklySummaryStory from '../components/WeeklySummaryStory';
 import styles from './WeeklySummary.module.css';
+
+// Whether this browser has already been shown the story for one specific
+// week of one specific league. Kept per league+season+week so a new week
+// gets its own first-open moment, and read defensively -- a browser with
+// storage blocked should still get the recap, just without the auto-play.
+const storyKey = (leagueId, season, week) => `whs_story_${leagueId}_${season}_${week}`;
+
+const hasSeenStory = (leagueId, season, week) => {
+    try {
+        return !!localStorage.getItem(storyKey(leagueId, season, week));
+    } catch {
+        return true;
+    }
+};
+
+const markStorySeen = (leagueId, season, week) => {
+    try {
+        localStorage.setItem(storyKey(leagueId, season, week), '1');
+    } catch {
+        // Storage blocked -- the story just replays next visit, which is a
+        // far better failure than the recap not rendering at all.
+    }
+};
 
 // Reads what api/weekly-summary.js already generated and stored -- this
 // page never talks to Gemini or any platform itself, it just renders the
@@ -18,6 +42,7 @@ export default function WeeklySummary() {
     const [summaries, setSummaries] = useState([]);
     const [selectedKey, setSelectedKey] = useState(null);
     const [shareLabel, setShareLabel] = useState('Share');
+    const [storyOpen, setStoryOpen] = useState(false);
 
     // The digest email links straight into a specific league's recap
     // (?league=<id>) rather than making the reader hunt for it in the
@@ -59,6 +84,17 @@ export default function WeeklySummary() {
     }, [activeLeague?.id, isPremium]);
 
     const selected = summaries.find(s => `${s.season}:${s.week}` === selectedKey);
+
+    // The first time this browser lands on a given week's recap, the story
+    // plays itself -- that's the whole point of it. Every visit after that
+    // goes straight to the page, with Replay there for anyone who wants it
+    // again (or wants to show someone).
+    useEffect(() => {
+        if (!selected || !activeLeague?.id) return;
+        if (hasSeenStory(activeLeague.id, selected.season, selected.week)) return;
+        setStoryOpen(true);
+        markStorySeen(activeLeague.id, selected.season, selected.week);
+    }, [selected, activeLeague?.id]);
 
     const handleShare = async () => {
         if (!activeLeague?.id || !selected) return;
@@ -132,15 +168,32 @@ export default function WeeklySummary() {
                             ))}
                         </select>
                         {selected && (
-                            <button className={styles.shareBtn} onClick={handleShare}>
-                                <i className="material-icons">ios_share</i>
-                                {shareLabel}
-                            </button>
+                            <div className={styles.actions}>
+                                <button className={styles.replayBtn} onClick={() => setStoryOpen(true)}>
+                                    <i className="material-icons">play_circle</i>
+                                    Replay
+                                </button>
+                                <button className={styles.shareBtn} onClick={handleShare}>
+                                    <i className="material-icons">ios_share</i>
+                                    {shareLabel}
+                                </button>
+                            </div>
                         )}
                     </div>
 
                     {selected && (
                         <WeeklySummaryRecap key={selectedKey} stats={selected.stats} narrative={selected.narrative} />
+                    )}
+
+                    {storyOpen && selected && (
+                        <WeeklySummaryStory
+                            stats={selected.stats}
+                            narrative={selected.narrative}
+                            leagueName={activeLeague?.league_name || 'Your League'}
+                            week={selected.week}
+                            season={selected.season}
+                            onClose={() => setStoryOpen(false)}
+                        />
                     )}
                 </>
             )}

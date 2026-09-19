@@ -74,6 +74,138 @@ export const teamNameFor = (rosterId, rosters, users) => {
     return user?.metadata?.team_name || user?.display_name || `Team ${rosterId}`;
 };
 
+const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+// --------------------------------------------------------------------------
+// The league-wide eval. Every function below is pure and platform-neutral:
+// each pipeline normalises its own data into these shapes, so Sleeper,
+// Yahoo and ESPN all produce the same eval rather than three variants of
+// one. All of it is computed from real scores -- none of it is anything
+// Gemini is left to estimate.
+// --------------------------------------------------------------------------
+
+/** Every result this week, ranked by the winning score. */
+export const buildScoreboard = (games) => {
+    return [...games]
+        .sort((a, b) => Math.max(b.scoreA, b.scoreB) - Math.max(a.scoreA, a.scoreB))
+        .map(g => ({
+            winner: g.winner,
+            loser: g.winner ? (g.winner === g.teamA ? g.teamB : g.teamA) : null,
+            winnerScore: g.winner === g.teamB ? g.scoreB : g.scoreA,
+            loserScore: g.winner === g.teamB ? g.scoreA : g.scoreB,
+            margin: g.margin,
+            tie: !g.winner,
+        }));
+};
+
+/** How this week scored league-wide -- the yardstick every team is judged against. */
+export const buildScoringContext = (teamScores) => {
+    const scores = teamScores.filter(t => Number.isFinite(t.score));
+    if (!scores.length) return null;
+    const sorted = [...scores].sort((a, b) => b.score - a.score);
+    const total = sorted.reduce((sum, t) => sum + t.score, 0);
+    const mid = Math.floor(sorted.length / 2);
+    return {
+        average: round2(total / sorted.length),
+        median: round2(sorted.length % 2 ? sorted[mid].score : (sorted[mid - 1].score + sorted[mid].score) / 2),
+        highest: { team: sorted[0].team, score: round2(sorted[0].score) },
+        lowest: { team: sorted[sorted.length - 1].team, score: round2(sorted[sorted.length - 1].score) },
+        allScores: sorted.map(t => ({ team: t.team, score: round2(t.score) })),
+    };
+};
+
+/** Standings after this week -- record first, points scored as the tiebreak. */
+export const buildPowerRankings = (teamRecords) => {
+    return [...teamRecords]
+        .sort((a, b) => {
+            const winDiff = (b.wins - b.losses) - (a.wins - a.losses);
+            if (winDiff !== 0) return winDiff;
+            return (b.pointsFor || 0) - (a.pointsFor || 0);
+        })
+        .map((t, idx) => ({
+            rank: idx + 1,
+            team: t.team,
+            wins: t.wins,
+            losses: t.losses,
+            pointsFor: round2(t.pointsFor || 0),
+        }));
+};
+
+/**
+ * The worst start/sit call each team made: the bench player who outscored
+ * one of that team's own starters AT THE SAME POSITION by the most. Same
+ * position matters -- a benched QB outscoring a starting kicker is not a
+ * decision anyone actually got to make, and calling it one would be a roast
+ * built on a fake mistake.
+ *
+ * Returned worst-first, since the point of this is the league-wide "who
+ * blew it hardest this week" line.
+ */
+export const buildBenchCalls = (teamRosters) => {
+    const calls = [];
+
+    teamRosters.forEach(({ team, players: roster }) => {
+        const starters = (roster || []).filter(p => p.isStarter && p.position);
+        const bench = (roster || []).filter(p => !p.isStarter && p.position);
+        let worst = null;
+
+        bench.forEach(benched => {
+            starters
+                .filter(s => s.position === benched.position)
+                .forEach(started => {
+                    const pointsLeft = round2(benched.actual - started.actual);
+                    if (pointsLeft <= 0) return;
+                    if (!worst || pointsLeft > worst.pointsLeft) {
+                        worst = {
+                            team,
+                            position: benched.position,
+                            benched: benched.name,
+                            benchedPoints: round2(benched.actual),
+                            started: started.name,
+                            startedPoints: round2(started.actual),
+                            pointsLeft,
+                        };
+                    }
+                });
+        });
+
+        if (worst) calls.push(worst);
+    });
+
+    return calls.sort((a, b) => b.pointsLeft - a.pointsLeft);
+};
+
+/**
+ * Who the schedule carried and who it robbed: the lowest score that still
+ * won, and the highest score that still lost. Both are only interesting
+ * relative to the rest of the week, so they carry the league average with
+ * them.
+ */
+export const buildLuckWatch = (scoreboard, leagueAverage) => {
+    const decided = scoreboard.filter(g => !g.tie);
+    if (!decided.length) return null;
+
+    const luckiest = [...decided].sort((a, b) => a.winnerScore - b.winnerScore)[0];
+    const unluckiest = [...decided].sort((a, b) => b.loserScore - a.loserScore)[0];
+
+    return {
+        luckiestWin: {
+            team: luckiest.winner,
+            score: round2(luckiest.winnerScore),
+            beat: luckiest.loser,
+            opponentScore: round2(luckiest.loserScore),
+            vsLeagueAverage: round2(luckiest.winnerScore - leagueAverage),
+        },
+        unluckiestLoss: {
+            team: unluckiest.loser,
+            score: round2(unluckiest.loserScore),
+            lostTo: unluckiest.winner,
+            opponentScore: round2(unluckiest.winnerScore),
+            vsLeagueAverage: round2(unluckiest.loserScore - leagueAverage),
+        },
+    };
+};
+
 /**
  * Every number this week's email/app card can show, computed from Sleeper's
  * own responses only -- nothing here is inferred or generated.
@@ -206,7 +338,46 @@ export const computeWeekStats = ({ matchups, rosters, users, transactions, playe
         }),
     };
 
-    return { week, games, blowout, closestCall, rivalry, mvpByPosition, biggestDisappointment, transactions: transactionSummary };
+    // --- The league-wide eval, off the same already-verified numbers ---
+    const teamScores = matchups.map(m => ({
+        team: teamNameFor(m.roster_id, rosters, users),
+        score: m.points || 0,
+    }));
+    const scoreboard = buildScoreboard(games);
+    const scoringContext = buildScoringContext(teamScores);
+    const powerRankings = buildPowerRankings(rosters.map(r => ({
+        team: teamNameFor(r.roster_id, rosters, users),
+        wins: r.settings?.wins || 0,
+        losses: r.settings?.losses || 0,
+        pointsFor: r.settings?.fpts || 0,
+    })));
+    // Sleeper hands back every rostered player and their points alongside
+    // the starters, so the bench is already here -- no extra request needed
+    // to work out what a manager left on it.
+    const benchCalls = buildBenchCalls(matchups.map(m => {
+        const starterIds = new Set((m.starters || []).filter(pid => pid && pid !== '0'));
+        const pointsById = m.players_points || {};
+        return {
+            team: teamNameFor(m.roster_id, rosters, users),
+            players: (m.players || [])
+                .filter(Boolean)
+                .map(pid => ({
+                    name: players[pid] ? `${players[pid].first_name || ''} ${players[pid].last_name || ''}`.trim() : `Player #${pid}`,
+                    position: players[pid]?.position || '',
+                    actual: pointsById[pid] ?? 0,
+                    isStarter: starterIds.has(pid),
+                }))
+                .filter(p => p.position),
+        };
+    }));
+    const luckWatch = scoringContext ? buildLuckWatch(scoreboard, scoringContext.average) : null;
+
+    return {
+        week, games, blowout, closestCall, rivalry, mvpByPosition, biggestDisappointment,
+        transactions: transactionSummary,
+        scoreboard, scoringContext, powerRankings, benchCalls, luckWatch,
+        teamVariances: teamVariances.sort((a, b) => b.variance - a.variance),
+    };
 };
 
 /**
@@ -256,12 +427,21 @@ export const buildEspnStatsInputs = ({ byWeek, week, rosters, playersMeta, trans
         teams.forEach(t => {
             const roster = rosters[t.roster_id];
             const starters = roster?.starters || [];
+            // players/players_points mirror Sleeper's own field names on
+            // purpose: computeWeekStats reads the bench off those two, so
+            // filling them here is what lets ESPN's start/sit calls come
+            // out of the same shared code rather than a second version.
+            const allPlayers = roster?.players || [];
             matchups.push({
                 matchup_id: idx + 1,
                 roster_id: t.roster_id,
                 points: t.points || 0,
                 starters,
                 starters_points: starters.map(pid => playersMeta[pid]?.actualPoints ?? 0),
+                players: allPlayers,
+                players_points: Object.fromEntries(
+                    allPlayers.map(pid => [pid, playersMeta[pid]?.actualPoints ?? 0])
+                ),
             });
         });
     });
@@ -319,6 +499,39 @@ export const teamNameForYahoo = (rosterId, standingsRows) => {
 const YAHOO_BENCH_SLOTS = new Set(['BN', 'IR', 'IR+', 'NA']);
 
 /**
+ * A player's fantasy points out of a Yahoo player entity, wherever Yahoo
+ * put them.
+ *
+ * Every OTHER field on this entity is read through yahooField, which
+ * tolerates both of Yahoo's entity shapes; player_points was the one field
+ * read by scanning only the player array's own top-level elements. That
+ * misses it whenever the entity arrives in the numeric-key object form
+ * (quirk 3 in yahooHistory.js's header: a node carrying both
+ * sub-collections and scalars is keyed "0","1","2",... rather than being a
+ * real array), and a miss silently reads as 0 rather than as an error --
+ * which is exactly how every player in a Yahoo weekly summary ended up at
+ * 0.0 while their names, positions and starter flags all read correctly
+ * off that same entity.
+ *
+ * Walks both shapes, shallow-first, via the same yahooCollection helper
+ * that already normalises array-vs-object everywhere else.
+ */
+export const findYahooPlayerPoints = (player) => {
+    const seen = new Set();
+    const walk = (node, depth) => {
+        if (!node || typeof node !== 'object' || depth > 4 || seen.has(node)) return null;
+        seen.add(node);
+        if (node.player_points && node.player_points.total !== undefined) return node.player_points;
+        for (const value of yahooCollection(node)) {
+            const hit = walk(value, depth + 1);
+            if (hit) return hit;
+        }
+        return null;
+    };
+    return walk(player, 0);
+};
+
+/**
  * Per-team roster rows (name, position, actual points, starter/bench) out of
  * a `teams;team_keys=.../roster;week=N/players/stats;type=week;week=N`
  * response. parseYahooTeamPlayerPoints (yahooHistory.js) already reads this
@@ -354,9 +567,7 @@ export const extractYahooRosterPlayers = (data) => {
             const playerId = yahooText(yahooField(playerInfo, 'player_id'));
             if (!playerId) return;
 
-            const pointsNode = Array.isArray(player)
-                ? player.find(x => x && x.player_points)?.player_points
-                : player.player_points;
+            const pointsNode = findYahooPlayerPoints(player);
             const actual = pointsNode?.total !== undefined ? (parseFloat(pointsNode.total) || 0) : 0;
 
             // selected_position is itself an entity (Yahoo's array-of-
@@ -486,7 +697,36 @@ export const computeYahooWeekStats = ({ scoreboardWeek, standingsRows, transacti
         })),
     };
 
-    return { week, games, blowout, closestCall, rivalry, mvpByPosition, biggestDisappointment, transactions: transactionSummary };
+    // --- The same league-wide eval Sleeper/ESPN get, off Yahoo's own data ---
+    const teamScores = scoreboardWeek
+        .flatMap(m => m.teams || [])
+        .map(t => ({ team: teamNameForYahoo(t.roster_id, standingsRows), score: t.points || 0 }));
+    const scoreboard = buildScoreboard(games);
+    const scoringContext = buildScoringContext(teamScores);
+    const powerRankings = buildPowerRankings(standingsRows.map(r => ({
+        team: r.teamName,
+        wins: r.wins || 0,
+        losses: r.losses || 0,
+        pointsFor: r.pointsFor || 0,
+    })));
+    // Yahoo's roster response already includes the whole bench with each
+    // player's own isStarter flag, so the start/sit calls need no extra
+    // request here either.
+    const benchCalls = buildBenchCalls(Object.entries(rosterPlayersByTeamKey).map(([teamKey, rows]) => {
+        const rosterId = standingsRows.find(r => r.teamKey === teamKey)?.rosterId ?? null;
+        return {
+            team: rosterId != null ? teamNameForYahoo(rosterId, standingsRows) : teamKey,
+            players: rows,
+        };
+    }));
+    const luckWatch = scoringContext ? buildLuckWatch(scoreboard, scoringContext.average) : null;
+
+    return {
+        week, games, blowout, closestCall, rivalry, mvpByPosition, biggestDisappointment,
+        transactions: transactionSummary,
+        scoreboard, scoringContext, powerRankings, benchCalls, luckWatch,
+        teamVariances: teamVariances.sort((a, b) => b.variance - a.variance),
+    };
 };
 
 /** Same idea again, off Yahoo's scoreboard shape. */
@@ -506,11 +746,16 @@ CRITICAL GROUNDING RULE: Every fact, score, name, and number below is real and v
 THIS WEEK'S DATA:
 ${JSON.stringify(stats, null, 2)}
 
-Write a recap with these sections, each 1-3 sentences, punchy and specific (use the real names/numbers, don't be generic):
+TONE: You are the league's loudmouth commissioner. Be genuinely funny and mean-spirited in a way friends are with each other -- name names, use the real numbers as ammunition, and never hedge into bland sports-desk filler. A manager reading this should either laugh or want to fight you. Roast hard, but only ever with facts that are actually in the data below.
+
+Write a recap with these sections. Each should be 2-4 sentences (the roast sections can run longer), punchy and specific -- use the real names and numbers, never be generic:
 - headline: A punchy 5-10 word headline for the week.
-- matchupRecap: Cover the week's matchups, calling out the biggest blowout and the closest call by name and score.
-- mvpSpotlight: Call out the standout position MVPs (the highest scorer at each position) by name.
+- matchupRecap: Walk the whole week, not just two games. stats.scoreboard lists every result ranked by winning score -- reference several by name and score, and use stats.scoringContext (league average/median, the week's highest and lowest scores) to say whether this was a shootout week or a leaguewide faceplant.
+- mvpSpotlight: Call out the standout position MVPs (the highest scorer at each position) by name and points.
 - disappointmentOfTheWeek: Roast the biggest disappointment (if one exists in the data) -- it's always a TEAM, not a player, so go after the whole roster/manager, not one guy. Really lean into it: compare their actual score to what they were projected for and let them have it.
+- benchDisasters: The week's worst start/sit calls, from stats.benchCalls (already sorted worst-first). Each entry is a real decision a manager actually made: they benched \`benched\` (\`benchedPoints\` pts) and started \`started\` (\`startedPoints\` pts) at the SAME position, leaving \`pointsLeft\` on the bench. Lead with the single worst one and absolutely bury that manager for it by name, then mention one or two others. If stats.benchCalls is empty, say every manager somehow got their lineup right and sound suspicious about it.
+- powerRankings: Using stats.powerRankings (already ranked, with real records and points-for), give a quick rundown -- who's for real at the top, who's quietly climbing, and who at the bottom should consider a new hobby. Name at least the top team and the bottom team with their actual records.
+- luckWatch: From stats.luckWatch. luckiestWin is the lowest score that still won (say how far below the league average it was and who they got to beat), and unluckiestLoss is the highest score that still lost (sympathy optional, mockery encouraged). Skip gracefully if it's missing.
 - rivalryWatch: Frame this week's most evenly-matched-by-record matchup as a rivalry, if one exists in the data.
 - waiverWireBuzz: Analyze the week's trades and waiver activity, not just list it. For each notable add, transactions.notableAdds[].added[] carries pointsThisWeek -- a real number if that player actually started and scored for their new team this week, or null if they didn't start. Grade the move on that: a pickup that started and scored well is a smart, real-impact add worth praising by name and points; one that sat the bench or scored little is fair game to call out as premature or a stash. Never invent a point total that isn't in the data, and never claim "impact" for a null pointsThisWeek -- say they haven't started yet instead.
 - nextWeekPreview: Only write this if stats.nextWeekMatchups is present and non-empty -- if it's missing or empty, return an empty string, don't guess at next week. When present, preview 1-2 of next week's real matchups by the real team names listed there -- which pairing looks like the week's best game, purely based on this week's results/records already in the data. Never invent an opponent, a projection, or a score for a game that hasn't happened.
@@ -524,11 +769,18 @@ const NARRATIVE_SCHEMA = {
         matchupRecap: { type: SchemaType.STRING },
         mvpSpotlight: { type: SchemaType.STRING },
         disappointmentOfTheWeek: { type: SchemaType.STRING },
+        benchDisasters: { type: SchemaType.STRING },
+        powerRankings: { type: SchemaType.STRING },
+        luckWatch: { type: SchemaType.STRING },
         rivalryWatch: { type: SchemaType.STRING },
         waiverWireBuzz: { type: SchemaType.STRING },
         nextWeekPreview: { type: SchemaType.STRING },
     },
-    required: ['headline', 'matchupRecap', 'mvpSpotlight', 'disappointmentOfTheWeek', 'rivalryWatch', 'waiverWireBuzz', 'nextWeekPreview'],
+    required: [
+        'headline', 'matchupRecap', 'mvpSpotlight', 'disappointmentOfTheWeek',
+        'benchDisasters', 'powerRankings', 'luckWatch',
+        'rivalryWatch', 'waiverWireBuzz', 'nextWeekPreview',
+    ],
 };
 
 const generateNarrative = async (leagueName, stats) => {
@@ -901,6 +1153,20 @@ const generateForYahooLeague = async ({ leagueDbId, yahooLeagueKey, leagueName, 
             );
             Object.assign(rosterPlayersByTeamKey, extractYahooRosterPlayers(single));
         }
+    }
+
+    // Every player reading 0 is the signature of a points node this parser
+    // never found -- it is never what a real week looks like. Logs the raw
+    // shape of one player entity (just its keys, not a whole roster dump) so
+    // the actual response structure is visible in the runtime logs rather
+    // than having to be guessed at from the outside.
+    const allRows = Object.values(rosterPlayersByTeamKey).flat();
+    if (allRows.length && allRows.every(r => !r.actual)) {
+        const sample = Object.values(rosterPlayersByTeamKey)[0]?.[0];
+        console.error(
+            `Yahoo weekly summary: all ${allRows.length} players read 0 points for week ${week} -- `
+            + `player_points was not found on any entity. Sample parsed row: ${JSON.stringify(sample)}`
+        );
     }
 
     const stats = computeYahooWeekStats({ scoreboardWeek, standingsRows, transactions: weekTransactions, rosterPlayersByTeamKey, playerMeta, week });

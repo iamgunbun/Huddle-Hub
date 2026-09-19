@@ -53,6 +53,9 @@ export default function WeeklySummaryRecap({ stats, narrative }) {
         ['Matchup Recap', narrative?.matchupRecap],
         ['MVP Spotlight', narrative?.mvpSpotlight],
         ['Disappointment of the Week', narrative?.disappointmentOfTheWeek],
+        ['Bench Disasters', narrative?.benchDisasters],
+        ['Power Rankings', narrative?.powerRankings],
+        ['Luck Watch', narrative?.luckWatch],
         ['Rivalry Watch', narrative?.rivalryWatch],
         ['Waiver Wire Impact', narrative?.waiverWireBuzz],
         ['Next Week Preview', narrative?.nextWeekPreview],
@@ -102,6 +105,59 @@ export default function WeeklySummaryRecap({ stats, narrative }) {
                                 <div className={styles.mvpPos}>{pos}</div>
                                 <div className={styles.mvpName}>{p.name}</div>
                                 <div className={styles.mvpPts}><CountUp value={p.actual} decimals={1} suffix=" pts" /></div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {stats?.scoreboard?.length > 0 && (
+                <div className={styles.section} style={nextDelay()}>
+                    <h4 className={styles.sectionTitle}>Every Result</h4>
+                    <div className={styles.rows}>
+                        {stats.scoreboard.map((g, i) => (
+                            <div key={`${g.winner}-${g.loser}-${i}`} className={styles.resultRow} style={nextDelay()}>
+                                <span className={styles.resultWinner}>{g.tie ? 'Tie' : g.winner}</span>
+                                <span className={styles.resultScore}>{g.winnerScore} &ndash; {g.loserScore}</span>
+                                <span className={styles.resultLoser}>{g.loser}</span>
+                            </div>
+                        ))}
+                    </div>
+                    {stats?.scoringContext && (
+                        <div className={styles.contextLine}>
+                            League average {stats.scoringContext.average} &middot; high {stats.scoringContext.highest.score} ({stats.scoringContext.highest.team}) &middot; low {stats.scoringContext.lowest.score} ({stats.scoringContext.lowest.team})
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {stats?.benchCalls?.length > 0 && (
+                <div className={styles.section} style={nextDelay()}>
+                    <h4 className={styles.sectionTitle}>Points Left On The Bench</h4>
+                    <div className={styles.rows}>
+                        {stats.benchCalls.slice(0, 5).map((c, i) => (
+                            <div key={`${c.team}-${i}`} className={styles.benchRow} style={nextDelay()}>
+                                <div className={styles.benchTeam}>{c.team}</div>
+                                <div className={styles.benchDetail}>
+                                    Benched <strong>{c.benched}</strong> ({c.benchedPoints}) &middot; started <strong>{c.started}</strong> ({c.startedPoints})
+                                </div>
+                                <div className={styles.benchCost}>-{c.pointsLeft}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {stats?.powerRankings?.length > 0 && (
+                <div className={styles.section} style={nextDelay()}>
+                    <h4 className={styles.sectionTitle}>Standings</h4>
+                    <div className={styles.rows}>
+                        {stats.powerRankings.map(r => (
+                            <div key={r.rank} className={styles.rankRow} style={nextDelay()}>
+                                <span className={styles.rankNum}>{r.rank}</span>
+                                <span className={styles.rankTeam}>{r.team}</span>
+                                <span className={styles.rankRecord}>{r.wins}-{r.losses}</span>
+                                <span className={styles.rankPts}>{r.pointsFor}</span>
                             </div>
                         ))}
                     </div>

@@ -114,6 +114,124 @@
     font-size: 0.85em;
 }
 
+.rows {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.resultRow,
+.rankRow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.85em;
+    animation: revealUp 0.5s ease both;
+}
+
+.resultWinner {
+    color: #f8fafc;
+    font-weight: 700;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resultScore {
+    color: #eebf1c;
+    font-weight: 800;
+    flex-shrink: 0;
+}
+
+.resultLoser {
+    color: #64748b;
+    flex: 1;
+    min-width: 0;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.contextLine {
+    color: #64748b;
+    font-size: 0.78em;
+    margin-top: 10px;
+    line-height: 1.5;
+}
+
+.benchRow {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2px 10px;
+    background: rgba(239, 68, 68, 0.07);
+    border: 1px solid rgba(239, 68, 68, 0.18);
+    border-radius: 8px;
+    padding: 10px 12px;
+    animation: revealUp 0.5s ease both;
+}
+
+.benchTeam {
+    color: #f8fafc;
+    font-weight: 700;
+    font-size: 0.85em;
+}
+
+.benchDetail {
+    color: #94a3b8;
+    font-size: 0.78em;
+    line-height: 1.5;
+    grid-column: 1 / 2;
+}
+
+.benchDetail strong {
+    color: #cbd5e1;
+}
+
+.benchCost {
+    color: #ef4444;
+    font-weight: 900;
+    font-size: 1.05em;
+    grid-column: 2 / 3;
+    grid-row: 1 / 3;
+    align-self: center;
+}
+
+.rankNum {
+    color: #eebf1c;
+    font-weight: 900;
+    width: 20px;
+    flex-shrink: 0;
+}
+
+.rankTeam {
+    color: #f8fafc;
+    font-weight: 700;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rankRecord {
+    color: #94a3b8;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.rankPts {
+    color: #64748b;
+    flex-shrink: 0;
+    min-width: 52px;
+    text-align: right;
+}
+
 /* Respect a reader who's asked their OS/browser to cut down on motion --
    the reveal is decoration, never information, so it's safe to just show
    everything already in place instead of animating it in. */

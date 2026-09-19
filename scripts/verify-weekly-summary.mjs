@@ -18,7 +18,8 @@ process.env.SUPABASE_SERVICE_ROLE_KEY ||= 'dummy-key-for-verify-script-only';
 // by a person looking at a screen before it ships the way a UI bug would be.
 const {
     computeWeekStats, teamNameFor, nextWeekMatchupPreview,
-    computeYahooWeekStats, teamNameForYahoo, extractYahooRosterPlayers, yahooNextWeekMatchupPreview,
+    buildScoreboard, buildScoringContext, buildPowerRankings, buildBenchCalls, buildLuckWatch,
+    computeYahooWeekStats, teamNameForYahoo, extractYahooRosterPlayers, yahooNextWeekMatchupPreview, findYahooPlayerPoints,
     buildEspnStatsInputs, espnNextWeekMatchupPreview,
     buildDigestEmailHtml,
 } = await import('../api/weekly-summary.js');
@@ -130,6 +131,96 @@ check('next week pairing resolves both real team names', [nextWeek[0].teamA, nex
 check('an unpaired (bye) team produces no extra pairing', nextWeek.length, 1);
 check('no future matchups at all produces an empty list rather than throwing', nextWeekMatchupPreview([], rosters, users), []);
 
+// ============================================================================
+// The league-wide eval -- platform-neutral, so these are checked directly
+// against hand-built inputs (one unambiguous right answer each) as well as
+// through the real Sleeper scenario above.
+// ============================================================================
+
+// --- buildScoreboard: every result, ranked by winning score ---
+const evalScoreboard = buildScoreboard(stats.games);
+check('the scoreboard covers every game, not just the extremes', evalScoreboard.length, 2);
+check('the scoreboard leads with the highest winning score', evalScoreboard[0].winner, 'Team Alpha');
+check('the scoreboard pairs each winner with the team they actually beat', evalScoreboard[0].loser, 'Team Delta');
+check('winner and loser scores are not swapped', [evalScoreboard[0].winnerScore, evalScoreboard[0].loserScore], [150.5, 90.2]);
+check('a tie is flagged rather than inventing a winner', buildScoreboard([
+    { teamA: 'A', teamB: 'B', scoreA: 100, scoreB: 100, margin: 0, winner: null },
+])[0].tie, true);
+
+// --- buildScoringContext ---
+const evalContext = buildScoringContext([
+    { team: 'Alpha', score: 150.5 }, { team: 'Bravo', score: 110 },
+    { team: 'Charlie', score: 108.5 }, { team: 'Delta', score: 90.2 },
+]);
+check('the league average is the real mean of the week', evalContext.average, Math.round(((150.5 + 110 + 108.5 + 90.2) / 4) * 100) / 100);
+check('the median of an even field averages the middle two', evalContext.median, Math.round(((110 + 108.5) / 2) * 100) / 100);
+check('the highest score names the right team', [evalContext.highest.team, evalContext.highest.score], ['Alpha', 150.5]);
+check('the lowest score names the right team', [evalContext.lowest.team, evalContext.lowest.score], ['Delta', 90.2]);
+check('every score is listed, ranked high to low', evalContext.allScores.map(s => s.team), ['Alpha', 'Bravo', 'Charlie', 'Delta']);
+check('no scores at all produces null rather than throwing', buildScoringContext([]), null);
+
+// --- buildPowerRankings: record first, points-for as the tiebreak ---
+const evalRankings = buildPowerRankings([
+    { team: 'Even Record Low Points', wins: 5, losses: 5, pointsFor: 900 },
+    { team: 'Best Record', wins: 9, losses: 1, pointsFor: 800 },
+    { team: 'Even Record High Points', wins: 5, losses: 5, pointsFor: 1100 },
+]);
+check('the best record ranks first even on fewer points', evalRankings[0].team, 'Best Record');
+check('equal records break by points scored', [evalRankings[1].team, evalRankings[2].team], ['Even Record High Points', 'Even Record Low Points']);
+check('ranks are numbered from 1', evalRankings.map(r => r.rank), [1, 2, 3]);
+
+// --- buildBenchCalls: only a real same-position decision counts ---
+const evalBenchCalls = buildBenchCalls([
+    {
+        team: 'Blew It',
+        players: [
+            { name: 'Started Dud', position: 'RB', actual: 3, isStarter: true },
+            { name: 'Benched Stud', position: 'RB', actual: 28, isStarter: false },
+        ],
+    },
+    {
+        // A benched QB outscoring a started KICKER is not a decision anyone
+        // got to make -- it must not be reported as a mistake.
+        team: 'Cross Position Non Mistake',
+        players: [
+            { name: 'Started Kicker', position: 'K', actual: 4, isStarter: true },
+            { name: 'Benched QB', position: 'QB', actual: 30, isStarter: false },
+        ],
+    },
+    {
+        team: 'Got It Right',
+        players: [
+            { name: 'Started Stud', position: 'WR', actual: 25, isStarter: true },
+            { name: 'Benched Dud', position: 'WR', actual: 2, isStarter: false },
+        ],
+    },
+]);
+check('only the team that actually misplayed a position appears', evalBenchCalls.map(c => c.team), ['Blew It']);
+check('points left on the bench is the real difference', evalBenchCalls[0].pointsLeft, 25);
+check('the call names both the benched player and who was started over them', [evalBenchCalls[0].benched, evalBenchCalls[0].started], ['Benched Stud', 'Started Dud']);
+check('worst calls come first', buildBenchCalls([
+    { team: 'Small Miss', players: [
+        { name: 'S1', position: 'TE', actual: 10, isStarter: true },
+        { name: 'B1', position: 'TE', actual: 13, isStarter: false },
+    ] },
+    { team: 'Huge Miss', players: [
+        { name: 'S2', position: 'TE', actual: 1, isStarter: true },
+        { name: 'B2', position: 'TE', actual: 31, isStarter: false },
+    ] },
+]).map(c => c.team), ['Huge Miss', 'Small Miss']);
+
+// --- buildLuckWatch ---
+const evalLuck = buildLuckWatch(evalScoreboard, evalContext.average);
+check('the luckiest win is the lowest score that still won', evalLuck.luckiestWin.team, 'Team Bravo');
+check('the unluckiest loss is the highest score that still lost', evalLuck.unluckiestLoss.team, 'Team Charlie');
+check('luck is measured against the real league average', evalLuck.unluckiestLoss.vsLeagueAverage, Math.round((108.5 - evalContext.average) * 100) / 100);
+check('an all-tie week produces no luck watch rather than throwing', buildLuckWatch([{ tie: true }], 100), null);
+
+// --- the eval is attached to the real computed stats, not just standalone ---
+check('computeWeekStats now carries the full scoreboard', stats.scoreboard.length, 2);
+check('computeWeekStats now carries power rankings for every team', stats.powerRankings.length, 4);
+check('computeWeekStats now carries the league scoring context', stats.scoringContext.highest.team, 'Team Alpha');
+
 // --- an unresolvable pair (no matching opponent this week) is dropped, not crashed on ---
 const lonelyStats = computeWeekStats({
     matchups: [{ matchup_id: 1, roster_id: 1, points: 100, starters: [], starters_points: [] }],
@@ -224,6 +315,31 @@ check('actual points are read from player_points.total', rosterPlayersByTeamKey[
 check('a starter is flagged as a starter', rosterPlayersByTeamKey['461.l.999.t.1'].find(p => p.playerId === '100').isStarter, true);
 check('a high-scoring benched player is not flagged as a starter', rosterPlayersByTeamKey['461.l.999.t.1'].find(p => p.playerId === '101').isStarter, false);
 check('a player missing selected_position defaults to not-a-starter rather than guessing', rosterPlayersByTeamKey['461.l.999.t.2'].find(p => p.playerId === '103').isStarter, false);
+
+// --- player_points found in BOTH of Yahoo's entity shapes ---
+// The array form above already passes. This is the numeric-key object form
+// (quirk 3: a node carrying sub-collections and scalars is keyed
+// "0","1","2",... instead of being a real array) -- reading it the shallow
+// way returned undefined, which silently became 0 for every player and is
+// what made a whole Yahoo league's weekly summary read 0.0 across the board.
+const numericKeyPlayerEntity = {
+    0: [
+        { player_key: '461.p.900' },
+        { player_id: '900' },
+        { name: { full: 'Object Shaped' } },
+        { display_position: 'WR' },
+    ],
+    1: { player_stats: { coverage_type: 'week', week: '5', stats: [] } },
+    2: { player_points: { coverage_type: 'week', week: '5', total: '18.6' } },
+    3: { selected_position: [{ coverage_type: 'week' }, { position: 'WR' }] },
+};
+check('points are found when the player entity is an array of single-key objects', findYahooPlayerPoints([
+    [{ player_id: '901' }],
+    { player_points: { total: '12.3' } },
+])?.total, '12.3');
+check('points are found when the player entity is the numeric-key object form instead', findYahooPlayerPoints(numericKeyPlayerEntity)?.total, '18.6');
+check('a player entity with genuinely no points node returns null rather than a bogus zero', findYahooPlayerPoints([[{ player_id: '902' }]]), null);
+check('a non-object player entity does not throw', findYahooPlayerPoints(null), null);
 
 const yahooTransactions = [
     { type: 'waiver', roster_ids: [3], adds: { '500': 3 }, settings: { waiver_bid: 22 } },
