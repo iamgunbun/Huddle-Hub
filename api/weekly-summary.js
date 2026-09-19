@@ -1374,6 +1374,13 @@ const generateForYahooLeague = async ({ leagueDbId, yahooLeagueKey, leagueName, 
         teamKeyGroups.push(teamKeys.slice(i, i + YAHOO_TEAM_POINTS_CHUNK));
     }
     const rosterPlayersByTeamKey = {};
+    // Holds one raw roster response purely so the all-zero diagnostic below
+    // can show what Yahoo actually sent. Declared here rather than assigned
+    // into thin air: api/*.js are ES modules, so they run in strict mode and
+    // an undeclared assignment is a ReferenceError, not an implicit global.
+    // That threw inside the Promise.all and took down the whole league's
+    // recap -- a debugging aid destroying the thing it was added to debug.
+    let lastRosterResponse = null;
     // Scoped under the LEAGUE, not the bare top-level `teams;team_keys=`
     // collection. Fantasy points are a function of the league's own scoring
     // settings, so Yahoo only returns a player_points node when the request
@@ -1405,6 +1412,9 @@ const generateForYahooLeague = async ({ leagueDbId, yahooLeagueKey, leagueName, 
     // shape of one player entity (just its keys, not a whole roster dump) so
     // the actual response structure is visible in the runtime logs rather
     // than having to be guessed at from the outside.
+    // Wrapped whole: a diagnostic must never be able to cost a league its
+    // recap. The first version of this threw and did exactly that.
+    try {
     const allRows = Object.values(rosterPlayersByTeamKey).flat();
     if (allRows.length && allRows.every(r => !r.actual)) {
         // Dump the RAW entity, not the parsed row. The parsed row only ever
@@ -1430,6 +1440,9 @@ const generateForYahooLeague = async ({ leagueDbId, yahooLeagueKey, leagueName, 
             + `statModifiers parsed: ${Object.keys(statModifiers || {}).length} entries. `
             + `Raw player entity: ${rawSample}`
         );
+    }
+    } catch (diagErr) {
+        console.error('Yahoo weekly summary: the all-zero diagnostic itself failed:', diagErr?.message || diagErr);
     }
 
     const stats = computeYahooWeekStats({ scoreboardWeek, standingsRows, transactions: weekTransactions, rosterPlayersByTeamKey, playerMeta, week });
