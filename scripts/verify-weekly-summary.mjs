@@ -22,7 +22,7 @@ const {
     computeYahooWeekStats, teamNameForYahoo, extractYahooRosterPlayers, yahooNextWeekMatchupPreview, findYahooPlayerPoints,
     buildEspnStatsInputs, espnNextWeekMatchupPreview,
     buildDigestEmailHtml, withDeadline, fetchWithTimeout,
-    parseYahooStatModifiers, scoreYahooStatLine, narrativePayload,
+    parseYahooStatModifiers, scoreYahooStatLine, narrativePayload, NARRATIVE_SCHEMA,
 } = await import('../api/weekly-summary.js');
 
 let checks = 0;
@@ -666,5 +666,49 @@ try {
 }
 hangingServer.close();
 check('a request that never answers times out instead of blocking the run', typeof fetchTimeoutError === 'string' && fetchTimeoutError.includes('timed out'), true);
+
+// --- Narrative schema: every story card must be guaranteed a burn. ---
+//
+// A storyBurns key left out of `required` is not a cosmetic slip -- that is
+// precisely how the model came to omit the whole object and ship a story
+// where every card rendered bare ("there are still no roasts"). A new card
+// added without its key landing in `required` would reintroduce it
+// silently, so this asserts the relationship rather than the list.
+const burnProps = Object.keys(NARRATIVE_SCHEMA.properties.storyBurns.properties);
+const burnRequired = NARRATIVE_SCHEMA.properties.storyBurns.required;
+check(
+    'every storyBurns key is required, so no story card can render without a burn',
+    burnProps.filter(k => !burnRequired.includes(k)),
+    []
+);
+check('the bottom-feeders card has its own burn key', burnProps.includes('bottomFeeders'), true);
+check('storyBurns itself is required at the top level', NARRATIVE_SCHEMA.required.includes('storyBurns'), true);
+
+// The leaders/bottom-feeders split (mirrors buildSlides in
+// WeeklySummaryStory.jsx, which is JSX and so can't be imported here).
+// The case that matters is a league small enough for a naive slice(-5) to
+// overlap: a team must never be congratulated on one card and called a
+// bottom feeder on the next.
+const splitRankings = (ranks) => ({
+    leaders: ranks.slice(0, 5),
+    bottom: ranks.slice(Math.max(5, ranks.length - 5)),
+});
+
+const twelve = Array.from({ length: 12 }, (_, i) => ({ rank: i + 1, team: `T${i + 1}` }));
+const twelveSplit = splitRankings(twelve);
+check('a 12-team league shows the real top 5', twelveSplit.leaders.map(r => r.rank), [1, 2, 3, 4, 5]);
+check('a 12-team league shows the real bottom 5', twelveSplit.bottom.map(r => r.rank), [8, 9, 10, 11, 12]);
+
+const eight = Array.from({ length: 8 }, (_, i) => ({ rank: i + 1, team: `T${i + 1}` }));
+const eightSplit = splitRankings(eight);
+check(
+    'an 8-team league never puts the same team on both the leaders and bottom-feeders cards',
+    eightSplit.leaders.filter(l => eightSplit.bottom.some(b => b.rank === l.rank)),
+    []
+);
+check('an 8-team league still names its worst teams', eightSplit.bottom.map(r => r.rank), [6, 7, 8]);
+
+const four = Array.from({ length: 4 }, (_, i) => ({ rank: i + 1, team: `T${i + 1}` }));
+check('a league smaller than the leaders card gets no bottom-feeders card at all', splitRankings(four).bottom, []);
 
 console.log(`OK: ${checks} weekly-summary checks passed`);

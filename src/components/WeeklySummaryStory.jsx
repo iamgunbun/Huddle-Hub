@@ -118,15 +118,32 @@ const buildSlides = ({ stats, narrative, leagueName, week, season }) => {
         });
     }
 
-    if (stats?.powerRankings?.length) {
+    const rankings = stats?.powerRankings || [];
+    if (rankings.length) {
         slides.push({
-            key: 'power',
+            key: 'leaders',
             kicker: 'Power rankings',
-            headline: 'Where everyone stands',
-            rankings: stats.powerRankings.slice(0, 5),
+            headline: "This Week's Leaders",
+            rankings: rankings.slice(0, 5),
             sub: burns.powerRankings,
             tone: 'gold',
         });
+
+        // The bottom five -- but never a team that just appeared on the
+        // leaders card. A plain slice(-5) in an 8-team league would put
+        // three teams on both slides, congratulating them and then calling
+        // them bottom feeders one tap later.
+        const bottom = rankings.slice(Math.max(5, rankings.length - 5));
+        if (bottom.length) {
+            slides.push({
+                key: 'bottom',
+                kicker: 'Power rankings',
+                headline: `Week ${week}'s Bottom Feeders`,
+                rankings: bottom,
+                sub: burns.bottomFeeders,
+                tone: 'red',
+            });
+        }
     }
 
     slides.push({
