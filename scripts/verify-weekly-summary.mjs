@@ -22,6 +22,7 @@ const {
     computeYahooWeekStats, teamNameForYahoo, extractYahooRosterPlayers, yahooNextWeekMatchupPreview, findYahooPlayerPoints,
     buildEspnStatsInputs, espnNextWeekMatchupPreview,
     buildDigestEmailHtml, withDeadline, fetchWithTimeout,
+    parseYahooStatModifiers, scoreYahooStatLine, narrativePayload,
 } = await import('../api/weekly-summary.js');
 
 let checks = 0;
@@ -521,6 +522,109 @@ check('the digest names every league it covers', ['Dynasty Warriors', 'Redraft R
 check('each league gets its own View Summary link, deep-linked by id', digestHtml.includes('/weekly-summary?league=league-a') && digestHtml.includes('/weekly-summary?league=league-b'), true);
 check('the digest headline is plural for more than one league', digestHtml.includes('Your Weekly Summaries Are Ready'), true);
 check('a single-league digest uses the singular headline instead', buildDigestEmailHtml([digestLeagues[0]]).includes('Your Weekly Summary Is Ready'), true);
+
+// ============================================================================
+// Deriving Yahoo player points from the raw stat line. Yahoo only returns a
+// player_points node when the request carries league context; the raw
+// player_stats line comes back either way. This is what keeps points real
+// regardless of which shape the response takes.
+// ============================================================================
+
+const yahooSettings = {
+    fantasy_content: {
+        league: [
+            { league_key: '461.l.999' },
+            {
+                settings: [{
+                    stat_modifiers: {
+                        stats: [
+                            { stat: { stat_id: '4', value: '0.04' } },   // passing yards
+                            { stat: { stat_id: '5', value: '4' } },      // passing TD
+                            { stat: { stat_id: '6', value: '-1' } },     // interception
+                            { stat: { stat_id: '9', value: '0.1' } },    // rushing yards
+                        ],
+                    },
+                }],
+            },
+        ],
+    },
+};
+
+const modifiers = parseYahooStatModifiers(yahooSettings);
+check('scoring settings are read off the league settings response', modifiers['5'], 4);
+check('a fractional per-unit modifier survives', modifiers['4'], 0.04);
+check('a negative modifier survives', modifiers['6'], -1);
+check('settings with no modifiers at all produce an empty map rather than throwing', parseYahooStatModifiers({}), {});
+
+// 300 passing yards (12), 2 passing TD (8), 1 INT (-1), 20 rush yards (2) = 21
+const statLinePlayer = [
+    [{ player_id: '100' }, { name: { full: 'Derivable Player' } }],
+    { player_stats: { stats: [
+        { stat: { stat_id: '4', value: '300' } },
+        { stat: { stat_id: '5', value: '2' } },
+        { stat: { stat_id: '6', value: '1' } },
+        { stat: { stat_id: '9', value: '20' } },
+    ] } },
+];
+check('points are derived from the raw stat line under the league\'s own scoring', scoreYahooStatLine(statLinePlayer, modifiers), 21);
+check('a stat the league does not score is ignored rather than counted as zero-value noise', scoreYahooStatLine([
+    [{ player_id: '101' }],
+    { player_stats: { stats: [
+        { stat: { stat_id: '5', value: '1' } },
+        { stat: { stat_id: '9999', value: '50' } },
+    ] } },
+], modifiers), 4);
+check('no stat line at all returns null rather than a fabricated zero', scoreYahooStatLine([[{ player_id: '102' }]], modifiers), null);
+check('no scoring settings returns null rather than scoring everything as zero', scoreYahooStatLine(statLinePlayer, {}), null);
+
+// The whole point: an entity with NO player_points still yields real points.
+const noPointsNodeRoster = {
+    fantasy_content: {
+        teams: {
+            0: {
+                team: [
+                    [{ team_key: '461.l.999.t.9' }, { team_id: '9' }, { name: 'Derived Team' }],
+                    { roster: { 0: { players: {
+                        0: { player: [
+                            [
+                                { player_key: '461.p.100' },
+                                { player_id: '100' },
+                                { name: { full: 'Derivable Player' } },
+                                { display_position: 'QB' },
+                            ],
+                            { player_stats: { stats: [
+                                { stat: { stat_id: '4', value: '300' } },
+                                { stat: { stat_id: '5', value: '2' } },
+                                { stat: { stat_id: '6', value: '1' } },
+                                { stat: { stat_id: '9', value: '20' } },
+                            ] } },
+                            { selected_position: [{ coverage_type: 'week' }, { position: 'QB' }] },
+                        ] },
+                        count: 1,
+                    } } } },
+                ],
+            },
+            count: 1,
+        },
+    },
+};
+const derivedRows = extractYahooRosterPlayers(noPointsNodeRoster, modifiers);
+check(
+    'a roster with no player_points node still produces real points instead of 0',
+    derivedRows['461.l.999.t.9'][0].actual,
+    21
+);
+check(
+    'without scoring settings that same roster falls back to 0 rather than guessing',
+    extractYahooRosterPlayers(noPointsNodeRoster, null)['461.l.999.t.9'][0].actual,
+    0
+);
+
+// --- the narrative payload stays small ---
+const payload = narrativePayload(stats);
+check('the narrative payload drops the redundant raw games list', payload.games, undefined);
+check('the narrative payload keeps the scoreboard it actually reads', Array.isArray(payload.scoreboard), true);
+check('the narrative payload is materially smaller than the full stats object', JSON.stringify(payload).length < JSON.stringify(stats).length, true);
 
 // ============================================================================
 // Timeout guards. These are what keep a single hung upstream from taking the

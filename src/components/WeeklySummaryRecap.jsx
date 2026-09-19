@@ -59,11 +59,19 @@ export default function WeeklySummaryRecap({ stats, narrative }) {
         ['Rivalry Watch', narrative?.rivalryWatch],
         ['Waiver Wire Impact', narrative?.waiverWireBuzz],
         ['Next Week Preview', narrative?.nextWeekPreview],
+        ['The Full Evaluation', narrative?.fullEvaluation],
     ];
 
     return (
         <div className={styles.recapCard}>
             <h2 className={styles.headline} style={nextDelay()}>{narrative?.headline}</h2>
+
+            {narrative?.generationFailed && (
+                <div className={styles.notice}>
+                    The write-up didn't generate for this week, so this is the raw breakdown.
+                    Re-running the summary will fill in the commentary.
+                </div>
+            )}
 
             <div className={styles.statRow}>
                 {stats?.blowout && (

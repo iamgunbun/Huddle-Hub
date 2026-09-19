@@ -114,6 +114,17 @@
     font-size: 0.85em;
 }
 
+.notice {
+    background: rgba(238, 191, 28, 0.08);
+    border: 1px solid rgba(238, 191, 28, 0.25);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #cbd5e1;
+    font-size: 0.82em;
+    line-height: 1.5;
+    margin-bottom: 18px;
+}
+
 .rows {
     display: flex;
     flex-direction: column;
