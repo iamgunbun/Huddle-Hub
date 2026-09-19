@@ -821,7 +821,14 @@ const generateNarrative = async (leagueName, stats) => {
         ],
         generationConfig: { responseMimeType: 'application/json', responseSchema: NARRATIVE_SCHEMA },
     });
-    const result = await model.generateContent(buildNarrativePrompt(leagueName, stats));
+    // The single slowest step in a league, and the SDK enforces no timeout
+    // of its own -- one slow generation used to be enough to push the whole
+    // multi-league run past the platform's ceiling.
+    const result = await withDeadline(
+        model.generateContent(buildNarrativePrompt(leagueName, stats)),
+        GEMINI_TIMEOUT_MS,
+        `Gemini narrative for "${leagueName}"`
+    );
     if (!result.response.candidates || result.response.candidates.length === 0) {
         throw new Error('Gemini blocked the weekly summary response.');
     }
@@ -886,7 +893,7 @@ const sendDigestEmail = async (email, leagues) => {
     const subject = leagues.length === 1
         ? `${leagues[0].leagueName} Week ${week ?? ''} Recap Is Ready`
         : `Your Week ${week ?? ''} Weekly Summaries Are Ready (${leagues.length} leagues)`;
-    const response = await fetch('https://api.resend.com/emails', {
+    const response = await fetchWithTimeout('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -904,8 +911,49 @@ const sendDigestEmail = async (email, leagues) => {
     return { sent: true };
 };
 
+// No outbound call here had a timeout, and fetch has no default one: a
+// single platform or Gemini request that never answers blocks its league
+// forever, which is what made this endpoint die on Vercel's hard 300s
+// ceiling (FUNCTION_INVOCATION_TIMEOUT) rather than finishing short. Every
+// request below now fails fast instead, so one bad upstream costs that
+// league and nothing else.
+const REQUEST_TIMEOUT_MS = 20000;
+// Generation is slower than a plain API read, so it gets its own, longer
+// ceiling -- still bounded, which is the point.
+const GEMINI_TIMEOUT_MS = 60000;
+// The whole of one league: its platform fetches plus its narrative. A
+// league that can't finish inside this is reported as a failure for that
+// league rather than being allowed to consume the run's entire budget.
+const LEAGUE_TIMEOUT_MS = 110000;
+
+export const fetchWithTimeout = async (url, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } catch (err) {
+        if (err?.name === 'AbortError') {
+            throw new Error(`${url} -> timed out after ${timeoutMs}ms`);
+        }
+        throw err;
+    } finally {
+        clearTimeout(timer);
+    }
+};
+
+/** Rejects if `promise` hasn't settled in time, so one stuck step can't hold a whole run. */
+export const withDeadline = (promise, timeoutMs, label) => {
+    let timer;
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error(`${label} exceeded ${timeoutMs}ms`)), timeoutMs);
+        }),
+    ]).finally(() => clearTimeout(timer));
+};
+
 const fetchJson = async (url, options) => {
-    const res = await fetch(url, options);
+    const res = await fetchWithTimeout(url, options);
     if (!res.ok) throw new Error(`${url} -> HTTP ${res.status}`);
     return res.json();
 };
@@ -974,7 +1022,7 @@ const espnApiRequest = async (espnLeagueId, season, views, scoringPeriodId, cook
     if (cookies?.espnS2 && cookies?.swid) {
         headers['Cookie'] = `espn_s2=${cookies.espnS2}; SWID=${cookies.swid};`;
     }
-    const response = await fetch(url, { headers });
+    const response = await fetchWithTimeout(url, { headers });
     if (response.status === 401) {
         throw new Error('Private ESPN league: missing or expired espn_s2/SWID cookies.');
     }
@@ -1018,7 +1066,7 @@ const generateForEspnLeague = async ({ leagueDbId, espnLeagueId, season, leagueN
         const defenseMeta = espnDefenseMetaFromId(id);
         if (defenseMeta) { playersMeta[id] = defenseMeta; continue; }
         try {
-            const res = await fetch(`https://site.api.espn.com/apis/common/v3/sports/football/nfl/athletes/${id}`);
+            const res = await fetchWithTimeout(`https://site.api.espn.com/apis/common/v3/sports/football/nfl/athletes/${id}`);
             if (res.ok) {
                 const meta = parseEspnAthleteResponse(await res.json());
                 if (meta) playersMeta[id] = meta;
@@ -1075,7 +1123,7 @@ const getYahooAccessToken = async (userId) => {
 
     if (Date.now() >= expiresAtMs - YAHOO_EXPIRY_SAFETY_MARGIN_MS) {
         const credentials = Buffer.from(`${process.env.YAHOO_CLIENT_ID}:${process.env.YAHOO_CLIENT_SECRET}`).toString('base64');
-        const tokenResponse = await fetch('https://api.login.yahoo.com/oauth2/get_token', {
+        const tokenResponse = await fetchWithTimeout('https://api.login.yahoo.com/oauth2/get_token', {
             method: 'POST',
             headers: { 'Authorization': `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({
@@ -1104,7 +1152,7 @@ const getYahooAccessToken = async (userId) => {
 };
 
 const yahooApiRequest = async (accessToken, endpoint) => {
-    const response = await fetch(`https://fantasysports.yahooapis.com/fantasy/v2/${endpoint}?format=json`, {
+    const response = await fetchWithTimeout(`https://fantasysports.yahooapis.com/fantasy/v2/${endpoint}?format=json`, {
         headers: { 'Authorization': `Bearer ${accessToken}` },
     });
     if (!response.ok) {
@@ -1264,6 +1312,11 @@ const handlePublicShare = async (req, res) => {
 };
 
 export default async function handler(req, res) {
+    // Measured from the true start of the invocation. Anything set later
+    // (after the membership query and the multi-megabyte Sleeper player
+    // dictionary) undercounts the time already spent and lets the budget
+    // below overrun the platform's own ceiling.
+    const startedAt = Date.now();
     if (req.method !== 'GET' && req.method !== 'POST') {
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
@@ -1393,9 +1446,10 @@ export default async function handler(req, res) {
         // Stop STARTING new leagues with enough headroom left to still
         // write what finished and send the digests. Overrunning the
         // platform's own timeout loses all of that, so finishing a smaller
-        // batch cleanly beats dying with a full one in flight.
-        const TIME_BUDGET_MS = 225000;
-        const startedAt = Date.now();
+        // batch cleanly beats dying with a full one in flight. Sized
+        // against LEAGUE_TIMEOUT_MS so even a league started at the very
+        // edge of the budget still lands inside the ceiling.
+        const TIME_BUDGET_MS = 170000;
         const skipped = [];
 
         const processLeague = async ({ league, emails, userId }) => {
@@ -1409,8 +1463,8 @@ export default async function handler(req, res) {
                     week = Math.max(1, currentWeek - 1);
                 }
 
-                const generated = league.platform === 'yahoo'
-                    ? await generateForYahooLeague({
+                const generateForPlatform = () => league.platform === 'yahoo'
+                    ? generateForYahooLeague({
                         leagueDbId: league.id,
                         yahooLeagueKey: league.sleeper_league_id,
                         leagueName: league.league_name || 'Your League',
@@ -1418,7 +1472,7 @@ export default async function handler(req, res) {
                         userId,
                     })
                     : league.platform === 'espn'
-                    ? await generateForEspnLeague({
+                    ? generateForEspnLeague({
                         leagueDbId: league.id,
                         espnLeagueId: fromEspnLeagueId(league.sleeper_league_id),
                         season: currentSeason,
@@ -1426,7 +1480,7 @@ export default async function handler(req, res) {
                         week,
                         userId,
                     })
-                    : await generateForLeague({
+                    : generateForLeague({
                         leagueDbId: league.id,
                         sleeperLeagueId: league.sleeper_league_id,
                         leagueName: league.league_name || 'Your League',
@@ -1434,6 +1488,12 @@ export default async function handler(req, res) {
                         playersCache,
                         projectionsCache,
                     });
+
+                const generated = await withDeadline(
+                    generateForPlatform(),
+                    LEAGUE_TIMEOUT_MS,
+                    `${league.platform} league "${league.league_name || league.id}"`
+                );
 
                 if (!dryRun) {
                     const { error: upsertErr } = await supabase
