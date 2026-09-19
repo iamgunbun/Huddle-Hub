@@ -876,12 +876,13 @@ Write a recap with these sections. Each should be 2-4 sentences (the roast secti
   - benchDisaster: for stats.benchCalls[0] -- this manager benched a specific player for a specific worse one. Be merciless and name them.
   - disappointment: for stats.biggestDisappointment -- they were projected for more and did not come close.
   - luck: for stats.luckWatch.unluckiestLoss -- they scored well and lost anyway.
-  - powerRankings: for stats.powerRankings -- one line about who's on top or who's bottoming out.
+  - powerRankings: for the TOP of stats.powerRankings -- this card is "This Week's Leaders" and shows the teams at the top of the standings. Give them credit and then undercut it; never sound impressed.
+  - bottomFeeders: for the BOTTOM of stats.powerRankings -- this card is literally titled "Bottom Feeders" and lists the worst teams in the league by record. Name them and bury them; this is the meanest line on the whole run.
 - nextWeekPreview: Only write this if stats.nextWeekMatchups is present and non-empty -- if it's missing or empty, return an empty string, don't guess at next week. When present, preview 1-2 of next week's real matchups by the real team names listed there -- which pairing looks like the week's best game, purely based on this week's results/records already in the data. Never invent an opponent, a projection, or a score for a game that hasn't happened.
 
 If a section's underlying data is empty or missing (e.g. no trades happened, or no disappointment qualified), say so briefly and move on -- never fabricate content to fill a section.`;
 
-const NARRATIVE_SCHEMA = {
+export const NARRATIVE_SCHEMA = {
     type: SchemaType.OBJECT,
     properties: {
         headline: { type: SchemaType.STRING },
@@ -910,10 +911,12 @@ const NARRATIVE_SCHEMA = {
                 disappointment: { type: SchemaType.STRING },
                 luck: { type: SchemaType.STRING },
                 powerRankings: { type: SchemaType.STRING },
+                bottomFeeders: { type: SchemaType.STRING },
             },
             required: [
                 'highScore', 'blowout', 'closestCall', 'mvps',
                 'benchDisaster', 'disappointment', 'luck', 'powerRankings',
+                'bottomFeeders',
             ],
         },
     },

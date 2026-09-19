@@ -223,6 +223,18 @@
     flex-shrink: 0;
 }
 
+/* The bottom-feeders card reuses the rank list, so it has to read as the
+   opposite of the leaders card at a glance -- gold numbers over a neutral
+   row would look like a podium for the worst teams in the league. */
+.red .rankRow {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.red .rankNum {
+    color: #ef4444;
+}
+
 /* Tap zones cover the card and sit ABOVE the slide content, so a tap
    anywhere advances instead of landing on text. They stop short of the
    footer and the progress/close row so those stay reachable. */
