@@ -106,6 +106,38 @@
     border-color: #eebf1c;
 }
 
+.actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.replayBtn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 14px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #94a3b8;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+}
+
+.replayBtn i {
+    font-size: 18px;
+}
+
+.replayBtn:hover {
+    color: #f8fafc;
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
 .shareBtn {
     display: flex;
     align-items: center;
