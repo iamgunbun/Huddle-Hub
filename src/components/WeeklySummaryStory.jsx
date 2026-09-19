@@ -9,6 +9,7 @@ const SLIDE_MS = 6000;
 // itself.
 const buildSlides = ({ stats, narrative, leagueName, week, season }) => {
     const slides = [];
+    const burns = narrative?.storyBurns || {};
 
     slides.push({
         key: 'intro',
@@ -25,19 +26,27 @@ const buildSlides = ({ stats, narrative, leagueName, week, season }) => {
             headline: stats.scoringContext.highest.team,
             stat: stats.scoringContext.highest.score,
             statLabel: 'points',
-            sub: `League average was ${stats.scoringContext.average}`,
+            meta: `League average was ${stats.scoringContext.average}`,
+            sub: burns.highScore,
             tone: 'gold',
         });
     }
 
     if (stats?.blowout) {
+        // The blowout is a matchup, so it has to name the team on the
+        // wrong end of it -- "won by 53" with no opponent is half a story.
+        const loser = stats.blowout.winner === stats.blowout.teamA ? stats.blowout.teamB : stats.blowout.teamA;
+        const winnerScore = stats.blowout.winner === stats.blowout.teamA ? stats.blowout.scoreA : stats.blowout.scoreB;
+        const loserScore = stats.blowout.winner === stats.blowout.teamA ? stats.blowout.scoreB : stats.blowout.scoreA;
         slides.push({
             key: 'blowout',
             kicker: 'Biggest blowout',
             headline: stats.blowout.winner,
+            versus: stats.blowout.winner ? `beat ${loser}` : null,
             stat: stats.blowout.margin,
             statLabel: 'point win',
-            sub: narrative?.matchupRecap,
+            meta: stats.blowout.winner ? `${winnerScore} — ${loserScore}` : null,
+            sub: burns.blowout,
             tone: 'gold',
         });
     }
@@ -49,6 +58,8 @@ const buildSlides = ({ stats, narrative, leagueName, week, season }) => {
             headline: `${stats.closestCall.teamA} vs ${stats.closestCall.teamB}`,
             stat: stats.closestCall.margin,
             statLabel: 'points apart',
+            meta: `${stats.closestCall.scoreA} — ${stats.closestCall.scoreB}`,
+            sub: burns.closestCall,
             tone: 'blue',
         });
     }
@@ -60,7 +71,7 @@ const buildSlides = ({ stats, narrative, leagueName, week, season }) => {
             kicker: 'Position MVPs',
             headline: 'The best of the week',
             grid: mvps.map(([pos, p]) => ({ pos, name: p.name, pts: p.actual })),
-            sub: narrative?.mvpSpotlight,
+            sub: burns.mvps,
             tone: 'gold',
         });
     }
@@ -73,7 +84,8 @@ const buildSlides = ({ stats, narrative, leagueName, week, season }) => {
             headline: worstBench.team,
             stat: worstBench.pointsLeft,
             statLabel: 'points left on the bench',
-            sub: `Benched ${worstBench.benched} (${worstBench.benchedPoints}) and started ${worstBench.started} (${worstBench.startedPoints}).`,
+            meta: `Benched ${worstBench.benched} (${worstBench.benchedPoints}) to start ${worstBench.started} (${worstBench.startedPoints})`,
+            sub: burns.benchDisaster,
             tone: 'red',
         });
     }
@@ -85,19 +97,23 @@ const buildSlides = ({ stats, narrative, leagueName, week, season }) => {
             headline: stats.biggestDisappointment.team,
             stat: stats.biggestDisappointment.variance,
             statLabel: 'under projection',
-            sub: narrative?.disappointmentOfTheWeek,
+            meta: `Projected ${stats.biggestDisappointment.projected}, scored ${stats.biggestDisappointment.actual}`,
+            sub: burns.disappointment,
             tone: 'red',
         });
     }
 
     if (stats?.luckWatch?.unluckiestLoss) {
+        const unlucky = stats.luckWatch.unluckiestLoss;
         slides.push({
             key: 'luck',
             kicker: 'Unluckiest loss',
-            headline: stats.luckWatch.unluckiestLoss.team,
-            stat: stats.luckWatch.unluckiestLoss.score,
-            statLabel: `points — and still lost to ${stats.luckWatch.unluckiestLoss.lostTo}`,
-            sub: narrative?.luckWatch,
+            headline: unlucky.team,
+            versus: `lost to ${unlucky.lostTo}`,
+            stat: unlucky.score,
+            statLabel: 'points — and still lost',
+            meta: `${unlucky.lostTo} put up ${unlucky.opponentScore}`,
+            sub: burns.luck,
             tone: 'blue',
         });
     }
@@ -108,6 +124,7 @@ const buildSlides = ({ stats, narrative, leagueName, week, season }) => {
             kicker: 'Power rankings',
             headline: 'Where everyone stands',
             rankings: stats.powerRankings.slice(0, 5),
+            sub: burns.powerRankings,
             tone: 'gold',
         });
     }
@@ -215,15 +232,10 @@ export default function WeeklySummaryStory({ stats, narrative, leagueName, week,
                 <i className="material-icons">close</i>
             </button>
 
-            <div
-                className={`${styles.slide} ${styles[slide.tone] || ''}`}
-                key={slide.key}
-                onPointerDown={() => setPaused(true)}
-                onPointerUp={() => setPaused(false)}
-                onPointerLeave={() => setPaused(false)}
-            >
+            <div className={`${styles.slide} ${styles[slide.tone] || ''}`} key={slide.key}>
                 <div className={styles.kicker}>{slide.kicker}</div>
                 <div className={styles.headline}>{slide.headline}</div>
+                {slide.versus && <div className={styles.versus}>{slide.versus}</div>}
 
                 {slide.stat !== undefined && (
                     <div className={styles.statBlock}>
@@ -231,6 +243,8 @@ export default function WeeklySummaryStory({ stats, narrative, leagueName, week,
                         <div className={styles.statLabel}>{slide.statLabel}</div>
                     </div>
                 )}
+
+                {slide.meta && <div className={styles.meta}>{slide.meta}</div>}
 
                 {slide.grid && (
                     <div className={styles.mvpGrid}>
@@ -259,12 +273,36 @@ export default function WeeklySummaryStory({ stats, narrative, leagueName, week,
                 {slide.sub && <p className={styles.sub}>{slide.sub}</p>}
             </div>
 
+            {/* Tap zones sit ABOVE the slide content (which is purely
+                visual and takes no pointer events of its own), so a tap
+                anywhere on the card advances rather than landing on the
+                text and doing nothing. Press-and-hold pauses, the way a
+                stories feed does. */}
             <div className={styles.navZones}>
-                <button className={styles.navPrev} onClick={prev} aria-label="Previous slide" />
-                <button className={styles.navNext} onClick={next} aria-label="Next slide" />
+                <button
+                    className={styles.navPrev}
+                    onClick={prev}
+                    onPointerDown={() => setPaused(true)}
+                    onPointerUp={() => setPaused(false)}
+                    onPointerCancel={() => setPaused(false)}
+                    onPointerLeave={() => setPaused(false)}
+                    aria-label="Previous slide"
+                />
+                <button
+                    className={styles.navNext}
+                    onClick={next}
+                    onPointerDown={() => setPaused(true)}
+                    onPointerUp={() => setPaused(false)}
+                    onPointerCancel={() => setPaused(false)}
+                    onPointerLeave={() => setPaused(false)}
+                    aria-label="Next slide"
+                />
             </div>
 
-            <button className={styles.skipBtn} onClick={onClose}>Skip to full recap</button>
+            <div className={styles.footer}>
+                <span className={styles.tapHint}>Tap to skip ahead</span>
+                <button className={styles.skipBtn} onClick={onClose}>Skip to full recap</button>
+            </div>
         </div>
     );
 }

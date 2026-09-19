@@ -758,6 +758,15 @@ Write a recap with these sections. Each should be 2-4 sentences (the roast secti
 - luckWatch: From stats.luckWatch. luckiestWin is the lowest score that still won (say how far below the league average it was and who they got to beat), and unluckiestLoss is the highest score that still lost (sympathy optional, mockery encouraged). Skip gracefully if it's missing.
 - rivalryWatch: Frame this week's most evenly-matched-by-record matchup as a rivalry, if one exists in the data.
 - waiverWireBuzz: Analyze the week's trades and waiver activity, not just list it. For each notable add, transactions.notableAdds[].added[] carries pointsThisWeek -- a real number if that player actually started and scored for their new team this week, or null if they didn't start. Grade the move on that: a pickup that started and scored well is a smart, real-impact add worth praising by name and points; one that sat the bench or scored little is fair game to call out as premature or a stash. Never invent a point total that isn't in the data, and never claim "impact" for a null pointsThisWeek -- say they haven't started yet instead.
+- storyBurns: Short, savage one-liners for the full-screen story cards the app opens the recap with. Each card already shows the team name and the number -- your line is the BURN that goes under it, not a restatement of the fact. ONE sentence, max ~15 words, and it has to land: this is the part people screenshot into the group chat. Write a key for each card you have real data for, and omit any key whose data is missing:
+  - highScore: for stats.scoringContext.highest -- credit where it's due, but keep it backhanded.
+  - blowout: for stats.blowout -- the winner beat a specific opponent; go after the loser for showing up at all.
+  - closestCall: for stats.closestCall -- a win this narrow is nothing to brag about.
+  - mvps: for stats.mvpByPosition -- one line about the week's best performers.
+  - benchDisaster: for stats.benchCalls[0] -- this manager benched a specific player for a specific worse one. Be merciless and name them.
+  - disappointment: for stats.biggestDisappointment -- they were projected for more and did not come close.
+  - luck: for stats.luckWatch.unluckiestLoss -- they scored well and lost anyway.
+  - powerRankings: for stats.powerRankings -- one line about who's on top or who's bottoming out.
 - nextWeekPreview: Only write this if stats.nextWeekMatchups is present and non-empty -- if it's missing or empty, return an empty string, don't guess at next week. When present, preview 1-2 of next week's real matchups by the real team names listed there -- which pairing looks like the week's best game, purely based on this week's results/records already in the data. Never invent an opponent, a projection, or a score for a game that hasn't happened.
 
 If a section's underlying data is empty or missing (e.g. no trades happened, or no disappointment qualified), say so briefly and move on -- never fabricate content to fill a section.`;
@@ -775,6 +784,23 @@ const NARRATIVE_SCHEMA = {
         rivalryWatch: { type: SchemaType.STRING },
         waiverWireBuzz: { type: SchemaType.STRING },
         nextWeekPreview: { type: SchemaType.STRING },
+        // The story cards' own burns. Optional per key (a week with no
+        // bench blunder has no bench burn to write), so this stays out of
+        // `required` below -- the story falls back to showing just the
+        // fact for any card without one.
+        storyBurns: {
+            type: SchemaType.OBJECT,
+            properties: {
+                highScore: { type: SchemaType.STRING },
+                blowout: { type: SchemaType.STRING },
+                closestCall: { type: SchemaType.STRING },
+                mvps: { type: SchemaType.STRING },
+                benchDisaster: { type: SchemaType.STRING },
+                disappointment: { type: SchemaType.STRING },
+                luck: { type: SchemaType.STRING },
+                powerRankings: { type: SchemaType.STRING },
+            },
+        },
     },
     required: [
         'headline', 'matchupRecap', 'mvpSpotlight', 'disappointmentOfTheWeek',
@@ -1122,38 +1148,45 @@ const generateForYahooLeague = async ({ leagueDbId, yahooLeagueKey, leagueName, 
     const weekTransactions = parseYahooTransactions(transactionsData)
         .filter(t => weekFromTimestamp(t.status_updated, seasonStartMs, startWeek) === week);
 
+    // Every group below is an independent request, so they run together
+    // rather than one after another. This endpoint runs against a hard
+    // 300s ceiling with several leagues to get through, and walking a
+    // 12-team league's roster chunks serially was a meaningful slice of
+    // that budget for no reason.
     const playerKeys = [...new Set(weekTransactions.flatMap(t => t.player_keys || []))];
-    const playerMeta = {};
+    const playerKeyGroups = [];
     for (let i = 0; i < playerKeys.length; i += YAHOO_PLAYER_KEY_BATCH) {
-        const group = playerKeys.slice(i, i + YAHOO_PLAYER_KEY_BATCH);
-        const data = await yahooApiRequest(accessToken, `league/${yahooLeagueKey}/players;player_keys=${group.join(',')}`);
-        parseYahooPlayers(data).forEach(p => { playerMeta[p.id] = p; });
+        playerKeyGroups.push(playerKeys.slice(i, i + YAHOO_PLAYER_KEY_BATCH));
     }
+    const playerMeta = {};
+    (await Promise.all(playerKeyGroups.map(group =>
+        yahooApiRequest(accessToken, `league/${yahooLeagueKey}/players;player_keys=${group.join(',')}`)
+            .then(parseYahooPlayers)
+            .catch(() => [])
+    ))).flat().forEach(p => { playerMeta[p.id] = p; });
 
     const teamKeys = [...new Set(scoreboardWeek.flatMap(m => (m.teams || []).map(t => t.team_key)).filter(Boolean))];
-    const rosterPlayersByTeamKey = {};
+    const teamKeyGroups = [];
     for (let i = 0; i < teamKeys.length; i += YAHOO_TEAM_POINTS_CHUNK) {
-        const group = teamKeys.slice(i, i + YAHOO_TEAM_POINTS_CHUNK);
-        const rosterData = await yahooApiRequest(
-            accessToken,
-            `teams;team_keys=${group.join(',')}/roster;week=${week}/players/stats;type=week;week=${week}`
-        );
-        const parsed = extractYahooRosterPlayers(rosterData);
-        if (Object.keys(parsed).length) {
-            Object.assign(rosterPlayersByTeamKey, parsed);
-            continue;
-        }
+        teamKeyGroups.push(teamKeys.slice(i, i + YAHOO_TEAM_POINTS_CHUNK));
+    }
+    const rosterPlayersByTeamKey = {};
+    const rosterPath = (keys) => `teams;team_keys=${keys.join(',')}/roster;week=${week}/players/stats;type=week;week=${week}`;
+    const rosterGroupResults = await Promise.all(teamKeyGroups.map(async (group) => {
+        const rosterData = await yahooApiRequest(accessToken, rosterPath(group)).catch(() => null);
+        const parsed = rosterData ? extractYahooRosterPlayers(rosterData) : {};
+        if (Object.keys(parsed).length) return parsed;
         // The batched form came back empty for this whole group -- fall
         // back to one team at a time, same recovery fetchYahooPlayerPoints
         // already relies on for this exact quirk.
-        for (const teamKey of group) {
-            const single = await yahooApiRequest(
-                accessToken,
-                `teams;team_keys=${teamKey}/roster;week=${week}/players/stats;type=week;week=${week}`
-            );
-            Object.assign(rosterPlayersByTeamKey, extractYahooRosterPlayers(single));
-        }
-    }
+        const singles = await Promise.all(group.map(teamKey =>
+            yahooApiRequest(accessToken, rosterPath([teamKey]))
+                .then(extractYahooRosterPlayers)
+                .catch(() => ({}))
+        ));
+        return Object.assign({}, ...singles);
+    }));
+    Object.assign(rosterPlayersByTeamKey, ...rosterGroupResults);
 
     // Every player reading 0 is the signature of a points node this parser
     // never found -- it is never what a real week looks like. Logs the raw
@@ -1345,7 +1378,27 @@ export default async function handler(req, res) {
         // listing all of them, not one email per league.
         const digestByEmail = new Map();
 
-        for (const { league, emails, userId } of proLeagues.values()) {
+        // Leagues are independent of each other, and each one spends most
+        // of its time waiting -- on a platform API, then on Gemini. Run
+        // several at once rather than one after another: this endpoint has
+        // a hard 300s ceiling, and walking leagues serially is what pushed
+        // a real multi-league account past it (a 504 mid-run, which left
+        // the leagues it never reached still showing their previous week's
+        // recap and sent no digest emails at all, since that step is last).
+        //
+        // Capped rather than unbounded so a big account doesn't open a
+        // burst of platform requests wide enough to get itself rate
+        // limited.
+        const LEAGUE_CONCURRENCY = 4;
+        // Stop STARTING new leagues with enough headroom left to still
+        // write what finished and send the digests. Overrunning the
+        // platform's own timeout loses all of that, so finishing a smaller
+        // batch cleanly beats dying with a full one in flight.
+        const TIME_BUDGET_MS = 225000;
+        const startedAt = Date.now();
+        const skipped = [];
+
+        const processLeague = async ({ league, emails, userId }) => {
             try {
                 let week = weekOverride;
                 if (!week) {
@@ -1411,17 +1464,54 @@ export default async function handler(req, res) {
                 console.error(`Weekly summary failed for league ${league.id}:`, leagueErr);
                 results.push({ leagueId: league.id, leagueName: league.league_name, error: leagueErr.message });
             }
-        }
+        };
+
+        const queue = [...proLeagues.values()];
+        const runWorker = async () => {
+            while (queue.length) {
+                if (Date.now() - startedAt > TIME_BUDGET_MS) {
+                    // Out of budget: hand back what's left by name rather
+                    // than half-processing it, so re-running finishes the
+                    // job and the caller can see it was cut short.
+                    skipped.push(...queue.splice(0).map(({ league }) => ({
+                        leagueId: league.id,
+                        leagueName: league.league_name,
+                    })));
+                    return;
+                }
+                const nextLeague = queue.shift();
+                if (nextLeague) await processLeague(nextLeague);
+            }
+        };
+        await Promise.all(
+            Array.from({ length: Math.min(LEAGUE_CONCURRENCY, queue.length) }, runWorker)
+        );
 
         let digestsSent = 0;
         if (!dryRun) {
-            for (const [email, leagues] of digestByEmail) {
-                const sendResult = await sendDigestEmail(email, leagues);
-                if (sendResult.sent) digestsSent++;
-            }
+            const sendResults = await Promise.all(
+                [...digestByEmail].map(([email, leagues]) => sendDigestEmail(email, leagues))
+            );
+            digestsSent = sendResults.filter(r => r.sent).length;
         }
 
-        return res.status(200).json({ processed: results.length, dryRun, allowlistActive: allowedEmails.length > 0, digestsSent, results });
+        if (skipped.length) {
+            console.error(
+                `Weekly summary ran out of time after ${Math.round((Date.now() - startedAt) / 1000)}s with `
+                + `${skipped.length} league(s) unprocessed: ${skipped.map(s => s.leagueName || s.leagueId).join(', ')}. `
+                + 'Re-run to finish them.'
+            );
+        }
+
+        return res.status(200).json({
+            processed: results.length,
+            dryRun,
+            allowlistActive: allowedEmails.length > 0,
+            digestsSent,
+            elapsedSeconds: Math.round((Date.now() - startedAt) / 1000),
+            ...(skipped.length ? { skipped, skippedNote: 'Ran out of time before these leagues. Re-run to finish them.' } : {}),
+            results,
+        });
     } catch (error) {
         console.error('weekly-summary handler error:', error);
         // A thrown Supabase/Postgrest error is a plain object, not an Error
