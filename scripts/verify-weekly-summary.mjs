@@ -21,7 +21,7 @@ const {
     buildScoreboard, buildScoringContext, buildPowerRankings, buildBenchCalls, buildLuckWatch,
     computeYahooWeekStats, teamNameForYahoo, extractYahooRosterPlayers, yahooNextWeekMatchupPreview, findYahooPlayerPoints,
     buildEspnStatsInputs, espnNextWeekMatchupPreview,
-    buildDigestEmailHtml,
+    buildDigestEmailHtml, withDeadline, fetchWithTimeout,
 } = await import('../api/weekly-summary.js');
 
 let checks = 0;
@@ -521,5 +521,46 @@ check('the digest names every league it covers', ['Dynasty Warriors', 'Redraft R
 check('each league gets its own View Summary link, deep-linked by id', digestHtml.includes('/weekly-summary?league=league-a') && digestHtml.includes('/weekly-summary?league=league-b'), true);
 check('the digest headline is plural for more than one league', digestHtml.includes('Your Weekly Summaries Are Ready'), true);
 check('a single-league digest uses the singular headline instead', buildDigestEmailHtml([digestLeagues[0]]).includes('Your Weekly Summary Is Ready'), true);
+
+// ============================================================================
+// Timeout guards. These are what keep a single hung upstream from taking the
+// whole invocation down with it (the FUNCTION_INVOCATION_TIMEOUT this
+// endpoint was actually dying on), so they're worth holding to directly.
+// ============================================================================
+
+const deadlineResolved = await withDeadline(Promise.resolve('done'), 1000, 'fast task');
+check('a task that finishes in time passes its value straight through', deadlineResolved, 'done');
+
+let deadlineError = null;
+try {
+    await withDeadline(new Promise(() => {}), 40, 'stuck task');
+} catch (err) {
+    deadlineError = err.message;
+}
+check('a task that never settles rejects rather than hanging forever', typeof deadlineError === 'string' && deadlineError.includes('stuck task'), true);
+
+let rejectionPassedThrough = null;
+try {
+    await withDeadline(Promise.reject(new Error('real failure')), 1000, 'failing task');
+} catch (err) {
+    rejectionPassedThrough = err.message;
+}
+check('a real rejection is surfaced as itself, not masked as a timeout', rejectionPassedThrough, 'real failure');
+
+// fetchWithTimeout against a socket that accepts and then never answers --
+// a real hang, which is the case a plain fetch would wait on indefinitely.
+const { createServer } = await import('node:http');
+const hangingServer = createServer(() => { /* deliberately never responds */ });
+await new Promise(resolve => hangingServer.listen(0, '127.0.0.1', resolve));
+const hangingUrl = `http://127.0.0.1:${hangingServer.address().port}/`;
+
+let fetchTimeoutError = null;
+try {
+    await fetchWithTimeout(hangingUrl, {}, 60);
+} catch (err) {
+    fetchTimeoutError = err.message;
+}
+hangingServer.close();
+check('a request that never answers times out instead of blocking the run', typeof fetchTimeoutError === 'string' && fetchTimeoutError.includes('timed out'), true);
 
 console.log(`OK: ${checks} weekly-summary checks passed`);
