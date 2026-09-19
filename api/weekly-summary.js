@@ -516,6 +516,77 @@ const YAHOO_BENCH_SLOTS = new Set(['BN', 'IR', 'IR+', 'NA']);
  * Walks both shapes, shallow-first, via the same yahooCollection helper
  * that already normalises array-vs-object everywhere else.
  */
+/**
+ * The league's own scoring, as { [statId]: pointsPerUnit }.
+ *
+ * Yahoo publishes this on the league settings response that this endpoint
+ * already fetches, which makes player points derivable from raw stats
+ * without another request -- see scoreYahooStatLine below for why that
+ * matters.
+ */
+export const parseYahooStatModifiers = (settingsData) => {
+    const league = settingsData?.fantasy_content?.league;
+    const settings = findNode(league, 'settings');
+    const modifiersNode = findNode(settings, 'stat_modifiers') || settings?.stat_modifiers;
+    const statsNode = findNode(modifiersNode, 'stats') || modifiersNode?.stats;
+
+    const modifiers = {};
+    yahooCollection(statsNode).forEach(entry => {
+        const stat = entry?.stat || entry;
+        const statId = yahooText(yahooField(stat, 'stat_id'));
+        const value = parseFloat(yahooText(yahooField(stat, 'value')));
+        if (statId && Number.isFinite(value)) modifiers[statId] = value;
+    });
+    return modifiers;
+};
+
+/**
+ * A player's fantasy points computed from their raw weekly stat line.
+ *
+ * Yahoo only returns a player_points node when the request carries league
+ * context; the raw player_stats line comes back either way. Deriving the
+ * total here means the points survive regardless of which shape the
+ * response takes -- worth having as a fallback given how many times the
+ * "why are these all zero" answer has turned out to be about the request
+ * rather than the parsing.
+ */
+export const scoreYahooStatLine = (player, modifiers) => {
+    if (!modifiers || !Object.keys(modifiers).length) return null;
+
+    const statsNode = (() => {
+        const seen = new Set();
+        const walk = (node, depth) => {
+            if (!node || typeof node !== 'object' || depth > 4 || seen.has(node)) return null;
+            seen.add(node);
+            if (node.player_stats) return node.player_stats;
+            for (const value of yahooCollection(node)) {
+                const hit = walk(value, depth + 1);
+                if (hit) return hit;
+            }
+            return null;
+        };
+        return walk(player, 0);
+    })();
+
+    const rows = yahooCollection(findNode(statsNode, 'stats') || statsNode?.stats);
+    if (!rows.length) return null;
+
+    let total = 0;
+    let matched = 0;
+    rows.forEach(entry => {
+        const stat = entry?.stat || entry;
+        const statId = yahooText(yahooField(stat, 'stat_id'));
+        const raw = yahooText(yahooField(stat, 'value'));
+        const value = parseFloat(raw);
+        if (!statId || !Number.isFinite(value)) return;
+        if (modifiers[statId] === undefined) return;
+        total += value * modifiers[statId];
+        matched += 1;
+    });
+
+    return matched ? Math.round(total * 100) / 100 : null;
+};
+
 export const findYahooPlayerPoints = (player) => {
     const seen = new Set();
     const walk = (node, depth) => {
@@ -541,7 +612,7 @@ export const findYahooPlayerPoints = (player) => {
  *
  * Returns { [teamKey]: [{ playerId, name, position, actual, isStarter }] }.
  */
-export const extractYahooRosterPlayers = (data) => {
+export const extractYahooRosterPlayers = (data, statModifiers = null) => {
     const byTeam = {};
     const teamsNode = data?.fantasy_content?.teams
         || findNode(data?.fantasy_content?.league, 'teams')
@@ -567,8 +638,14 @@ export const extractYahooRosterPlayers = (data) => {
             const playerId = yahooText(yahooField(playerInfo, 'player_id'));
             if (!playerId) return;
 
+            // Yahoo's own total when it's there; otherwise derive it from
+            // the raw stat line, which comes back either way. Only falls
+            // through to 0 when the response carried neither.
             const pointsNode = findYahooPlayerPoints(player);
-            const actual = pointsNode?.total !== undefined ? (parseFloat(pointsNode.total) || 0) : 0;
+            const reportedTotal = pointsNode?.total !== undefined ? parseFloat(pointsNode.total) : null;
+            const actual = Number.isFinite(reportedTotal)
+                ? reportedTotal
+                : (scoreYahooStatLine(player, statModifiers) ?? 0);
 
             // selected_position is itself an entity (Yahoo's array-of-
             // single-key-objects shape), so it's read with the same
@@ -739,12 +816,44 @@ export const yahooNextWeekMatchupPreview = (nextScoreboardWeek, standingsRows) =
         }));
 };
 
+/**
+ * The slice of the stats the narrative actually needs, compact.
+ *
+ * The whole stats object pretty-printed is a large prompt -- `games`
+ * duplicates `scoreboard`, `allScores` duplicates the rankings, and
+ * `teamVariances` carries a row per team that only the disappointment line
+ * uses. Sending all of it is what pushed generation past its deadline on
+ * real multi-team leagues (three leagues in one run failed with "Gemini
+ * narrative exceeded 60000ms" and so produced no recap at all). Trimmed to
+ * what each section is actually told to read, and stringified without
+ * indentation.
+ */
+export const narrativePayload = (stats) => ({
+    week: stats.week,
+    scoreboard: stats.scoreboard,
+    scoringContext: stats.scoringContext && {
+        average: stats.scoringContext.average,
+        median: stats.scoringContext.median,
+        highest: stats.scoringContext.highest,
+        lowest: stats.scoringContext.lowest,
+    },
+    powerRankings: stats.powerRankings,
+    // Only the worst few are ever named; the rest is noise in the prompt.
+    benchCalls: (stats.benchCalls || []).slice(0, 4),
+    luckWatch: stats.luckWatch,
+    mvpByPosition: stats.mvpByPosition,
+    biggestDisappointment: stats.biggestDisappointment,
+    rivalry: stats.rivalry,
+    transactions: stats.transactions,
+    nextWeekMatchups: stats.nextWeekMatchups,
+});
+
 const buildNarrativePrompt = (leagueName, stats) => `You are writing a fun, banter-filled weekly recap email for the fantasy football league "${leagueName}", covering Week ${stats.week}. This goes out to every manager in the league, so the tone should read like a knowledgeable, slightly cheeky league commissioner's newsletter -- not a generic sports report.
 
 CRITICAL GROUNDING RULE: Every fact, score, name, and number below is real and verified. You must ONLY reference what's in this data. Never invent a score, a player, a team name, or a stat that isn't listed here.
 
 THIS WEEK'S DATA:
-${JSON.stringify(stats, null, 2)}
+${JSON.stringify(narrativePayload(stats))}
 
 TONE: You are the league's loudmouth commissioner. Be genuinely funny and mean-spirited in a way friends are with each other -- name names, use the real numbers as ammunition, and never hedge into bland sports-desk filler. A manager reading this should either laugh or want to fight you. Roast hard, but only ever with facts that are actually in the data below.
 
@@ -758,7 +867,8 @@ Write a recap with these sections. Each should be 2-4 sentences (the roast secti
 - luckWatch: From stats.luckWatch. luckiestWin is the lowest score that still won (say how far below the league average it was and who they got to beat), and unluckiestLoss is the highest score that still lost (sympathy optional, mockery encouraged). Skip gracefully if it's missing.
 - rivalryWatch: Frame this week's most evenly-matched-by-record matchup as a rivalry, if one exists in the data.
 - waiverWireBuzz: Analyze the week's trades and waiver activity, not just list it. For each notable add, transactions.notableAdds[].added[] carries pointsThisWeek -- a real number if that player actually started and scored for their new team this week, or null if they didn't start. Grade the move on that: a pickup that started and scored well is a smart, real-impact add worth praising by name and points; one that sat the bench or scored little is fair game to call out as premature or a stash. Never invent a point total that isn't in the data, and never claim "impact" for a null pointsThisWeek -- say they haven't started yet instead.
-- storyBurns: Short, savage one-liners for the full-screen story cards the app opens the recap with. Each card already shows the team name and the number -- your line is the BURN that goes under it, not a restatement of the fact. ONE sentence, max ~15 words, and it has to land: this is the part people screenshot into the group chat. Write a key for each card you have real data for, and omit any key whose data is missing:
+- fullEvaluation: The long one -- a complete written evaluation of the entire league week, 3-5 paragraphs, separated by blank lines. Go team by team through stats.powerRankings and account for EVERY team: what they scored, whether they won or lost and to whom, how that squares with their record, and what it says about them. Work in the bench blunders, the waiver moves, the luck, and who is genuinely good versus who is being carried by an easy schedule. This is the definitive summary of the week -- thorough, specific, and still openly mocking. Only real names and numbers from the data.
+- storyBurns: REQUIRED, and every single key below must be present and non-empty -- these are the one-liners on the full-screen story cards, and a card without one falls flat. Each card already shows the team name and the number, so your line is the BURN that goes under it, NOT a restatement of the fact. ONE sentence, max ~15 words, and it must be a genuine insult -- snarky, personal, the kind of thing that starts an argument in the group chat. No hedging, no "tough break", no neutral observations. If a card's underlying data happens to be missing, still write a snarky line aimed at the league in general rather than leaving it blank. The keys:
   - highScore: for stats.scoringContext.highest -- credit where it's due, but keep it backhanded.
   - blowout: for stats.blowout -- the winner beat a specific opponent; go after the loser for showing up at all.
   - closestCall: for stats.closestCall -- a win this narrow is nothing to brag about.
@@ -784,10 +894,11 @@ const NARRATIVE_SCHEMA = {
         rivalryWatch: { type: SchemaType.STRING },
         waiverWireBuzz: { type: SchemaType.STRING },
         nextWeekPreview: { type: SchemaType.STRING },
-        // The story cards' own burns. Optional per key (a week with no
-        // bench blunder has no bench burn to write), so this stays out of
-        // `required` below -- the story falls back to showing just the
-        // fact for any card without one.
+        fullEvaluation: { type: SchemaType.STRING },
+        // Every key REQUIRED. Left optional, the model simply omitted the
+        // whole object and every story card rendered with no burn at all,
+        // which is exactly the "there are still no roasts" report. A card
+        // with no data gets a general jab rather than being skipped.
         storyBurns: {
             type: SchemaType.OBJECT,
             properties: {
@@ -800,14 +911,44 @@ const NARRATIVE_SCHEMA = {
                 luck: { type: SchemaType.STRING },
                 powerRankings: { type: SchemaType.STRING },
             },
+            required: [
+                'highScore', 'blowout', 'closestCall', 'mvps',
+                'benchDisaster', 'disappointment', 'luck', 'powerRankings',
+            ],
         },
     },
     required: [
         'headline', 'matchupRecap', 'mvpSpotlight', 'disappointmentOfTheWeek',
         'benchDisasters', 'powerRankings', 'luckWatch',
         'rivalryWatch', 'waiverWireBuzz', 'nextWeekPreview',
+        'fullEvaluation', 'storyBurns',
     ],
 };
+
+/**
+ * Every computed stat still renders without a narrative -- the scoreboard,
+ * MVPs, bench calls and standings are all real numbers this endpoint
+ * already has in hand. Losing the whole recap because the AI step was slow
+ * (three leagues in one run died on "Gemini narrative exceeded 60000ms",
+ * and a thrown error meant nothing was written at all) is far worse than
+ * showing those numbers with a plain header over them, so generation
+ * failure degrades to this instead of taking the league down.
+ */
+const fallbackNarrative = (week, reason) => ({
+    headline: `Week ${week} Recap`,
+    matchupRecap: '',
+    mvpSpotlight: '',
+    disappointmentOfTheWeek: '',
+    benchDisasters: '',
+    powerRankings: '',
+    luckWatch: '',
+    rivalryWatch: '',
+    waiverWireBuzz: '',
+    nextWeekPreview: '',
+    fullEvaluation: '',
+    storyBurns: {},
+    generationFailed: reason || true,
+});
 
 const generateNarrative = async (leagueName, stats) => {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -998,7 +1139,11 @@ const generateForLeague = async ({ leagueDbId, sleeperLeagueId, leagueName, week
         .catch(() => []);
     if (nextWeekMatchups.length) stats.nextWeekMatchups = nextWeekMatchups;
 
-    const narrative = await generateNarrative(leagueName, stats);
+    const narrative = await generateNarrative(leagueName, stats)
+        .catch((err) => {
+            console.error(`Narrative generation failed for "${leagueName}" -- saving the stats without it:`, err.message);
+            return fallbackNarrative(week, err.message);
+        });
     narrative.week = week;
 
     return { leagueDbId, season: String(season), week, stats, narrative };
@@ -1085,7 +1230,11 @@ const generateForEspnLeague = async ({ leagueDbId, espnLeagueId, season, leagueN
     const nextWeekMatchups = espnNextWeekMatchupPreview(byWeek[week + 1], rosters);
     if (nextWeekMatchups.length) stats.nextWeekMatchups = nextWeekMatchups;
 
-    const narrative = await generateNarrative(leagueName, stats);
+    const narrative = await generateNarrative(leagueName, stats)
+        .catch((err) => {
+            console.error(`Narrative generation failed for "${leagueName}" -- saving the stats without it:`, err.message);
+            return fallbackNarrative(week, err.message);
+        });
     narrative.week = week;
 
     return { leagueDbId, season: String(season), week, stats, narrative };
@@ -1192,6 +1341,9 @@ const generateForYahooLeague = async ({ leagueDbId, yahooLeagueKey, leagueName, 
 
     const standingsRows = parseYahooStandings(standingsData);
     const scoreboardWeek = parseYahooScoreboard(scoreboardData, week);
+    // Already fetched above -- no extra request to make player points
+    // derivable if Yahoo doesn't hand them over directly.
+    const statModifiers = parseYahooStatModifiers(settingsData);
 
     const weekTransactions = parseYahooTransactions(transactionsData)
         .filter(t => weekFromTimestamp(t.status_updated, seasonStartMs, startWeek) === week);
@@ -1219,17 +1371,26 @@ const generateForYahooLeague = async ({ leagueDbId, yahooLeagueKey, leagueName, 
         teamKeyGroups.push(teamKeys.slice(i, i + YAHOO_TEAM_POINTS_CHUNK));
     }
     const rosterPlayersByTeamKey = {};
-    const rosterPath = (keys) => `teams;team_keys=${keys.join(',')}/roster;week=${week}/players/stats;type=week;week=${week}`;
+    // Scoped under the LEAGUE, not the bare top-level `teams;team_keys=`
+    // collection. Fantasy points are a function of the league's own scoring
+    // settings, so Yahoo only returns a player_points node when the request
+    // carries league context -- without it the response still has every
+    // roster, name, position and selected_position (which is why those all
+    // parsed fine) but no points at all, and each one silently read 0. The
+    // diagnostic below confirmed exactly that: "all 151 players read 0
+    // points -- player_points was not found on any entity".
+    const rosterPath = (keys) => `league/${yahooLeagueKey}/teams;team_keys=${keys.join(',')}/roster;week=${week}/players/stats;type=week;week=${week}`;
     const rosterGroupResults = await Promise.all(teamKeyGroups.map(async (group) => {
         const rosterData = await yahooApiRequest(accessToken, rosterPath(group)).catch(() => null);
-        const parsed = rosterData ? extractYahooRosterPlayers(rosterData) : {};
+        if (rosterData) lastRosterResponse = rosterData;
+        const parsed = rosterData ? extractYahooRosterPlayers(rosterData, statModifiers) : {};
         if (Object.keys(parsed).length) return parsed;
         // The batched form came back empty for this whole group -- fall
         // back to one team at a time, same recovery fetchYahooPlayerPoints
         // already relies on for this exact quirk.
         const singles = await Promise.all(group.map(teamKey =>
             yahooApiRequest(accessToken, rosterPath([teamKey]))
-                .then(extractYahooRosterPlayers)
+                .then(single => extractYahooRosterPlayers(single, statModifiers))
                 .catch(() => ({}))
         ));
         return Object.assign({}, ...singles);
@@ -1243,10 +1404,28 @@ const generateForYahooLeague = async ({ leagueDbId, yahooLeagueKey, leagueName, 
     // than having to be guessed at from the outside.
     const allRows = Object.values(rosterPlayersByTeamKey).flat();
     if (allRows.length && allRows.every(r => !r.actual)) {
-        const sample = Object.values(rosterPlayersByTeamKey)[0]?.[0];
+        // Dump the RAW entity, not the parsed row. The parsed row only ever
+        // says "actual: 0", which is the symptom, not the cause -- what's
+        // actually needed is which nodes Yahoo did send, so the next fix
+        // isn't another guess at the response shape.
+        const rawSample = (() => {
+            try {
+                const teamsNode = lastRosterResponse?.fantasy_content?.teams
+                    || findNode(lastRosterResponse?.fantasy_content?.league, 'teams')
+                    || findNode(lastRosterResponse?.fantasy_content, 'teams');
+                const team = yahooCollection(teamsNode)[0]?.team;
+                const roster = findNode(team, 'roster');
+                const players = findNode(roster, 'players') || findNode(team, 'players');
+                const player = yahooCollection(players)[0]?.player;
+                return JSON.stringify(player).slice(0, 1500);
+            } catch {
+                return 'could not extract a raw player entity';
+            }
+        })();
         console.error(
-            `Yahoo weekly summary: all ${allRows.length} players read 0 points for week ${week} -- `
-            + `player_points was not found on any entity. Sample parsed row: ${JSON.stringify(sample)}`
+            `Yahoo weekly summary: all ${allRows.length} players read 0 points for week ${week}. `
+            + `statModifiers parsed: ${Object.keys(statModifiers || {}).length} entries. `
+            + `Raw player entity: ${rawSample}`
         );
     }
 
@@ -1260,7 +1439,11 @@ const generateForYahooLeague = async ({ leagueDbId, yahooLeagueKey, leagueName, 
         .catch(() => []);
     if (nextWeekMatchups.length) stats.nextWeekMatchups = nextWeekMatchups;
 
-    const narrative = await generateNarrative(leagueName, stats);
+    const narrative = await generateNarrative(leagueName, stats)
+        .catch((err) => {
+            console.error(`Narrative generation failed for "${leagueName}" -- saving the stats without it:`, err.message);
+            return fallbackNarrative(week, err.message);
+        });
     narrative.week = week;
 
     return { leagueDbId, season, week, stats, narrative };
@@ -1549,10 +1732,21 @@ export default async function handler(req, res) {
 
         let digestsSent = 0;
         if (!dryRun) {
-            const sendResults = await Promise.all(
-                [...digestByEmail].map(([email, leagues]) => sendDigestEmail(email, leagues))
-            );
-            digestsSent = sendResults.filter(r => r.sent).length;
+            // Resend allows 10 requests/second and rejects the rest with a
+            // 429 -- firing every digest at once got them all rate limited
+            // and silently dropped. Paced just under the limit instead.
+            const RESEND_PER_SECOND = 8;
+            const recipients = [...digestByEmail];
+            for (let i = 0; i < recipients.length; i += RESEND_PER_SECOND) {
+                const batch = recipients.slice(i, i + RESEND_PER_SECOND);
+                const sendResults = await Promise.all(
+                    batch.map(([email, leagues]) => sendDigestEmail(email, leagues))
+                );
+                digestsSent += sendResults.filter(r => r.sent).length;
+                if (i + RESEND_PER_SECOND < recipients.length) {
+                    await new Promise(resolve => setTimeout(resolve, 1100));
+                }
+            }
         }
 
         if (skipped.length) {
