@@ -23,6 +23,7 @@ const {
     buildEspnStatsInputs, espnNextWeekMatchupPreview,
     buildDigestEmailHtml, withDeadline, fetchWithTimeout,
     parseYahooStatModifiers, scoreYahooStatLine, narrativePayload, NARRATIVE_SCHEMA,
+    parseYahooPlayerStatPoints, applyYahooPlayerPoints,
 } = await import('../api/weekly-summary.js');
 
 let checks = 0;
@@ -710,5 +711,119 @@ check('an 8-team league still names its worst teams', eightSplit.bottom.map(r =>
 
 const four = Array.from({ length: 4 }, (_, i) => ({ rank: i + 1, team: `T${i + 1}` }));
 check('a league smaller than the leaders card gets no bottom-feeders card at all', splitRankings(four).bottom, []);
+
+// --- Yahoo points: the second pass that fixes the all-zero weeks. ---
+//
+// The roster entity below is the REAL one Yahoo returned, copied from the
+// production log that finally caught it (Joe Burrow, week 5, trimmed of the
+// long image URLs). The point of using the real shape is that it is the
+// thing that broke: metadata, selected_position and is_editable, with no
+// player_stats or player_points element anywhere on it. Three separate
+// attempts to parse points out of this were doomed, because there is
+// nothing here to parse.
+const realRosterPlayerEntity = [
+    [
+        { player_key: '470.p.32671' },
+        { player_id: '32671' },
+        { name: { full: 'Joe Burrow', first: 'Joe', last: 'Burrow' } },
+        { editorial_team_abbr: 'Cin' },
+        { bye_weeks: { week: '6' } },
+        { uniform_number: '9' },
+        { display_position: 'QB' },
+        { position_type: 'O' },
+        { primary_position: 'QB' },
+        { eligible_positions: [{ position: 'QB' }] },
+        [], [],
+        { has_player_notes: 1 },
+        [],
+        { player_notes_last_timestamp: 1791755902 },
+    ],
+    { selected_position: [{ coverage_type: 'week', week: '5' }, { position: 'QB' }, { is_flex: 0 }] },
+    { is_editable: 0 },
+];
+
+const realRosterResponse = {
+    fantasy_content: {
+        teams: {
+            count: 1,
+            0: {
+                team: [
+                    [{ team_key: '470.l.1.t.1' }, { name: 'Real Team' }],
+                    { roster: { 0: { players: { count: 1, 0: { player: realRosterPlayerEntity } } } } },
+                ],
+            },
+        },
+    },
+};
+
+const realRoster = extractYahooRosterPlayers(realRosterResponse, { 4: 0.04, 5: 4 });
+check('the real roster entity still yields the player and their slot', realRoster['470.l.1.t.1'][0].name, 'Joe Burrow');
+check('the real roster entity is correctly read as a starter', realRoster['470.l.1.t.1'][0].isStarter, true);
+check('the real roster entity genuinely carries no points -- this is the bug', realRoster['470.l.1.t.1'][0].actual, 0);
+check('the player_key is carried so a stats pass can ask for this player', realRoster['470.l.1.t.1'][0].playerKey, '470.p.32671');
+
+// The players;player_keys=.../stats collection DOES carry a stat line, and
+// that is what the second pass reads. Yahoo's own player_points wins when
+// present; otherwise the line is scored against the league's settings.
+const statsResponse = {
+    fantasy_content: {
+        league: [
+            { league_key: '470.l.1' },
+            {
+                players: {
+                    count: 2,
+                    0: {
+                        player: [
+                            [{ player_key: '470.p.32671' }, { player_id: '32671' }, { display_position: 'QB' }],
+                            { player_points: { coverage_type: 'week', week: '5', total: '24.86' } },
+                        ],
+                    },
+                    1: {
+                        player: [
+                            [{ player_key: '470.p.99999' }, { player_id: '99999' }, { display_position: 'RB' }],
+                            // No player_points -- only the raw line, so this
+                            // one has to be scored from the league settings.
+                            { player_stats: { stats: [
+                                { stat: { stat_id: '4', value: '300' } },
+                                { stat: { stat_id: '5', value: '2' } },
+                            ] } },
+                        ],
+                    },
+                },
+            },
+        ],
+    },
+};
+
+const statPoints = parseYahooPlayerStatPoints(statsResponse, { 4: 0.04, 5: 4 });
+check("Yahoo's own total is used when the stats collection reports one", statPoints['32671'], 24.86);
+check('a player with only a raw stat line is scored from the league settings', statPoints['99999'], 20);
+
+// 300 * 0.04 = 12 passing yards, 2 * 4 = 8 passing TDs -> 20.
+check('an unscored stat id contributes nothing rather than being counted raw', parseYahooPlayerStatPoints({
+    fantasy_content: { league: [{}, { players: { count: 1, 0: { player: [
+        [{ player_id: '1' }],
+        { player_stats: { stats: [{ stat: { stat_id: '999', value: '50' } }] } },
+    ] } } }] },
+}, { 4: 0.04 }), {});
+
+check('a player Yahoo returns nothing for is left absent, not recorded as 0', parseYahooPlayerStatPoints({
+    fantasy_content: { league: [{}, { players: { count: 1, 0: { player: [[{ player_id: '7' }]] } } }] },
+}, { 4: 0.04 }), {});
+
+// End to end: the real all-zero roster, repaired by the stats pass.
+const repairTarget = extractYahooRosterPlayers(realRosterResponse, { 4: 0.04, 5: 4 });
+const repairedCount = applyYahooPlayerPoints(repairTarget, statPoints);
+check('the second pass repairs the all-zero roster', repairedCount, 1);
+check('the repaired row carries the real points instead of 0', repairTarget['470.l.1.t.1'][0].actual, 24.86);
+
+// A row that really did score zero must not be "repaired" into a lie, and a
+// row that already has points must not be overwritten.
+const alreadyScored = { T: [{ playerId: '32671', playerKey: 'k', actual: 11.5 }] };
+applyYahooPlayerPoints(alreadyScored, { 32671: 24.86 });
+check('a row that already has points is left alone', alreadyScored.T[0].actual, 11.5);
+
+const genuineZero = { T: [{ playerId: '55', playerKey: 'k', actual: 0 }] };
+check('a player Yahoo has no number for stays 0 rather than being invented', applyYahooPlayerPoints(genuineZero, {}), 0);
 
 console.log(`OK: ${checks} weekly-summary checks passed`);

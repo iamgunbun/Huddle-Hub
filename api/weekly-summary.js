@@ -603,6 +603,77 @@ export const findYahooPlayerPoints = (player) => {
 };
 
 /**
+ * Points per player id out of a
+ * `league/{key}/players;player_keys=...;/stats;type=week;week=N` response.
+ *
+ * This exists because the roster sub-resource chain does NOT reliably carry
+ * stats. The raw entity Yahoo returned for a league-scoped roster request
+ * was logged in full, and it ends:
+ *
+ *   ...{"eligible_positions_to_add":[...]},[],[],{"has_player_notes":1},[]],
+ *   {"selected_position":[...]},{"is_editable":0}]
+ *
+ * -- metadata, selected_position, is_editable, and no player_stats or
+ * player_points element anywhere on it. The roster request honours
+ * `;week=N` (selected_position came back scoped to week 5) but simply does
+ * not attach a stat line, so no amount of parsing could have found one.
+ *
+ * The `players;player_keys=` collection, on the other hand, is already
+ * fetched a few lines below for player metadata and parses correctly, so
+ * this asks that same proven collection for stats rather than guessing at
+ * another roster URL shape. Points come from Yahoo's own player_points when
+ * present, and are otherwise derived from the raw stat line against the
+ * league's scoring settings.
+ *
+ * Returns { [playerId]: points }.
+ */
+export const parseYahooPlayerStatPoints = (data, statModifiers = null) => {
+    const byPlayerId = {};
+    const playersNode = findNode(data?.fantasy_content?.league, 'players')
+        || findNode(data?.fantasy_content, 'players');
+
+    yahooCollection(playersNode).forEach(entry => {
+        const player = entry?.player;
+        if (!player) return;
+        const playerInfo = Array.isArray(player) ? player[0] : player;
+        const playerId = yahooText(yahooField(playerInfo, 'player_id'));
+        if (!playerId) return;
+
+        const pointsNode = findYahooPlayerPoints(player);
+        const reportedTotal = pointsNode?.total !== undefined ? parseFloat(pointsNode.total) : null;
+        const points = Number.isFinite(reportedTotal)
+            ? reportedTotal
+            : scoreYahooStatLine(player, statModifiers);
+
+        // Only a real number is recorded. A missing player is left absent so
+        // the caller can tell "Yahoo had nothing" apart from "scored zero".
+        if (Number.isFinite(points)) byPlayerId[playerId] = Math.round(points * 100) / 100;
+    });
+
+    return byPlayerId;
+};
+
+/**
+ * Fills in points for roster rows the roster response left at zero, using
+ * the stats map above. Returns the number of rows actually repaired so the
+ * run can log whether the second pass was needed and whether it worked.
+ */
+export const applyYahooPlayerPoints = (rosterPlayersByTeamKey, pointsByPlayerId) => {
+    let repaired = 0;
+    Object.values(rosterPlayersByTeamKey || {}).forEach(rows => {
+        (rows || []).forEach(row => {
+            if (row.actual) return;
+            const points = pointsByPlayerId?.[row.playerId];
+            if (Number.isFinite(points) && points !== 0) {
+                row.actual = points;
+                repaired += 1;
+            }
+        });
+    });
+    return repaired;
+};
+
+/**
  * Per-team roster rows (name, position, actual points, starter/bench) out of
  * a `teams;team_keys=.../roster;week=N/players/stats;type=week;week=N`
  * response. parseYahooTeamPlayerPoints (yahooHistory.js) already reads this
@@ -637,6 +708,9 @@ export const extractYahooRosterPlayers = (data, statModifiers = null) => {
             const playerInfo = Array.isArray(player) ? player[0] : player;
             const playerId = yahooText(yahooField(playerInfo, 'player_id'));
             if (!playerId) return;
+            // Kept so a later stats pass can ask for this exact player by
+            // key when the roster response carried no stat line for them.
+            const playerKey = yahooText(yahooField(playerInfo, 'player_key'));
 
             // Yahoo's own total when it's there; otherwise derive it from
             // the raw stat line, which comes back either way. Only falls
@@ -660,6 +734,7 @@ export const extractYahooRosterPlayers = (data, statModifiers = null) => {
 
             rows.push({
                 playerId,
+                playerKey,
                 name,
                 position,
                 actual: Math.round(actual * 100) / 100,
@@ -1381,14 +1456,13 @@ const generateForYahooLeague = async ({ leagueDbId, yahooLeagueKey, leagueName, 
     // That threw inside the Promise.all and took down the whole league's
     // recap -- a debugging aid destroying the thing it was added to debug.
     let lastRosterResponse = null;
-    // Scoped under the LEAGUE, not the bare top-level `teams;team_keys=`
-    // collection. Fantasy points are a function of the league's own scoring
-    // settings, so Yahoo only returns a player_points node when the request
-    // carries league context -- without it the response still has every
-    // roster, name, position and selected_position (which is why those all
-    // parsed fine) but no points at all, and each one silently read 0. The
-    // diagnostic below confirmed exactly that: "all 151 players read 0
-    // points -- player_points was not found on any entity".
+    // This request is for WHO is on each roster and who started -- not for
+    // points. The league-context theory behind this path was wrong: the raw
+    // entity logged from this very response carries metadata,
+    // selected_position (correctly scoped to the requested week) and
+    // is_editable, and no stat line at all. Scoped or bare, the roster
+    // sub-resource chain does not attach one. Points are fetched separately
+    // below, from a collection that demonstrably does carry them.
     const rosterPath = (keys) => `league/${yahooLeagueKey}/teams;team_keys=${keys.join(',')}/roster;week=${week}/players/stats;type=week;week=${week}`;
     const rosterGroupResults = await Promise.all(teamKeyGroups.map(async (group) => {
         const rosterData = await yahooApiRequest(accessToken, rosterPath(group)).catch(() => null);
@@ -1412,6 +1486,37 @@ const generateForYahooLeague = async ({ leagueDbId, yahooLeagueKey, leagueName, 
     // shape of one player entity (just its keys, not a whole roster dump) so
     // the actual response structure is visible in the runtime logs rather
     // than having to be guessed at from the outside.
+    // Second pass: ask for the stat lines the roster response omitted.
+    // Only for rows that actually came back without points, so a league
+    // where Yahoo did hand them over costs no extra requests at all.
+    const missingKeys = [...new Set(
+        Object.values(rosterPlayersByTeamKey)
+            .flat()
+            .filter(row => !row.actual && row.playerKey)
+            .map(row => row.playerKey)
+    )];
+    if (missingKeys.length) {
+        const statGroups = [];
+        for (let i = 0; i < missingKeys.length; i += YAHOO_PLAYER_KEY_BATCH) {
+            statGroups.push(missingKeys.slice(i, i + YAHOO_PLAYER_KEY_BATCH));
+        }
+        const statMaps = await Promise.all(statGroups.map(group =>
+            yahooApiRequest(
+                accessToken,
+                `league/${yahooLeagueKey}/players;player_keys=${group.join(',')}/stats;type=week;week=${week}`
+            )
+                .then(statData => parseYahooPlayerStatPoints(statData, statModifiers))
+                .catch(() => ({}))
+        ));
+        const repaired = applyYahooPlayerPoints(rosterPlayersByTeamKey, Object.assign({}, ...statMaps));
+        if (!repaired) {
+            console.error(
+                `Yahoo weekly summary: the stats pass recovered no points for week ${week} `
+                + `(${missingKeys.length} players asked for, ${statGroups.length} requests).`
+            );
+        }
+    }
+
     // Wrapped whole: a diagnostic must never be able to cost a league its
     // recap. The first version of this threw and did exactly that.
     try {
