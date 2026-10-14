@@ -923,7 +923,7 @@ export const narrativePayload = (stats) => ({
     nextWeekMatchups: stats.nextWeekMatchups,
 });
 
-const buildNarrativePrompt = (leagueName, stats) => `You are writing a fun, banter-filled weekly recap email for the fantasy football league "${leagueName}", covering Week ${stats.week}. This goes out to every manager in the league, so the tone should read like a knowledgeable, slightly cheeky league commissioner's newsletter -- not a generic sports report.
+export const buildNarrativePrompt = (leagueName, stats) => `You are writing a fun, banter-filled weekly recap email for the fantasy football league "${leagueName}", covering Week ${stats.week}. This goes out to every manager in the league, so the tone should read like a knowledgeable, slightly cheeky league commissioner's newsletter -- not a generic sports report.
 
 CRITICAL GROUNDING RULE: Every fact, score, name, and number below is real and verified. You must ONLY reference what's in this data. Never invent a score, a player, a team name, or a stat that isn't listed here.
 
@@ -943,16 +943,28 @@ Write a recap with these sections. Each should be 2-4 sentences (the roast secti
 - rivalryWatch: Frame this week's most evenly-matched-by-record matchup as a rivalry, if one exists in the data.
 - waiverWireBuzz: Analyze the week's trades and waiver activity, not just list it. For each notable add, transactions.notableAdds[].added[] carries pointsThisWeek -- a real number if that player actually started and scored for their new team this week, or null if they didn't start. Grade the move on that: a pickup that started and scored well is a smart, real-impact add worth praising by name and points; one that sat the bench or scored little is fair game to call out as premature or a stash. Never invent a point total that isn't in the data, and never claim "impact" for a null pointsThisWeek -- say they haven't started yet instead.
 - fullEvaluation: The long one -- a complete written evaluation of the entire league week, 3-5 paragraphs, separated by blank lines. Go team by team through stats.powerRankings and account for EVERY team: what they scored, whether they won or lost and to whom, how that squares with their record, and what it says about them. Work in the bench blunders, the waiver moves, the luck, and who is genuinely good versus who is being carried by an easy schedule. This is the definitive summary of the week -- thorough, specific, and still openly mocking. Only real names and numbers from the data.
-- storyBurns: REQUIRED, and every single key below must be present and non-empty -- these are the one-liners on the full-screen story cards, and a card without one falls flat. Each card already shows the team name and the number, so your line is the BURN that goes under it, NOT a restatement of the fact. ONE sentence, max ~15 words, and it must be a genuine insult -- snarky, personal, the kind of thing that starts an argument in the group chat. No hedging, no "tough break", no neutral observations. If a card's underlying data happens to be missing, still write a snarky line aimed at the league in general rather than leaving it blank. The keys:
-  - highScore: for stats.scoringContext.highest -- credit where it's due, but keep it backhanded.
-  - blowout: for stats.blowout -- the winner beat a specific opponent; go after the loser for showing up at all.
-  - closestCall: for stats.closestCall -- a win this narrow is nothing to brag about.
-  - mvps: for stats.mvpByPosition -- one line about the week's best performers.
-  - benchDisaster: for stats.benchCalls[0] -- this manager benched a specific player for a specific worse one. Be merciless and name them.
-  - disappointment: for stats.biggestDisappointment -- they were projected for more and did not come close.
-  - luck: for stats.luckWatch.unluckiestLoss -- they scored well and lost anyway.
-  - powerRankings: for the TOP of stats.powerRankings -- this card is "This Week's Leaders" and shows the teams at the top of the standings. Give them credit and then undercut it; never sound impressed.
-  - bottomFeeders: for the BOTTOM of stats.powerRankings -- this card is literally titled "Bottom Feeders" and lists the worst teams in the league by record. Name them and bury them; this is the meanest line on the whole run.
+- storyBurns: REQUIRED, and every single key below must be present and non-empty -- these are the roasts on the full-screen story cards that open the recap, and a card without one falls flat.
+
+  LENGTH: 2-3 sentences, roughly 30-50 words. These are NOT one-liners -- build the joke. Open with the jab, then twist the knife with the specific detail that makes it land. Do not exceed 3 sentences; these render on a phone screen.
+
+  EVERY BURN MUST BE UNIQUE. This is the most important rule in this section. All nine burns are read back to back in one sitting, so a repeated joke is immediately obvious and kills the whole run:
+    * Never reuse a comparison, metaphor, insult, punchline or sentence structure in more than one burn. If you call one team a "fraud", no other burn says "fraud". If one opens with a rhetorical question, no other does.
+    * Never make the same joke about the same person twice. If you have already buried a manager on the bench card, the rankings card finds something different about them or goes after somebody else.
+    * Vary the opening of every single burn -- do not start more than one with the same word.
+    * Each burn must be impossible to move to a different card. If a burn would still make sense under another slide, it is too generic -- rewrite it around the specific name, number or matchup that only THIS card shows.
+
+  CONTENT: The card already displays the team name and the number, so do not restate them as the joke -- use them as ammunition for it. Be genuinely mean, personal, and specific, the kind of thing that starts an argument in the group chat. No hedging, no "tough break", no neutral observations, no sports-desk filler. If a card's underlying data is missing, still write a burn aimed at the league in general rather than leaving it blank.
+
+  The keys, each needing its own distinct angle:
+  - highScore: for stats.scoringContext.highest -- credit where it's due, but keep it backhanded. Work in how far clear of the league average they were, and imply it says more about the competition than about them.
+  - blowout: for stats.blowout -- the winner beat a specific opponent by a specific margin. Go after the LOSER for showing up at all, by name.
+  - closestCall: for stats.closestCall -- a win this narrow is nothing to brag about. Mock both teams; neither should enjoy reading it.
+  - mvps: for stats.mvpByPosition -- about the actual players who went off. Pick the single most absurd line in there and build the burn on that one rather than listing them.
+  - benchDisaster: for stats.benchCalls[0] -- this manager benched a specific player for a specific worse one at the same position. Name the manager, name both players, and be merciless about the decision itself.
+  - disappointment: for stats.biggestDisappointment -- a TEAM projected for far more that did not come close. Use the gap between projected and actual as the weapon.
+  - luck: for stats.luckWatch.unluckiestLoss -- they scored well and lost anyway. Mockery over sympathy, and go at who beat them too.
+  - powerRankings: for the TOP of stats.powerRankings -- the "This Week's Leaders" card. Give them credit and then undercut it; never sound impressed. Find the hole in the best team's resume.
+  - bottomFeeders: for the BOTTOM of stats.powerRankings -- the card is literally titled "Bottom Feeders" and lists the league's worst by record. Name them and bury them; this is the meanest burn on the whole run.
 - nextWeekPreview: Only write this if stats.nextWeekMatchups is present and non-empty -- if it's missing or empty, return an empty string, don't guess at next week. When present, preview 1-2 of next week's real matchups by the real team names listed there -- which pairing looks like the week's best game, purely based on this week's results/records already in the data. Never invent an opponent, a projection, or a score for a game that hasn't happened.
 
 If a section's underlying data is empty or missing (e.g. no trades happened, or no disappointment qualified), say so briefly and move on -- never fabricate content to fill a section.`;

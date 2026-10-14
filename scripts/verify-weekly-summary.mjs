@@ -23,7 +23,7 @@ const {
     buildEspnStatsInputs, espnNextWeekMatchupPreview,
     buildDigestEmailHtml, withDeadline, fetchWithTimeout,
     parseYahooStatModifiers, scoreYahooStatLine, narrativePayload, NARRATIVE_SCHEMA,
-    parseYahooPlayerStatPoints, applyYahooPlayerPoints,
+    parseYahooPlayerStatPoints, applyYahooPlayerPoints, buildNarrativePrompt,
 } = await import('../api/weekly-summary.js');
 
 let checks = 0;
@@ -825,5 +825,30 @@ check('a row that already has points is left alone', alreadyScored.T[0].actual, 
 
 const genuineZero = { T: [{ playerId: '55', playerKey: 'k', actual: 0 }] };
 check('a player Yahoo has no number for stays 0 rather than being invented', applyYahooPlayerPoints(genuineZero, {}), 0);
+
+// --- The story burns are the slideshow's whole point. ---
+//
+// String checks on a prompt are a weak test, but the failure they guard
+// against is real and has already happened twice: a burn rule quietly
+// weakening -- first `storyBurns` being optional, then every burn capped to
+// one generic sentence -- with nobody noticing until a whole week's recap
+// had already shipped flat to real subscribers.
+const burnPrompt = buildNarrativePrompt('Test League', {
+    week: 1, scoreboard: [], powerRankings: [], benchCalls: [], mvpByPosition: {},
+});
+
+check('the burn section demands multiple sentences, not a one-liner', /2-3 sentences/.test(burnPrompt), true);
+check('the burns are explicitly required to be unique from one another', /EVERY BURN MUST BE UNIQUE/.test(burnPrompt), true);
+check('reusing a joke or structure across burns is forbidden', /Never reuse a comparison, metaphor, insult, punchline or sentence structure/.test(burnPrompt), true);
+check('a burn that would fit another card counts as too generic', /impossible to move to a different card/.test(burnPrompt), true);
+check('every story card still gets its own named angle', [
+    'highScore:', 'blowout:', 'closestCall:', 'mvps:', 'benchDisaster:',
+    'disappointment:', 'luck:', 'powerRankings:', 'bottomFeeders:',
+].filter(key => !burnPrompt.includes(`  - ${key}`)), []);
+
+// The cap exists because these render on a phone. A browser pass confirmed a
+// burn 50% over it still clears the footer on a 360x640 screen, so there is
+// real headroom -- but the cap has to stay stated for that to hold.
+check('the burns are capped so they cannot overrun the card', /Do not exceed 3 sentences/.test(burnPrompt), true);
 
 console.log(`OK: ${checks} weekly-summary checks passed`);
