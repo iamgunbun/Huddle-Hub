@@ -1,7 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './WeeklySummaryStory.module.css';
 
-const SLIDE_MS = 6000;
+// Burns run 2-3 sentences now, so a 6s card advanced before they could be
+// read -- which wasted the thing the slide exists for. Paced to the slowest
+// card rather than the average: finishing early and tapping on is free,
+// being cut off mid-roast is not.
+const SLIDE_MS = 9000;
 
 // Builds the slide run for one week's recap. Only slides whose underlying
 // data actually exists are included -- a week with no trades or no bench

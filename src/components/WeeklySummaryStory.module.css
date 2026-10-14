@@ -137,8 +137,8 @@
 .sub {
     color: #cbd5e1;
     font-size: 0.95em;
-    line-height: 1.6;
-    margin: 22px auto 0;
+    line-height: 1.55;
+    margin: 20px auto 0;
     max-width: 460px;
     animation: slideIn 0.5s ease both;
     animation-delay: 380ms;
@@ -325,5 +325,49 @@
 @media (prefers-reduced-motion: reduce) {
     .slide, .kicker, .headline, .statBlock, .sub, .mvpGrid, .rankList, .versus, .meta {
         animation: none;
+    }
+}
+
+/* ---- Short-screen fitting ----
+   These live at the END of the file on purpose: they share specificity
+   with the base rules they override, so placed earlier the base rule
+   (defined later) would win. The first version of this block sat next to
+   `.sub` and silently did nothing to the grids.
+
+   The burn is the point of the card, so when a slide gets tall (a long roast
+   under the MVP grid or a rankings list) the text shrinks rather than being
+   clipped by the overlay's `overflow: hidden`. The slide can't simply scroll:
+   the tap zones above it own every pointer event, which is what makes
+   tap-to-advance work. */
+@media (max-height: 740px) {
+    .sub {
+        font-size: 0.88em;
+        margin-top: 14px;
+    }
+}
+
+@media (max-height: 640px) {
+    .sub {
+        font-size: 0.82em;
+        line-height: 1.45;
+        margin-top: 10px;
+    }
+
+    /* The MVP grid and the rankings list are the tallest things that share a
+       card with a burn, so on a short screen they give up their padding
+       first. Measured: this is what keeps a burn that overshoots its length
+       cap by half from reaching the footer on a 360x640 phone. */
+    .mvpGrid,
+    .rankList {
+        margin-top: 14px;
+        gap: 6px;
+    }
+
+    .mvpCard {
+        padding: 8px 6px;
+    }
+
+    .rankRow {
+        padding: 7px 12px;
     }
 }
