@@ -219,10 +219,31 @@ export const buildOwnedIndex = (rosters, { matchNames = false, nameSources = [] 
     const ids = new Set();
     const names = new Set();
     const defTeams = new Set();
+    // The same three lookups again, but carrying WHO owns the player rather
+    // than just that somebody does. Recorded in this one traversal, from the
+    // exact keys the sets above are built from, so "is this player owned" and
+    // "which team owns them" are answered by the same data and cannot drift
+    // apart into a row that is hidden as rostered but names no owner.
+    const ownerById = new Map();
+    const ownerByName = new Map();
+    const ownerByDefTeam = new Map();
 
     if (rosters && typeof rosters === 'object') {
-        Object.values(rosters).forEach(roster => {
+        Object.entries(rosters).forEach(([rosterKey, roster]) => {
             if (!roster || typeof roster !== 'object') return;
+
+            const rosterId = roster.roster_id ?? rosterKey;
+            const owner = {
+                rosterId: rosterId === null || rosterId === undefined ? null : String(rosterId),
+                teamName: roster.team_name || `Team ${rosterId}`,
+                managerName: roster.manager_name || null,
+            };
+            // First writer wins everywhere below: a player can only really be
+            // on one roster, and if two teams both claim them (a stale or
+            // duplicated roster feed) silently overwriting would make the
+            // label depend on object key order. Keeping the first is at least
+            // stable between renders.
+            const claim = (map, key) => { if (key && !map.has(key)) map.set(key, owner); };
 
             ROSTER_PLAYER_FIELDS.forEach(field => {
                 const list = roster[field];
@@ -232,6 +253,7 @@ export const buildOwnedIndex = (rosters, { matchNames = false, nameSources = [] 
                     if (rawId === null || rawId === undefined || rawId === '0') return;
                     const key = String(rawId);
                     ids.add(key);
+                    claim(ownerById, key);
 
                     if (!matchNames) return;
                     let nameFound = false;
@@ -241,7 +263,10 @@ export const buildOwnedIndex = (rosters, { matchNames = false, nameSources = [] 
 
                         if (isDefensePos(meta.pos ?? meta.position)) {
                             const team = String(meta.t ?? meta.team ?? '').toUpperCase();
-                            if (team) defTeams.add(team);
+                            if (team) {
+                                defTeams.add(team);
+                                claim(ownerByDefTeam, team);
+                            }
                         }
 
                         if (!nameFound) {
@@ -250,13 +275,17 @@ export const buildOwnedIndex = (rosters, { matchNames = false, nameSources = [] 
                             const nameKey = playerNameKey(fn, ln);
                             if (nameKey) {
                                 names.add(nameKey);
+                                claim(ownerByName, nameKey);
                                 // Suffix-free too -- a rostered "Michael Pittman Jr."
                                 // must still match a dictionary entry whose last_name
                                 // is bare "Pittman" (see the module note up top), or
                                 // this index silently fails to cover that player at
                                 // all and they leak through as available.
                                 const noSuffix = playerNameKeyNoSuffix(fn, ln);
-                                if (noSuffix) names.add(noSuffix);
+                                if (noSuffix) {
+                                    names.add(noSuffix);
+                                    claim(ownerByName, noSuffix);
+                                }
                                 nameFound = true;
                             }
                         }
@@ -266,8 +295,63 @@ export const buildOwnedIndex = (rosters, { matchNames = false, nameSources = [] 
         });
     }
 
-    return { ids, names, defTeams, isEmpty: ids.size === 0 };
+    return { ids, names, defTeams, ownerById, ownerByName, ownerByDefTeam, isEmpty: ids.size === 0 };
 };
+
+/**
+ * The single ownership lookup both public checks are built on: does any team
+ * hold this player, and if the index recorded it, which one.
+ *
+ * One function rather than two parallel ones so the lookup ORDER can never
+ * drift -- a player matched by name here must be the same player matched by
+ * name there. They differ only in what a missing owner label means, and that
+ * difference is deliberate (see each caller).
+ */
+const matchOwnership = (player, ownedIndex) => {
+    const miss = { owned: false, owner: null };
+    if (!player || !ownedIndex) return miss;
+
+    const candidateIds = [player.player_id, player.id, player.sleeper_id];
+    for (const candidate of candidateIds) {
+        if (candidate === null || candidate === undefined) continue;
+        const key = String(candidate);
+        if (ownedIndex.ids.has(key)) {
+            return { owned: true, owner: ownedIndex.ownerById?.get(key) || null };
+        }
+    }
+
+    if (ownedIndex.defTeams?.size && isDefensePos(player.pos ?? player.position)) {
+        const team = String(player.t ?? player.team ?? '').toUpperCase();
+        if (team && ownedIndex.defTeams.has(team)) {
+            return { owned: true, owner: ownedIndex.ownerByDefTeam?.get(team) || null };
+        }
+    }
+
+    if (!ownedIndex.names.size) return miss;
+    const fn = player.fn ?? player.first_name;
+    const ln = player.ln ?? player.last_name;
+
+    const nameKey = playerNameKey(fn, ln);
+    if (nameKey && ownedIndex.names.has(nameKey)) {
+        return { owned: true, owner: ownedIndex.ownerByName?.get(nameKey) || null };
+    }
+    const noSuffix = playerNameKeyNoSuffix(fn, ln);
+    if (noSuffix && ownedIndex.names.has(noSuffix)) {
+        return { owned: true, owner: ownedIndex.ownerByName?.get(noSuffix) || null };
+    }
+
+    return miss;
+};
+
+/**
+ * Which team in the league holds this player, or null if nobody does.
+ * Returns `{ rosterId, teamName, managerName }`.
+ *
+ * Null here means "no owner to show", which covers both "nobody owns them"
+ * and the should-not-happen case of an owned player the index has no label
+ * for. A caller rendering a row has to handle that anyway.
+ */
+export const findPlayerOwner = (player, ownedIndex) => matchOwnership(player, ownedIndex).owner;
 
 /**
  * True when this player is rostered by someone in the league.
@@ -275,29 +359,7 @@ export const buildOwnedIndex = (rosters, { matchNames = false, nameSources = [] 
  * abbreviation for a defense, and its name when the index was built with
  * name matching enabled.
  */
-export const isPlayerOwned = (player, ownedIndex) => {
-    if (!player || !ownedIndex) return false;
-
-    const candidateIds = [player.player_id, player.id, player.sleeper_id];
-    for (const candidate of candidateIds) {
-        if (candidate !== null && candidate !== undefined && ownedIndex.ids.has(String(candidate))) {
-            return true;
-        }
-    }
-
-    if (ownedIndex.defTeams?.size && isDefensePos(player.pos ?? player.position)) {
-        const team = String(player.t ?? player.team ?? '').toUpperCase();
-        if (team && ownedIndex.defTeams.has(team)) return true;
-    }
-
-    if (!ownedIndex.names.size) return false;
-    const fn = player.fn ?? player.first_name;
-    const ln = player.ln ?? player.last_name;
-    const nameKey = playerNameKey(fn, ln);
-    if (nameKey && ownedIndex.names.has(nameKey)) return true;
-    const noSuffix = playerNameKeyNoSuffix(fn, ln);
-    return noSuffix ? ownedIndex.names.has(noSuffix) : false;
-};
+export const isPlayerOwned = (player, ownedIndex) => matchOwnership(player, ownedIndex).owned;
 
 /**
  * Independent, index-free check for whether a name genuinely has nobody in
