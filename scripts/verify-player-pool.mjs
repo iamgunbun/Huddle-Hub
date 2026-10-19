@@ -5,7 +5,7 @@
 // incomplete, rostered players are presented as free agents and nothing
 // about the page looks broken.
 
-import { buildOwnedIndex, isPlayerOwned, isRosterableNflPlayer, resolvePlayerFromMeta, playerNameKeyNoSuffix, withResolvedPlayerMeta, resolveRosterPlayers, isLessProminentDuplicate, entryOwnsLookupId, playerInitialKey, INITIAL_KEY_PREFIX, findByLastNameRaw, isRealCrosswalkId } from '../src/utils/playerPool.js';
+import { buildOwnedIndex, isPlayerOwned, findPlayerOwner, isRosterableNflPlayer, resolvePlayerFromMeta, playerNameKeyNoSuffix, withResolvedPlayerMeta, resolveRosterPlayers, isLessProminentDuplicate, entryOwnsLookupId, playerInitialKey, INITIAL_KEY_PREFIX, findByLastNameRaw, isRealCrosswalkId } from '../src/utils/playerPool.js';
 import { findSuccessorLeagueId, pickOwnerId } from '../src/utils/leagueSeason.js';
 
 let pass = 0;
@@ -343,6 +343,85 @@ eq('an empty string is not a real id', isRealCrosswalkId(''), false);
 eq('whitespace-only is not a real id', isRealCrosswalkId('   '), false);
 eq('null is not a real id', isRealCrosswalkId(null), false);
 eq('undefined is not a real id', isRealCrosswalkId(undefined), false);
+
+// --- Who owns a rostered player (the Players page search) ---
+//
+// Searching for a taken player shows the row with the owning team on it, so
+// a lookup that found ownership but no owner would render "rostered by
+// nobody". These check the owner is found by every route ownership itself
+// uses, not just by id.
+const namedRosters = {
+    1: { roster_id: 1, team_name: 'Couch Commanders', manager_name: 'Gunner', players: ['4046', '6794'] },
+    2: { roster_id: 2, team_name: 'Gridiron Goblins', players: ['1234'] },
+};
+const ownIdx = buildOwnedIndex(namedRosters, { nameSources: [dict] });
+eq('owner is found by player id',
+    findPlayerOwner({ player_id: '4046' }, ownIdx)?.teamName, 'Couch Commanders');
+eq('the right team is named, not just any team',
+    findPlayerOwner({ player_id: '1234' }, ownIdx)?.teamName, 'Gridiron Goblins');
+eq('the manager is carried through when the platform gave one',
+    findPlayerOwner({ player_id: '4046' }, ownIdx)?.managerName, 'Gunner');
+eq('a free agent has no owner', findPlayerOwner({ player_id: '9999' }, ownIdx), null);
+eq('owner lookup survives a missing index', findPlayerOwner({ player_id: '4046' }, null), null);
+eq('owner lookup survives a missing player', findPlayerOwner(null, ownIdx), null);
+
+// A roster with no team_name must still name something usable rather than
+// rendering "Rostered by undefined".
+const unnamed = buildOwnedIndex({ 7: { roster_id: 7, players: ['4046'] } }, { nameSources: [dict] });
+eq('a roster with no team name falls back to its number',
+    findPlayerOwner({ player_id: '4046' }, unnamed)?.teamName, 'Team 7');
+
+// The crosswalk route: a Yahoo-keyed player whose sleeper_id is what the
+// roster holds. isPlayerOwned already accepts this, so the owner must too.
+eq('owner is found via the crosswalked sleeper_id',
+    findPlayerOwner({ player_id: 'yahoo-only', sleeper_id: '6794' }, ownIdx)?.teamName, 'Couch Commanders');
+
+// The name route, which is the only thing that works on Yahoo/ESPN for a
+// player the id crosswalk missed.
+const yahooNamed = {
+    1: { roster_id: 1, team_name: 'Waiver Wolves', players: ['31003'] },
+};
+const yahooNameIdx = buildOwnedIndex(yahooNamed, {
+    matchNames: true,
+    nameSources: [{ '31003': { fn: 'Bijan', ln: 'Robinson', pos: 'RB' } }],
+});
+eq('owner is found by name when ids cannot line up',
+    findPlayerOwner({ player_id: 'dict-only', fn: 'Bijan', ln: 'Robinson' }, yahooNameIdx)?.teamName,
+    'Waiver Wolves');
+
+// Suffix handling has to agree with ownership, or a player is hidden from
+// the available list while the search cannot say who has them.
+const suffixOwner = buildOwnedIndex(
+    { 3: { roster_id: 3, team_name: 'Punt Returners', players: ['p1'] } },
+    { matchNames: true, nameSources: [{ p1: { fn: 'Michael', ln: 'Pittman Jr.', pos: 'WR' } }] });
+eq('owner is found when the roster carries a suffix and the dictionary does not',
+    findPlayerOwner({ player_id: 'dict-only', fn: 'Michael', ln: 'Pittman' }, suffixOwner)?.teamName,
+    'Punt Returners');
+
+// Defenses: abbreviation is the only key both platforms agree on.
+const defOwner = buildOwnedIndex(
+    { 4: { roster_id: 4, team_name: 'Dream League', players: ['d1'] } },
+    { matchNames: true, nameSources: [{ d1: { fn: 'San Francisco', ln: '49ers', pos: 'DEF', t: 'SF' } }] });
+eq('owner is found for a rostered defense by team abbreviation',
+    findPlayerOwner({ pos: 'DEF', t: 'SF', fn: '49ers', ln: '' }, defOwner)?.teamName, 'Dream League');
+eq('an unrostered defense has no owner',
+    findPlayerOwner({ pos: 'DEF', t: 'KC', fn: 'Chiefs', ln: '' }, defOwner), null);
+
+// The invariant that matters: anything hidden from the available list as
+// owned must be findable by the search, and vice versa. If these ever
+// disagree, a player is either unaddable and unexplained, or offered as a
+// free agent while somebody holds them.
+const bothWays = [
+    { player_id: '4046' },
+    { player_id: '6794' },
+    { player_id: '1234' },
+    { player_id: '9999' },
+    { player_id: 'yahoo-only', sleeper_id: '4046' },
+    { pos: 'DEF', t: 'SF', fn: '49ers', ln: '' },
+];
+const disagreements = bothWays.filter(pl =>
+    isPlayerOwned(pl, ownIdx) !== (findPlayerOwner(pl, ownIdx) !== null)).length;
+eq('ownership and owner lookup never disagree', disagreements, 0);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

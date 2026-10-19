@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useLeague } from '../context/LeagueContext';
 import { loadPlayers, getLeagueData, getLeagueRosters, getNflState } from '../utils/helper';
 import { resolveCurrentSeasonLeagueId } from '../utils/leagueSeason';
-import { buildOwnedIndex, isPlayerOwned, isRosterableNflPlayer, playerNameKey } from '../utils/playerPool';
+import { buildOwnedIndex, isPlayerOwned, findPlayerOwner, isRosterableNflPlayer, playerNameKey } from '../utils/playerPool';
 import { fetchYahooAvailablePlayers } from '../utils/yahooService';
 import PlayerModal from '../components/PlayerModal';
 import { scoreStatLine } from '../utils/yahooScoring';
@@ -313,6 +313,22 @@ export default function Players() {
         }).filter(p => validPositions.has(p.pos) && isRosterableNflPlayer(p));
     }, [playersInfo, validPositions]);
 
+    // Who owns what, built once. Hoisted out of the availability memo below
+    // because the rostered-player search needs the same index to name an
+    // owner, and rebuilding it per keystroke would re-walk every roster.
+    //
+    // Name matching only where ids genuinely can't be trusted to line up.
+    // A Yahoo or ESPN league's rosters carry that platform's own ids while
+    // the dictionary falls back to a Sleeper id for uncrosswalked players,
+    // so names bridge that gap. On Sleeper both sides are Sleeper ids
+    // already, and adding names there can only hide a real free agent who
+    // shares a name with a rostered player.
+    const ownedIndex = useMemo(() => buildOwnedIndex(rosters, {
+        matchNames: isYahooLeagueId(activeLeague?.sleeper_league_id)
+            || isEspnLeagueId(activeLeague?.sleeper_league_id),
+        nameSources: [yahooPlayersMeta, playersInfo],
+    }), [rosters, yahooPlayersMeta, playersInfo, activeLeague]);
+
     // The much smaller set of those players nobody in the league has already
     // rostered. Depends on rosters/the Yahoo pool, not on the search box or
     // position filter, so typing a search doesn't re-derive ownership either.
@@ -324,18 +340,8 @@ export default function Players() {
         // nothing: a wrong "available" list invites rostering someone who's
         // actually taken, while an empty one just looks like a slow load.
         if (rosterPoolIncomplete) return [];
-        // Name matching only where ids genuinely can't be trusted to line up.
-        // A Yahoo or ESPN league's rosters carry that platform's own ids while
-        // the dictionary falls back to a Sleeper id for uncrosswalked players,
-        // so names bridge that gap. On Sleeper both sides are Sleeper ids
-        // already, and adding names there can only hide a real free agent who
-        // shares a name with a rostered player.
         const isYahooLeague = isYahooLeagueId(activeLeague?.sleeper_league_id);
         const isEspnLeague = isEspnLeagueId(activeLeague?.sleeper_league_id);
-        const ownedIndex = buildOwnedIndex(rosters, {
-            matchNames: isYahooLeague || isEspnLeague,
-            nameSources: [yahooPlayersMeta, playersInfo],
-        });
 
         // When Yahoo told us its actual pool, that is the answer -- no inference.
         const yahooAvailableIds = yahooAvailable ? new Set(yahooAvailable.map(p => String(p.id))) : null;
@@ -376,7 +382,7 @@ export default function Players() {
         });
 
         return list;
-    }, [nflPlayerPool, rosters, yahooPlayersMeta, playersInfo, yahooAvailable, activeLeague, leagueData, rosterPoolIncomplete]);
+    }, [nflPlayerPool, ownedIndex, rosters, yahooAvailable, activeLeague, leagueData, rosterPoolIncomplete]);
 
     const availablePlayers = useMemo(() => {
         let list = unownedPlayers.map(p => ({ ...p, projVal: parseFloat(getProjPts(p.player_id)) || 0 }));
@@ -399,6 +405,46 @@ export default function Players() {
         // eslint-disable-next-line react-hooks/exhaustive-deps -- getProjPts closes over weeklyProjections/weeklyStats/leagueData/playersInfo/activeWeek directly
     }, [unownedPlayers, posFilter, searchQuery, weeklyProjections, weeklyStats, nflScheduleMap]);
 
+    /**
+     * Rostered players matching the search box.
+     *
+     * Deliberately empty until something is typed. The point of the Available
+     * tab is what you can actually add, and folding ~200 taken players into
+     * that list by default would bury the handful that matter. They surface
+     * only when somebody goes looking for a specific name -- "is Bijan on
+     * anyone's team, and whose?" -- which is the question the browse list
+     * can't answer.
+     *
+     * Still runs when rosterPoolIncomplete has emptied the available list:
+     * these are positive ownership matches, so a partial roster feed can
+     * only make this show fewer players, never a wrong owner.
+     */
+    const rosteredMatches = useMemo(() => {
+        const q = searchQuery.toLowerCase().trim();
+        if (!q) return [];
+
+        const matches = [];
+        for (const p of nflPlayerPool) {
+            if (posFilter !== 'ALL' && p.pos !== posFilter) continue;
+
+            const fn = (p.fn || '').toLowerCase();
+            const ln = (p.ln || '').toLowerCase();
+            const full = (p.full_name || `${fn} ${ln}`).toLowerCase();
+            if (!fn.includes(q) && !ln.includes(q) && !full.includes(q)) continue;
+
+            const owner = findPlayerOwner(p, ownedIndex);
+            if (!owner) continue;
+
+            matches.push({ ...p, owner, projVal: parseFloat(getProjPts(p.player_id)) || 0 });
+            // A search is a lookup, not a browse. Enough room for a shared
+            // surname without walking the whole dictionary every keystroke.
+            if (matches.length >= 60) break;
+        }
+
+        return matches.sort((a, b) => b.projVal - a.projVal);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- getProjPts closes over weeklyProjections/weeklyStats/leagueData/playersInfo/activeWeek directly
+    }, [nflPlayerPool, ownedIndex, posFilter, searchQuery, weeklyProjections, weeklyStats, nflScheduleMap]);
+
     const renderPlayerRow = (pId, pObj = null, trendCount = null) => {
         const player = pObj || playersInfo[pId] || playersInfo[String(pId)] || playersBySleeperId[String(pId)];
         if (!player) return null;
@@ -418,6 +464,14 @@ export default function Players() {
                             {injury && <span className={[styles.injTag, styles['inj_' + injury.tone]].filter(Boolean).join(' ')} title={injury.label}>{injury.code}</span>}
                         </div>
                         <div className={styles.posText}>{player.pos} • {player.t || player.team || 'FA'}</div>
+                        {/* Rostered players reach this row only via search, so
+                            the owner is the whole reason the row is on screen --
+                            it sits above the schedule line rather than after it. */}
+                        {player.owner && (
+                            <div className={styles.ownerText} title={player.owner.managerName || undefined}>
+                                Rostered by <strong>{player.owner.teamName}</strong>
+                            </div>
+                        )}
                         {injury?.reason && <div className={styles.injReasonText}>{injury.label}: {injury.reason}</div>}
                         <div className={styles.schedText}>{matchup}</div>
                     </div>
@@ -497,7 +551,22 @@ export default function Players() {
                             {availablePlayers.length > 0 ? (
                                 availablePlayers.map(p => renderPlayerRow(p.player_id, p))
                             ) : (
-                                <div className={styles.emptyState}>No available players found.</div>
+                                <div className={styles.emptyState}>
+                                    {searchQuery.trim() && rosteredMatches.length > 0
+                                        ? 'No available players match that search.'
+                                        : 'No available players found.'}
+                                </div>
+                            )}
+
+                            {/* Only ever rendered for a search -- see rosteredMatches. */}
+                            {rosteredMatches.length > 0 && (
+                                <>
+                                    <div className={styles.rosteredHeading}>
+                                        Already rostered
+                                        <span className={styles.rosteredCount}>{rosteredMatches.length}</span>
+                                    </div>
+                                    {rosteredMatches.map(p => renderPlayerRow(p.player_id, p))}
+                                </>
                             )}
                         </div>
                     </>
