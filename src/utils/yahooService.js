@@ -691,6 +691,41 @@ export const fetchYahooPlayerPoints = async (leagueId, teamKeys, week, passedUse
 };
 
 // Single-week view, in the shape the matchup pages already consume.
+/**
+ * Team totals for one week, without the per-player breakdown.
+ *
+ * fetchAndNormalizeYahooMatchups below also calls fetchYahooPlayerPoints,
+ * which walks every team's roster -- correct for the matchup page, far too
+ * expensive for the sidebar preview, which needs two numbers per league and
+ * runs for every connected league at once. The scoreboard call alone already
+ * carries each team's total and Yahoo's own projection.
+ */
+export const fetchYahooScoreboardTotals = async (leagueId, week = 1, passedUserId = null) => {
+    const safeWeek = parseInt(week) || 1;
+    const cleanKey = cleanYahooKey(leagueId);
+    const userId = await getUserId(passedUserId);
+    if (!cleanKey || !userId) return [];
+
+    const data = await yahooProxyRequest(
+        userId,
+        (key) => `league/${key}/scoreboard;week=${safeWeek}`,
+        cleanKey,
+        `scoreboard totals week ${safeWeek}`
+    );
+    if (!data) return [];
+
+    const flat = [];
+    parseYahooScoreboard(data, safeWeek).forEach((m, idx) => {
+        (m.teams || []).forEach(t => flat.push({
+            roster_id: t.roster_id,
+            matchup_id: String(idx + 1),
+            points: t.points,
+            projected_points: t.projected_points,
+        }));
+    });
+    return flat;
+};
+
 export const fetchAndNormalizeYahooMatchups = async (leagueId, week = 1, passedUserId = null) => {
     const safeWeek = parseInt(week) || 1;
     const cleanKey = cleanYahooKey(leagueId);
