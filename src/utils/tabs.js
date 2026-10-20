@@ -1,9 +1,13 @@
+// NOTE: nothing imports this today -- the live navigation is built inline in
+// components/Sidebar.jsx and components/MobileBottomNav.jsx. It is kept in
+// step with them so it cannot quietly become a wrong map of the app for
+// whoever wires it up next.
 export const tabs = [
     { icon: 'home', label: 'Home', dest: '/', key: 'home' },
     { icon: 'bolt', label: 'Vs', dest: '/matchups', key: 'matchups' },
     { icon: 'badge', label: 'My Team', dest: '/rosters', key: 'my_team' },
-    { icon: 'groups', label: 'Players', dest: '/players', key: 'players' },
-    { icon: 'swap_horiz', label: 'Transactions', dest: '/transactions', key: 'transactions' },
+    { icon: 'local_fire_department', label: 'Rivalry', dest: '/rivalry', key: 'rivalry' },
+    { icon: 'emoji_events', label: 'Trophy Room', dest: '/awards', key: 'trophy_room' },
     {
         icon: 'build',
         label: 'Tools & Graders',
@@ -22,10 +26,10 @@ export const tabs = [
         key: 'league_info',
         children: [
             { icon: 'people', label: 'Managers', dest: '/managers' },
-            { icon: 'local_fire_department', label: 'Rivalry', dest: '/rivalry' },
+            { icon: 'groups', label: 'Players', dest: '/players' },
             { icon: 'leaderboard', label: 'Standings', dest: '/standings' },
             { icon: 'view_comfy', label: 'Drafts', dest: '/drafts' },
-            { icon: 'emoji_events', label: 'Trophy Room', dest: '/awards' },
+            { icon: 'swap_horiz', label: 'Transactions', dest: '/transactions' },
             { icon: 'military_tech', label: 'Records', dest: '/records' },
             { icon: 'format_list_numbered', label: 'Scoring Format', dest: '/scoring' },
             { icon: 'history_edu', label: 'Constitution', dest: '/constitution' },
