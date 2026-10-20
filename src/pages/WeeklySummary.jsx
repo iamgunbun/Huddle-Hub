@@ -5,6 +5,7 @@ import { supabase } from '../supabaseClient';
 import BackButton from '../components/BackButton';
 import WeeklySummaryRecap from '../components/WeeklySummaryRecap';
 import WeeklySummaryStory from '../components/WeeklySummaryStory';
+import { parseNarrative } from '../utils/weeklyNarrative';
 import styles from './WeeklySummary.module.css';
 
 // Whether this browser has already been shown the story for one specific
@@ -74,8 +75,14 @@ export default function WeeklySummary() {
                 console.error("Error loading weekly summaries:", error);
                 setSummaries([]);
             } else {
-                setSummaries(data || []);
-                if (data?.length) setSelectedKey(`${data[0].season}:${data[0].week}`);
+                // `narrative` is a text column, so it arrives as the JSON
+                // text of the object that was written (see
+                // utils/weeklyNarrative.js). Parsed once here so the recap
+                // and the story both get an object rather than a string
+                // whose every property reads back undefined.
+                const rows = (data || []).map(row => ({ ...row, narrative: parseNarrative(row.narrative) }));
+                setSummaries(rows);
+                if (rows.length) setSelectedKey(`${rows[0].season}:${rows[0].week}`);
             }
             setLoading(false);
         };

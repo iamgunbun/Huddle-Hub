@@ -221,16 +221,49 @@ create index if not exists profiles_email_idx on public.profiles (email);
 -- narrate -- kept alongside `narrative` so the app can render its own
 -- structured stat cards without re-parsing prose, and so a wrong narrative
 -- claim can be checked against the real numbers it was supposed to be
--- grounded in.
+-- grounded in. Both are jsonb: `narrative` is a structured object of named
+-- sections (headline, fullEvaluation, storyBurns, ...), not one blob of
+-- prose, and the app reads those fields individually.
 create table if not exists public.league_weekly_summaries (
     league_id   uuid not null references public.leagues(id) on delete cascade,
     season      text not null,
     week        integer not null,
     stats       jsonb not null,
-    narrative   text not null,
+    narrative   jsonb not null,
     generated_at timestamptz not null default now(),
     primary key (league_id, season, week)
 );
+
+-- `narrative` was originally created as text, beside a jsonb `stats`.
+-- api/weekly-summary.js writes both as plain objects, so Postgres stored the
+-- narrative as the JSON TEXT of that object and PostgREST handed it back as
+-- a string. Reading a property off a string is legal JavaScript that yields
+-- undefined, so every `narrative.headline` and `narrative.storyBurns` in the
+-- app came back empty: recaps rendered their stat tiles with no prose under
+-- them and every story card rendered with no roast, with nothing thrown and
+-- nothing logged anywhere.
+--
+-- src/utils/weeklyNarrative.js parses a string row, so the app works either
+-- way and this is cleanup rather than a dependency. Every row ever written
+-- is the JSON text of an object, so the cast is lossless; if some row is not
+-- (hand-edited, say), the statement aborts and changes nothing rather than
+-- half-migrating the table.
+--
+-- Guarded because `create table if not exists` above leaves an existing
+-- table alone, so this file has to stay safe to re-run.
+do $$
+begin
+    if exists (
+        select 1 from information_schema.columns
+        where table_schema = 'public'
+          and table_name   = 'league_weekly_summaries'
+          and column_name  = 'narrative'
+          and data_type    = 'text'
+    ) then
+        alter table public.league_weekly_summaries
+            alter column narrative type jsonb using narrative::jsonb;
+    end if;
+end $$;
 
 alter table public.league_weekly_summaries enable row level security;
 
