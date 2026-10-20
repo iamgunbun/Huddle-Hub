@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 const {
     teamRecord, previewSubtitle, pickMyRosterId, findMatchupPair,
     scoreShare, buildPreview, flattenMatchupMap, attachSleeperTeamNames,
+    sleeperOwnerIdsByName,
 } = await import('../src/utils/leaguePreview.js');
 
 let checks = 0;
@@ -208,5 +209,110 @@ check('a Sleeper league now previews with a real team name',
 check('and names the real opponent rather than "Team 2"',
     sleeperPreview.opponent.name, 'CeeDeezTdz');
 check('with the real scores', [sleeperPreview.me.score, sleeperPreview.opponent.score], [146, 130.3]);
+
+// --- Identifying a co-owner, and a renamed team ---
+//
+// The report after the /users join landed was that ONE Sleeper league still
+// showed nothing while the rest worked -- a 16-team league, where shared
+// rosters are common. Matching on the roster's team_name alone cannot find a
+// co-owner: the name on that roster is the PRIMARY owner's, so the stored
+// connection name never equals it. The same blind spot catches a manager who
+// renamed their team in Sleeper after connecting, since AddLeague stored
+// whichever of the two names was set then.
+const sixteenTeamUsers = [
+    { user_id: 'u1', display_name: 'gunner', metadata: { team_name: 'Straw Hat Pirates' } },
+    { user_id: 'u2', display_name: 'CeeDeezTdz' },
+    { user_id: 'u3', display_name: 'brotherInLaw', metadata: { team_name: 'Ballers Inc' } },
+];
+const ownerIds = sleeperOwnerIdsByName(sixteenTeamUsers);
+check('a member is findable by their team name', ownerIds.get('strawhatpirates'), 'u1');
+check('and by their display name, which is the other thing that gets stored',
+    ownerIds.get('gunner'), 'u1');
+check('a member with no team name is findable by display name alone',
+    ownerIds.get('ceedeeztdz'), 'u2');
+check('an unknown name resolves to nobody rather than the first member',
+    ownerIds.get('somebodyelse'), undefined);
+
+// The roster belongs to u3; I am a co-owner of it. Its team_name is "Ballers
+// Inc" -- not my stored name, under either spelling.
+const coOwned = {
+    7: { roster_id: 7, owner_id: 'u3', co_owners: ['u1'], team_name: 'Ballers Inc', settings: { wins: 3, losses: 2 } },
+    8: { roster_id: 8, owner_id: 'u2', co_owners: null, team_name: 'CeeDeezTdz', settings: { wins: 2, losses: 3 } },
+};
+check('a name match alone cannot find a co-owned roster -- this is the bug',
+    pickMyRosterId(coOwned, 'Straw Hat Pirates'), null);
+check('resolving the name to a user id finds the roster I co-own',
+    pickMyRosterId(coOwned, 'Straw Hat Pirates', ownerIds), '7');
+check('a co-owner is found by their display name too',
+    pickMyRosterId(coOwned, 'gunner', ownerIds), '7');
+check('the primary owner still matches their own roster',
+    pickMyRosterId(coOwned, 'CeeDeezTdz', ownerIds), '8');
+// Owning outright must win over co-owning: a manager who co-owns a friend's
+// team as well as running their own must get THEIR team's matchup.
+const bothRoles = {
+    1: { roster_id: 1, owner_id: 'u3', co_owners: ['u1'] },
+    2: { roster_id: 2, owner_id: 'u1', co_owners: [] },
+};
+check('my own roster beats one I merely co-own',
+    pickMyRosterId(bothRoles, 'gunner', ownerIds), '2');
+
+// A team renamed in Sleeper after connecting: the stored name is the old
+// display name, which no roster carries any more.
+const renamed = {
+    1: { roster_id: 1, owner_id: 'u2', team_name: 'Brand New Name' },
+};
+check('a renamed team is still found through the display name on /users',
+    pickMyRosterId(renamed, 'CeeDeezTdz', sleeperOwnerIdsByName([
+        { user_id: 'u2', display_name: 'CeeDeezTdz', metadata: { team_name: 'Brand New Name' } },
+    ])), '1');
+
+// Guessing is still worse than no preview.
+check('an owner id that matches no roster yields nothing rather than a guess',
+    pickMyRosterId(coOwned, 'brotherInLaw', sleeperOwnerIdsByName([
+        { user_id: 'nobody', display_name: 'brotherInLaw' },
+    ])), null);
+check('no users means no owner index, and the name path still runs',
+    pickMyRosterId(coOwned, 'Ballers Inc', sleeperOwnerIdsByName([])), '7');
+check('a null user list does not throw', sleeperOwnerIdsByName(null).size, 0);
+check('a user with no id is skipped', sleeperOwnerIdsByName([{ display_name: 'ghost' }]).size, 0);
+
+// Display-name collisions: two members called the same thing cannot be told
+// apart, and the index must not silently prefer the later one.
+const collide = sleeperOwnerIdsByName([
+    { user_id: 'first', display_name: 'mike' },
+    { user_id: 'second', display_name: 'Mike' },
+]);
+check('a duplicated display name keeps the first member rather than the last',
+    collide.get('mike'), 'first');
+
+// --- Co-owner display names ---
+check('a roster whose owner left is named after a co-owner rather than nothing',
+    attachSleeperTeamNames(
+        { 1: { roster_id: 1, owner_id: null, co_owners: ['u1'] } }, sixteenTeamUsers
+    )[1].team_name,
+    'Straw Hat Pirates');
+check('a roster that still has an owner is NOT renamed after its co-owner',
+    attachSleeperTeamNames(
+        { 1: { roster_id: 1, owner_id: 'u3', co_owners: ['u1'] } }, sixteenTeamUsers
+    )[1].team_name,
+    'Ballers Inc');
+check('a null co_owners field does not throw',
+    attachSleeperTeamNames({ 1: { roster_id: 1, owner_id: null, co_owners: null } }, sixteenTeamUsers)[1].team_name,
+    undefined);
+
+// End to end for the 16-team case: a co-owned roster now previews.
+const coOwnedPreview = buildPreview({
+    league: { platform: 'sleeper', total_rosters: 16, settings: { type: 2, rec: 1 } },
+    rosters: coOwned,
+    matchups: [
+        { roster_id: 7, matchup_id: '4', points: 118.6 },
+        { roster_id: 8, matchup_id: '4', points: 121.2 },
+    ],
+    myRosterId: pickMyRosterId(coOwned, 'Straw Hat Pirates', ownerIds),
+});
+check('the 16-team co-owned league previews under the roster\'s real name',
+    coOwnedPreview.me.name, 'Ballers Inc');
+check('and knows I am behind', coOwnedPreview.leading, false);
+check('and says it is a 16-team league', coOwnedPreview.subtitle, '16-Team Dynasty PPR');
 
 console.log(`OK: ${checks} league-preview checks passed`);
