@@ -1829,6 +1829,14 @@ export default async function handler(req, res) {
 
     const query = req.query || {};
     const dryRun = query.dryRun === '1' || query.dryRun === 'true';
+    // Backfill mode: regenerate and SAVE the recaps, but send nobody a
+    // digest. The leagues the time budget used to drop still have a stale
+    // recap sitting in the database, and the only way to replace it was a
+    // full re-run -- which mails a second digest to every Pro member of
+    // every league, including the ones that were already fine. This fixes
+    // the stored recaps quietly instead; everyone sees the corrected one the
+    // next time they open the app.
+    const noEmail = query.noEmail === '1' || query.noEmail === 'true';
     const onlyLeagueId = query.leagueId || null;
     // Overridable for backfilling a specific week during manual testing --
     // defaults to "the week that just finished" (the cron fires Tuesday, and
@@ -2023,7 +2031,7 @@ export default async function handler(req, res) {
                     }
                 }
 
-                results.push({ leagueId: league.id, leagueName: league.league_name, week: generated.week, recipients: dryRun ? 0 : emails.size, ...(dryRun ? { stats: generated.stats, narrative: generated.narrative } : {}) });
+                results.push({ leagueId: league.id, leagueName: league.league_name, week: generated.week, recipients: (dryRun || noEmail) ? 0 : emails.size, ...(dryRun ? { stats: generated.stats, narrative: generated.narrative } : {}) });
             } catch (leagueErr) {
                 console.error(`Weekly summary failed for league ${league.id}:`, leagueErr);
                 results.push({ leagueId: league.id, leagueName: league.league_name, error: leagueErr.message });
@@ -2052,7 +2060,7 @@ export default async function handler(req, res) {
         );
 
         let digestsSent = 0;
-        if (!dryRun) {
+        if (!dryRun && !noEmail) {
             // Resend allows 10 requests/second and rejects the rest with a
             // 429 -- firing every digest at once got them all rate limited
             // and silently dropped. Paced just under the limit instead.
@@ -2082,6 +2090,10 @@ export default async function handler(req, res) {
             processed: results.length,
             queued: proLeagues.size,
             dryRun,
+            // Stated back rather than assumed: a backfill that silently
+            // emailed, or a real run that silently didn't, both look like a
+            // success from the response alone.
+            noEmail,
             allowlistActive: allowedEmails.length > 0,
             digestsSent,
             ...(excluded.length ? { excluded } : {}),
