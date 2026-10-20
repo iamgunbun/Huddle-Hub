@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import WeeklySummaryRecap from '../components/WeeklySummaryRecap';
+import { parseNarrative } from '../utils/weeklyNarrative';
 import styles from './WeeklySummaryShare.module.css';
 
 // A public, no-login-required view of one already-generated recap -- what a
@@ -57,7 +58,10 @@ export default function WeeklySummaryShare() {
                             <div className={styles.leagueName}>{state.data.leagueName}</div>
                             <div className={styles.weekLabel}>{state.data.season} &middot; Week {state.data.week}</div>
                         </div>
-                        <WeeklySummaryRecap stats={state.data.stats} narrative={state.data.narrative} />
+                        {/* The share endpoint returns the narrative column verbatim,
+                            which is JSON text rather than an object -- see
+                            utils/weeklyNarrative.js. */}
+                        <WeeklySummaryRecap stats={state.data.stats} narrative={parseNarrative(state.data.narrative)} />
                     </>
                 )}
 
