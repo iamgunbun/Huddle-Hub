@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 // where that failure would come from.
 const {
     teamRecord, previewSubtitle, pickMyRosterId, findMatchupPair,
-    scoreShare, buildPreview, flattenMatchupMap,
+    scoreShare, buildPreview, flattenMatchupMap, attachSleeperTeamNames,
 } = await import('../src/utils/leaguePreview.js');
 
 let checks = 0;
@@ -147,5 +147,66 @@ check('the matchup map flattens to a list with ids',
     [{ roster_id: 1, matchup_id: '1' }, { roster_id: 2, matchup_id: '1' }]);
 check('an empty map flattens to an empty list', flattenMatchupMap({}), []);
 check('a null map does not throw', flattenMatchupMap(null), []);
+
+// --- Sleeper team names ---
+//
+// This is the bug that shipped: Sleeper's /rosters response carries no
+// team_name at all (names live on /users, joined by owner_id), so every
+// Sleeper roster had an undefined name, the connection name could never
+// match one, and not a single Sleeper league showed a preview. Yahoo and
+// ESPN were unaffected because their adapters already name the team.
+const rawSleeperRosters = {
+    1: { roster_id: 1, owner_id: 'u1', settings: { wins: 4, losses: 1 } },
+    2: { roster_id: 2, owner_id: 'u2', settings: { wins: 2, losses: 3 } },
+};
+check('a raw Sleeper roster genuinely has no team name -- this is the bug',
+    rawSleeperRosters[1].team_name, undefined);
+check('an unnamed Sleeper roster set cannot identify my team',
+    pickMyRosterId(rawSleeperRosters, 'Straw Hat Pirates'), null);
+
+// AddLeague stores `metadata.team_name || display_name`, so the join has to
+// read the same field or the two sides compare different things.
+const sleeperUsers = [
+    { user_id: 'u1', display_name: 'gunner', metadata: { team_name: 'Straw Hat Pirates' } },
+    { user_id: 'u2', display_name: 'CeeDeezTdz' },
+];
+const named = attachSleeperTeamNames(rawSleeperRosters, sleeperUsers);
+check('the join puts the metadata team name on the roster',
+    named[1].team_name, 'Straw Hat Pirates');
+check('a user with no metadata team name falls back to their display name',
+    named[2].team_name, 'CeeDeezTdz');
+check('after the join my roster is identifiable',
+    pickMyRosterId(named, 'Straw Hat Pirates'), '1');
+check('the join matches the display-name case too',
+    pickMyRosterId(named, 'CeeDeezTdz'), '2');
+check('the join leaves the rest of the roster intact', named[1].settings.wins, 4);
+
+// Degradation: these must not throw or invent names.
+check('no users leaves the rosters untouched',
+    attachSleeperTeamNames(rawSleeperRosters, [])[1].team_name, undefined);
+check('null users leaves the rosters untouched',
+    attachSleeperTeamNames(rawSleeperRosters, null)[1].team_name, undefined);
+check('a roster whose owner has no user keeps its shape rather than gaining an empty name',
+    attachSleeperTeamNames({ 3: { roster_id: 3, owner_id: 'nobody' } }, sleeperUsers)[3].team_name,
+    undefined);
+check('a roster with no owner_id at all is left alone',
+    attachSleeperTeamNames({ 4: { roster_id: 4 } }, sleeperUsers)[4].team_name, undefined);
+
+// End to end: the real shape a Sleeper league arrives in now previews.
+const sleeperWeek = [
+    { roster_id: 1, matchup_id: '1', points: 146.0 },
+    { roster_id: 2, matchup_id: '1', points: 130.3 },
+];
+const sleeperPreview = buildPreview({
+    league: { platform: 'sleeper', total_rosters: 10, settings: { type: 0, rec: 1 } },
+    rosters: named,
+    matchups: sleeperWeek,
+    myRosterId: pickMyRosterId(named, 'Straw Hat Pirates'),
+});
+check('a Sleeper league now previews with a real team name',
+    sleeperPreview.me.name, 'Straw Hat Pirates');
+check('and names the real opponent rather than "Team 2"',
+    sleeperPreview.opponent.name, 'CeeDeezTdz');
+check('with the real scores', [sleeperPreview.me.score, sleeperPreview.opponent.score], [146, 130.3]);
 
 console.log(`OK: ${checks} league-preview checks passed`);
