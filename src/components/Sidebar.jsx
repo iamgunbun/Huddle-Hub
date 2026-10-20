@@ -1,9 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLeague } from '../context/LeagueContext';
 import { supabase } from '../supabaseClient';
 import SettingsModal from './SettingsModal.jsx';
 import { getPlatformLink } from '../utils/platformLinks';
+import { fetchLeaguePreview } from '../utils/leaguePreview';
+import { getNflState } from '../utils/helper';
 import styles from './Sidebar.module.css';
 
 export default function Sidebar({ isOpen, onClose }) {
@@ -15,6 +17,38 @@ export default function Sidebar({ isOpen, onClose }) {
     const [infoOpen, setInfoOpen] = useState(false);
     const [hoveredLeague, setHoveredLeague] = useState(null);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+    // This week's matchup for every connected league, keyed by league id.
+    // Only fetched while the menu is actually open -- the switcher is the
+    // only thing that shows it, and every other page would otherwise pay for
+    // data it never draws. fetchLeaguePreview caches for a minute on top of
+    // that, so repeated opens on a Sunday don't re-hit three platforms.
+    const [previews, setPreviews] = useState({});
+
+    useEffect(() => {
+        if (!isOpen || !userLeagues.length) return;
+        let alive = true;
+
+        (async () => {
+            const nflState = await getNflState().catch(() => null);
+            const week = nflState?.season_type === 'post'
+                ? 18
+                : (nflState?.display_week || nflState?.week || null);
+            if (!week || !alive) return;
+
+            // Each league resolves on its own rather than awaiting the whole
+            // set, so one slow platform doesn't hold up the rest of the list.
+            userLeagues.forEach(l => {
+                fetchLeaguePreview(l, week)
+                    .then(preview => {
+                        if (alive && preview) setPreviews(prev => ({ ...prev, [l.id]: preview }));
+                    })
+                    .catch(() => {});
+            });
+        })();
+
+        return () => { alive = false; };
+    }, [isOpen, userLeagues]);
 
     // Grouped by platform so a manager with leagues on more than one site can
     // tell them apart at a glance instead of one flat list where a Sleeper
@@ -195,7 +229,52 @@ export default function Sidebar({ isOpen, onClose }) {
                                                 <div className={styles.radio} style={{ backgroundColor: activeLeague?.id === l.id ? '#eebf1c' : 'transparent', borderColor: activeLeague?.id === l.id ? '#eebf1c' : '#475569' }}></div>
                                             )}
 
-                                            <span className={activeLeague?.id === l.id ? styles.activeLeagueText : ''}>{l.name || l.league_name}</span>
+                                            <div className={styles.leagueBody}>
+                                                <span className={activeLeague?.id === l.id ? styles.activeLeagueText : ''}>{l.name || l.league_name}</span>
+
+                                                {/* Absent until the preview resolves, and absent for good if it
+                                                    can't -- the row then reads exactly as it did before rather
+                                                    than showing a half-filled matchup. */}
+                                                {previews[l.id] && (() => {
+                                                    const p = previews[l.id];
+                                                    return (
+                                                        <div className={styles.preview}>
+                                                            {p.subtitle && <div className={styles.previewSub}>{p.subtitle}</div>}
+
+                                                            {p.opponent ? (
+                                                                <>
+                                                                    <div className={styles.previewTeams}>
+                                                                        <span className={`${styles.pTeam} ${p.leading ? styles.pLead : ''}`}>
+                                                                            {p.me.name}<span className={styles.pRec}>({p.me.record})</span>
+                                                                        </span>
+                                                                        <span className={`${styles.pTeam} ${styles.pRight} ${!p.leading ? styles.pLead : ''}`}>
+                                                                            <span className={styles.pRec}>({p.opponent.record})</span>{p.opponent.name}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className={styles.previewScores}>
+                                                                        <span className={`${styles.pScore} ${p.leading ? styles.pScoreLead : ''}`}>
+                                                                            {p.me.score.toFixed(2)}
+                                                                        </span>
+                                                                        <div className={styles.pBar}>
+                                                                            <div className={styles.pBarFill} style={{ width: `${p.share}%` }} />
+                                                                        </div>
+                                                                        <span className={`${styles.pScore} ${!p.leading ? styles.pScoreLead : ''}`}>
+                                                                            {p.opponent.score.toFixed(2)}
+                                                                        </span>
+                                                                    </div>
+                                                                </>
+                                                            ) : (
+                                                                <div className={styles.previewTeams}>
+                                                                    <span className={styles.pTeam}>
+                                                                        {p.me.name}<span className={styles.pRec}>({p.me.record})</span>
+                                                                    </span>
+                                                                    <span className={`${styles.pTeam} ${styles.pRight} ${styles.pBye}`}>Bye week</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </div>
 
                                             {hoveredLeague === l.id && (
                                                 <div

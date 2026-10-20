@@ -218,7 +218,10 @@
 
 .leagueItem {
     display: flex;
-    align-items: center;
+    /* Top-aligned, not centred: the row grows downward when a matchup
+       preview is attached, and centring would float the avatar into the
+       middle of a three-line block. */
+    align-items: flex-start;
     color: #94a3b8;
     padding: 10px 15px;
     cursor: pointer;
@@ -226,6 +229,11 @@
     font-weight: 500;
     border-radius: 8px;
     transition: background 0.2s;
+}
+
+.leagueBody {
+    flex: 1;
+    min-width: 0;
 }
 
 .platformDivider {
@@ -337,4 +345,99 @@
     .desktopNavOnly {
         display: none !important;
     }
+}
+
+/* ---- Matchup preview in the league switcher ---- */
+
+.preview {
+    margin-top: 7px;
+}
+
+.previewSub {
+    color: #64748b;
+    font-size: 0.78em;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.previewTeams {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.pTeam {
+    color: #94a3b8;
+    font-size: 0.78em;
+    font-weight: 700;
+    /* Long team names shorten rather than wrapping the row to a new line
+       and pushing the scores out of alignment with the league above. */
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pRight {
+    text-align: right;
+}
+
+/* Whoever is ahead right now, on both the name and the score. */
+.pLead {
+    color: #f1f5f9;
+}
+
+.pRec {
+    color: #64748b;
+    font-weight: 600;
+    margin: 0 4px;
+}
+
+.pBye {
+    color: #64748b;
+    font-weight: 600;
+    font-style: italic;
+    /* Never shortened: a long team name on the other side was ellipsising
+       this to "Bye …", which reads as a truncated opponent rather than as
+       the absence of one. */
+    flex-shrink: 0;
+}
+
+.previewScores {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-top: 4px;
+}
+
+.pScore {
+    color: #94a3b8;
+    font-size: 0.86em;
+    font-weight: 800;
+    flex-shrink: 0;
+    min-width: 46px;
+}
+
+.previewScores .pScore:last-child {
+    text-align: right;
+}
+
+.pScoreLead {
+    color: #eebf1c;
+}
+
+.pBar {
+    flex: 1;
+    height: 4px;
+    border-radius: 3px;
+    background: rgba(148, 163, 184, 0.22);
+    overflow: hidden;
+    min-width: 0;
+}
+
+.pBarFill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #d9a80f, #ffe27a);
 }
