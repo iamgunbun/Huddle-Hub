@@ -24,6 +24,7 @@ const {
     buildDigestEmailHtml, withDeadline, fetchWithTimeout,
     parseYahooStatModifiers, scoreYahooStatLine, narrativePayload, NARRATIVE_SCHEMA,
     parseYahooPlayerStatPoints, applyYahooPlayerPoints, buildNarrativePrompt,
+    orderByStaleness, selectProLeagues, missingBurnKeys,
 } = await import('../api/weekly-summary.js');
 
 let checks = 0;
@@ -850,5 +851,169 @@ check('every story card still gets its own named angle', [
 // burn 50% over it still clears the footer on a 360x640 screen, so there is
 // real headroom -- but the cap has to stay stated for that to hold.
 check('the burns are capped so they cannot overrun the card', /Do not exceed 3 sentences/.test(burnPrompt), true);
+
+// --- Burns that came back empty ---
+//
+// A narrative with no burns is indistinguishable from a complete one
+// everywhere except the story cards, so this check is the only thing that
+// turns "there are still no roasts" into something the logs can answer.
+const allKeys = NARRATIVE_SCHEMA.properties.storyBurns.required;
+const fullBurns = Object.fromEntries(allKeys.map(k => [k, `a burn for ${k}`]));
+check('a complete set of burns reports nothing missing',
+    missingBurnKeys({ storyBurns: fullBurns }), []);
+check('a narrative with no storyBurns at all reports every key -- the reported bug',
+    missingBurnKeys({ headline: 'Week 6 Recap' }), allKeys);
+check('an empty storyBurns object reports every key',
+    missingBurnKeys({ storyBurns: {} }), allKeys);
+check('a single dropped key is reported on its own',
+    missingBurnKeys({ storyBurns: { ...fullBurns, bottomFeeders: undefined } }), ['bottomFeeders']);
+// A whitespace-only burn renders as a blank card, which is the symptom this
+// exists to catch -- present-but-empty must not read as present.
+check('a whitespace-only burn counts as missing',
+    missingBurnKeys({ storyBurns: { ...fullBurns, luck: '   ' } }), ['luck']);
+check('an empty string counts as missing',
+    missingBurnKeys({ storyBurns: { ...fullBurns, mvps: '' } }), ['mvps']);
+check('a null narrative reports every key rather than throwing',
+    missingBurnKeys(null), allKeys);
+check('the check covers exactly the nine story cards', allKeys.length, 9);
+
+// --- Which leagues the run is for ---
+//
+// A league that is never SELECTED leaves no trace at all: no error, no
+// result row, nothing in anyone's digest. "Why wasn't my league in the
+// email?" was unanswerable because of it, so every exclusion now carries a
+// reason -- and these check the reasons are the right ones, since a wrong
+// reason sends the next investigation down the wrong path.
+const profilesById = new Map([
+    ['pro', { id: 'pro', is_premium: true, email: 'Owner@Example.com' }],
+    ['free', { id: 'free', is_premium: false, email: 'free@example.com' }],
+    ['noemail', { id: 'noemail', is_premium: true, email: null }],
+    ['other', { id: 'other', is_premium: true, email: 'someone@example.com' }],
+]);
+const membership = (leagueId, userId, platform = 'sleeper', leagueName = leagueId) => ({
+    league_id: leagueId, user_id: userId,
+    leagues: { id: leagueId, sleeper_league_id: `s_${leagueId}`, platform, league_name: leagueName },
+});
+
+const sel = selectProLeagues({
+    memberships: [
+        membership('a', 'pro'),
+        membership('b', 'free'),
+        membership('c', 'noemail'),
+        membership('d', 'pro', 'fleaflicker'),
+        membership('e', 'ghost'),
+    ],
+    profilesById,
+});
+check('a league with a Pro member is queued', [...sel.proLeagues.keys()], ['a']);
+check('the Pro member\'s email is collected for the digest',
+    [...sel.proLeagues.get('a').emails], ['Owner@Example.com']);
+check('every other league is reported rather than silently dropped',
+    sel.excluded.map(e => e.leagueId).sort(), ['b', 'c', 'd', 'e']);
+const reasonFor = (id) => sel.excluded.find(e => e.leagueId === id)?.reason;
+check('a free-only league says so', reasonFor('b'), 'no Pro member');
+check('a Pro member with no email is distinguished from a free one',
+    reasonFor('c'), 'Pro member has no email on file');
+// This is the one that would otherwise look like a code bug rather than a
+// data problem: an ESPN league whose platform column says something else is
+// excluded by a list membership test, with nothing logged anywhere.
+check('an unreadable platform names the platform as the reason',
+    reasonFor('d'), 'platform is not one this endpoint can read');
+check('and reports which platform it was', sel.excluded.find(e => e.leagueId === 'd').platform, 'fleaflicker');
+check('a membership whose account has no profile row says that',
+    reasonFor('e'), 'no profile row for the connected account');
+check('the league name is carried so the report is readable',
+    sel.excluded.find(e => e.leagueId === 'b').leagueName, 'b');
+
+// One qualifying member is enough, and the reason from a non-qualifying
+// member of the SAME league must not survive -- that would report a league
+// as excluded in the very same run that processed it.
+const mixed = selectProLeagues({
+    memberships: [membership('a', 'free'), membership('a', 'pro')],
+    profilesById,
+});
+check('a league with one free and one Pro member is queued', [...mixed.proLeagues.keys()], ['a']);
+check('and is not also reported as excluded', mixed.excluded, []);
+check('all Pro members of a league are emailed, not just the first',
+    [...selectProLeagues({
+        memberships: [membership('a', 'pro'), membership('a', 'other')],
+        profilesById,
+    }).proLeagues.get('a').emails],
+    ['Owner@Example.com', 'someone@example.com']);
+
+// The soft-launch allowlist. Case and padding come from an env var typed by
+// hand, so the comparison has to survive both.
+const allow = selectProLeagues({
+    memberships: [membership('a', 'pro'), membership('b', 'other')],
+    profilesById,
+    allowedEmails: ['owner@example.com'],
+});
+check('the allowlist is matched case-insensitively', [...allow.proLeagues.keys()], ['a']);
+check('a league left out by the allowlist says that, not "no Pro member"',
+    allow.excluded.map(e => e.reason), ['Pro member is not on WEEKLY_SUMMARY_ALLOWED_EMAILS']);
+
+// A single-league run deliberately leaves the rest out, so reporting them as
+// exclusions would bury the one line that matters under every other league.
+const single = selectProLeagues({
+    memberships: [membership('a', 'pro'), membership('b', 'pro')],
+    profilesById,
+    onlyLeagueId: 'b',
+});
+check('a single-league run queues only that league', [...single.proLeagues.keys()], ['b']);
+check('and does not report the leagues it was told to ignore', single.excluded, []);
+
+check('no memberships yields nothing rather than throwing',
+    selectProLeagues({ memberships: [], profilesById }).proLeagues.size, 0);
+check('a null membership list does not throw',
+    selectProLeagues({ memberships: null, profilesById: new Map() }).excluded, []);
+check('a membership row with no league is skipped',
+    selectProLeagues({ memberships: [{ user_id: 'pro' }], profilesById }).excluded, []);
+
+// --- Queue order ---
+//
+// Two real runs a week apart both ran out of time on the same two leagues,
+// which is the whole bug: a fixed queue order means the tail is never
+// reached, so those leagues are missing from every digest email AND their
+// stored recap never picks up any later change to the narrative. These
+// check that the order rotates on staleness instead.
+const entry = (id, generatedAt) => ({ league: { id }, generatedAt });
+const times = new Map([
+    ['fresh', '2026-10-20T13:00:00.000Z'],
+    ['stale', '2026-10-13T13:00:00.000Z'],
+    ['older', '2026-09-29T13:00:00.000Z'],
+]);
+const ordered = orderByStaleness(
+    [entry('fresh'), entry('stale'), entry('never'), entry('older')],
+    times
+);
+check('the league that missed last week is processed before the one that did not',
+    ordered.map(e => e.league.id), ['never', 'older', 'stale', 'fresh']);
+check('a league with no recap at all goes first', ordered[0].league.id, 'never');
+
+// Equally-stale leagues must not shuffle between runs: a queue that reorders
+// itself at random would drop a different arbitrary tail each week rather
+// than converging on everything being covered.
+const tied = [entry('b'), entry('c'), entry('a')];
+check('equally stale leagues keep a deterministic order',
+    orderByStaleness(tied, new Map()).map(e => e.league.id), ['a', 'b', 'c']);
+check('ordering the same set twice gives the same order',
+    orderByStaleness(tied, new Map()).map(e => e.league.id),
+    orderByStaleness([...tied].reverse(), new Map()).map(e => e.league.id));
+
+// Degradation: the timestamp lookup is allowed to fail (it returns an empty
+// map), and an unparseable stamp must not sort as "now" -- that would push a
+// league with corrupt data to the back forever.
+check('no timestamps at all still returns every league',
+    orderByStaleness([entry('a'), entry('b')], new Map()).length, 2);
+check('an unparseable timestamp is treated as never summarised, not as fresh',
+    orderByStaleness([entry('x'), entry('y')], new Map([['x', 'not a date'], ['y', '2026-10-20T13:00:00.000Z']]))
+        .map(e => e.league.id),
+    ['x', 'y']);
+check('a null entry list does not throw', orderByStaleness(null, new Map()), []);
+check('the input array is not mutated', (() => {
+    const input = [entry('z'), entry('a')];
+    orderByStaleness(input, new Map());
+    return input.map(e => e.league.id);
+})(), ['z', 'a']);
 
 console.log(`OK: ${checks} weekly-summary checks passed`);

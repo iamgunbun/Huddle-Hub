@@ -91,12 +91,53 @@ export const attachSleeperTeamNames = (rosters, users) => {
 
     const out = {};
     Object.entries(rosters || {}).forEach(([key, roster]) => {
-        const name = roster?.owner_id ? nameByUserId.get(String(roster.owner_id)) : null;
-        // A co-owned or orphaned roster with no matching user keeps its
-        // original shape rather than gaining an empty name.
+        // The primary owner names the team. A co-owner is only consulted
+        // when there is no primary owner on file (a roster handed over
+        // mid-season leaves owner_id pointing at nobody), never in
+        // preference to one -- that would put the wrong manager's name on a
+        // team that does have an owner.
+        const name = (roster?.owner_id ? nameByUserId.get(String(roster.owner_id)) : null)
+            || coOwnerIds(roster).map(id => nameByUserId.get(id)).find(Boolean)
+            || null;
+        // A roster with no matching user at all keeps its original shape
+        // rather than gaining an empty name.
         out[key] = name ? { ...roster, team_name: name } : roster;
     });
     return out;
+};
+
+/** A roster's co-owners as strings. Sleeper leaves the field null when there are none. */
+const coOwnerIds = (roster) => (Array.isArray(roster?.co_owners) ? roster.co_owners : [])
+    .filter(Boolean)
+    .map(String);
+
+/**
+ * Normalised name -> Sleeper user id, indexing BOTH names a member can be
+ * known by.
+ *
+ * AddLeague.jsx stores `metadata.team_name || display_name` on the
+ * connection, so the stored name is whichever of the two was set at connect
+ * time. Matching it back against only the field that currently wins loses
+ * the league in two real cases: the manager has since set (or cleared) a
+ * team name in Sleeper, and the roster is CO-OWNED, where the name on the
+ * roster belongs to the primary owner and so can never equal the
+ * co-owner's. Both end with no preview at all for that one league while
+ * every other Sleeper league renders -- which is exactly how this was
+ * reported.
+ */
+export const sleeperOwnerIdsByName = (users) => {
+    const byName = new Map();
+    (users || []).forEach(u => {
+        if (!u?.user_id) return;
+        [u.metadata?.team_name, u.display_name].forEach(candidate => {
+            const key = normalizeName(candidate);
+            // First writer wins: two members with the same display name is
+            // not something this can resolve, and picking the later one
+            // would be no more correct than picking the earlier.
+            if (key && !byName.has(key)) byName.set(key, String(u.user_id));
+        });
+    });
+    return byName;
 };
 
 /**
@@ -108,7 +149,7 @@ export const attachSleeperTeamNames = (rosters, users) => {
  * already use. Returns null rather than guessing when neither resolves: a
  * preview for the wrong team is worse than no preview.
  */
-export const pickMyRosterId = (rosters, connectionTeamName) => {
+export const pickMyRosterId = (rosters, connectionTeamName, ownerIdsByName = null) => {
     const list = Object.values(rosters || {});
     if (!list.length) return null;
 
@@ -117,6 +158,16 @@ export const pickMyRosterId = (rosters, connectionTeamName) => {
 
     const wanted = normalizeName(connectionTeamName);
     if (!wanted) return null;
+
+    // The stored name identifies a PERSON, and a person owns a roster
+    // outright or alongside someone else. Resolving to their user id first
+    // covers the co-owned roster, whose team_name is the primary owner's.
+    const myUserId = ownerIdsByName?.get(wanted) || null;
+    if (myUserId) {
+        const byOwner = list.find(r => String(r?.owner_id ?? '') === myUserId)
+            || list.find(r => coOwnerIds(r).includes(myUserId));
+        if (byOwner) return String(byOwner.roster_id);
+    }
 
     const byName = list.find(r => normalizeName(r?.team_name) === wanted);
     return byName ? String(byName.roster_id) : null;
@@ -239,10 +290,25 @@ export const fetchLeaguePreview = async (league, week, { now = Date.now } = {}) 
             ? attachSleeperTeamNames(rawRosters, sleeperUsers)
             : rawRosters;
 
-        const myRosterId = pickMyRosterId(rosters, league?.team_name);
+        const myRosterId = pickMyRosterId(
+            rosters, league?.team_name, sleeperOwnerIdsByName(sleeperUsers)
+        );
         const value = myRosterId
             ? buildPreview({ league, rosters, matchups, myRosterId })
             : null;
+
+        // One league rendering no preview while the others do is the exact
+        // shape this has been reported in twice, and from the outside the
+        // three causes look identical. Named here so the next report says
+        // which one it is instead of starting from scratch.
+        if (!value) {
+            console.warn(
+                `[sidebar] no preview for league ${leagueId}: `
+                + `${Object.keys(rosters || {}).length} roster(s), `
+                + `${Array.isArray(matchups) ? matchups.length : 0} matchup row(s) for week ${week}, `
+                + `${myRosterId ? `my roster is ${myRosterId}` : `could not identify "${league?.team_name ?? ''}"`}`
+            );
+        }
 
         cache.set(key, { at: now(), value });
         return value;

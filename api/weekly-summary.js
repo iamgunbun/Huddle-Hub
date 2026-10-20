@@ -1040,6 +1040,23 @@ const fallbackNarrative = (week, reason) => ({
     generationFailed: reason || true,
 });
 
+/**
+ * The required burn keys that came back empty, if any.
+ *
+ * The burns are the one part of a recap a reader notices MISSING, and also
+ * the part nothing else in the run depends on: a narrative with no burns
+ * writes to the database, sends its digest and renders the recap page
+ * exactly like a complete one, with only the story cards left blank. So an
+ * empty storyBurns has twice now been something only a reader could see,
+ * with nothing in the logs either way. Checked against the schema's own
+ * required list rather than a second copy of the key names.
+ */
+export const missingBurnKeys = (narrative) => {
+    const burns = narrative?.storyBurns || {};
+    return (NARRATIVE_SCHEMA.properties.storyBurns.required || [])
+        .filter(key => !String(burns[key] ?? '').trim());
+};
+
 const generateNarrative = async (leagueName, stats) => {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({
@@ -1063,7 +1080,23 @@ const generateNarrative = async (leagueName, stats) => {
     if (!result.response.candidates || result.response.candidates.length === 0) {
         throw new Error('Gemini blocked the weekly summary response.');
     }
-    return JSON.parse(result.response.text());
+    const narrative = JSON.parse(result.response.text());
+
+    // console.error rather than warn on purpose: this is the one channel
+    // that survives long enough to be read after a weekly cron (Vercel keeps
+    // runtime logs for an hour and error clusters for a week), and a recap
+    // that generated "successfully" with no roasts in it is a failure from
+    // where the reader sits.
+    const missing = missingBurnKeys(narrative);
+    if (missing.length) {
+        console.error(
+            `Gemini returned a narrative for "${leagueName}" missing ${missing.length} of `
+            + `${NARRATIVE_SCHEMA.properties.storyBurns.required.length} story burn(s) that the `
+            + `schema marks required: ${missing.join(', ')}. Those story cards will render with no roast.`
+        );
+    }
+
+    return narrative;
 };
 
 const escapeHtml = (str) => String(str ?? '')
@@ -1156,6 +1189,149 @@ const GEMINI_TIMEOUT_MS = 60000;
 // league that can't finish inside this is reported as a failure for that
 // league rather than being allowed to consume the run's entire budget.
 const LEAGUE_TIMEOUT_MS = 110000;
+
+const SUPPORTED_PLATFORMS = ['sleeper', 'yahoo', 'espn'];
+
+/**
+ * Which leagues this run is for, and -- the reason this is a function rather
+ * than an inline loop -- which ones it is NOT for, and why.
+ *
+ * A league needs at least one member who is Pro AND has an email on file,
+ * and a platform this endpoint can actually read. A league that fails every
+ * one of those is simply absent from the run: no error, no log line, nothing
+ * in the digest. That is indistinguishable from the two failure modes that
+ * DO leave a trace (a league that threw, and a league the time budget
+ * dropped), which made "why wasn't my league in the email?" unanswerable
+ * from the outside. Every exclusion is now reported with its reason.
+ *
+ * Reasons are per LEAGUE, not per membership row: one league can have
+ * several members, and it only takes one qualifying member to include it, so
+ * a reason is only kept for a league that no row ever qualified.
+ */
+export const selectProLeagues = ({ memberships, profilesById, onlyLeagueId = null, allowedEmails = [] }) => {
+    const proLeagues = new Map();
+    const reasons = new Map();
+
+    // First reason seen wins, and it is dropped entirely if any later row
+    // qualifies the same league.
+    const note = (league, reason) => {
+        if (!league?.id || reasons.has(league.id)) return;
+        reasons.set(league.id, {
+            leagueId: league.id,
+            leagueName: league.league_name || null,
+            platform: league.platform || null,
+            reason,
+        });
+    };
+
+    (memberships || []).forEach(row => {
+        const league = row?.leagues;
+        const profile = profilesById?.get(row?.user_id);
+
+        if (!league?.id) return;
+        // Not an exclusion to report: an explicit single-league run asked
+        // for every other league to be left out.
+        if (onlyLeagueId && league.id !== onlyLeagueId) return;
+
+        if (!SUPPORTED_PLATFORMS.includes(league.platform)) {
+            note(league, 'platform is not one this endpoint can read');
+            return;
+        }
+        if (!profile) {
+            note(league, 'no profile row for the connected account');
+            return;
+        }
+        if (!profile.is_premium) {
+            note(league, 'no Pro member');
+            return;
+        }
+        if (!profile.email) {
+            note(league, 'Pro member has no email on file');
+            return;
+        }
+        if (allowedEmails.length && !allowedEmails.includes(profile.email.trim().toLowerCase())) {
+            note(league, 'Pro member is not on WEEKLY_SUMMARY_ALLOWED_EMAILS');
+            return;
+        }
+
+        if (!proLeagues.has(league.id)) {
+            // userId is only used for the Yahoo and ESPN paths (fetching
+            // a token / stored cookies to read the league with) -- both
+            // platforms' league data is shared league-wide, so any Pro
+            // member's linked account works, and the first one seen is
+            // as good as any other.
+            proLeagues.set(league.id, { league, emails: new Set(), userId: row.user_id });
+        }
+        proLeagues.get(league.id).emails.add(profile.email);
+    });
+
+    proLeagues.forEach((_entry, leagueId) => reasons.delete(leagueId));
+
+    return { proLeagues, excluded: [...reasons.values()] };
+};
+
+/**
+ * Queue order: the league whose stored recap is oldest goes first.
+ *
+ * Whatever is still queued when the run's time budget expires is dropped
+ * until the cron fires again a week later. With the queue in whatever order
+ * Postgres happened to hand back the memberships, that was the SAME trailing
+ * leagues every single week -- two real runs a week apart both ended on
+ * "Sunday's For The Boys, East Texas Ballers 26-27". Those leagues were
+ * missing from every digest email, and worse, their stored recap stayed
+ * frozen on whichever week last got through, so every later improvement to
+ * the narrative (the story burns, which is why a reader of those leagues
+ * saw no roasts at all) never reached them.
+ *
+ * Ordering by staleness makes an overflow self-correcting: a league that
+ * missed last week is at the front of the queue this week. A league with no
+ * recap at all sorts first of all, and the id tie-break keeps the order
+ * deterministic when several leagues are equally stale.
+ */
+export const orderByStaleness = (entries, lastGeneratedByLeagueId) => {
+    const stamp = (entry) => {
+        const raw = lastGeneratedByLeagueId?.get(entry?.league?.id);
+        const ms = raw ? Date.parse(raw) : NaN;
+        // Never summarised sorts ahead of everything that has been.
+        return Number.isFinite(ms) ? ms : -Infinity;
+    };
+    return [...(entries || [])].sort((a, b) => {
+        const left = stamp(a);
+        const right = stamp(b);
+        // Compared, not subtracted: -Infinity minus -Infinity is NaN, which
+        // a comparator treats as "equal" only by accident.
+        if (left !== right) return left < right ? -1 : 1;
+        return String(a?.league?.id ?? '').localeCompare(String(b?.league?.id ?? ''));
+    });
+};
+
+/**
+ * The most recent generated_at per league, which is what the ordering above
+ * sorts on. A failed lookup returns an empty map rather than throwing: the
+ * run then keeps its old arbitrary order, which is the behaviour it had
+ * before this existed, instead of not running at all.
+ */
+const latestRecapTimes = async (leagueIds) => {
+    const latest = new Map();
+    if (!leagueIds.length) return latest;
+
+    const { data, error } = await supabase
+        .from('league_weekly_summaries')
+        .select('league_id, generated_at')
+        .in('league_id', leagueIds);
+    if (error) {
+        console.error('Could not read recap timestamps -- queueing leagues unordered:', error.message);
+        return latest;
+    }
+
+    (data || []).forEach(row => {
+        const ms = Date.parse(row?.generated_at);
+        if (!Number.isFinite(ms)) return;
+        const seen = latest.get(row.league_id);
+        if (!seen || ms > Date.parse(seen)) latest.set(row.league_id, row.generated_at);
+    });
+    return latest;
+};
 
 export const fetchWithTimeout = async (url, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) => {
     const controller = new AbortController();
@@ -1695,25 +1871,22 @@ export default async function handler(req, res) {
             (profiles || []).forEach(p => profilesById.set(p.id, p));
         }
 
-        const proLeagues = new Map();
-        (memberships || []).forEach(row => {
-            const league = row.leagues;
-            const profile = profilesById.get(row.user_id);
-            if (!league || !['sleeper', 'yahoo', 'espn'].includes(league.platform)) return;
-            if (onlyLeagueId && league.id !== onlyLeagueId) return;
-            if (!profile?.is_premium || !profile?.email) return;
-            if (allowedEmails.length && !allowedEmails.includes(profile.email.trim().toLowerCase())) return;
-
-            if (!proLeagues.has(league.id)) {
-                // userId is only used for the Yahoo and ESPN paths (fetching
-                // a token / stored cookies to read the league with) -- both
-                // platforms' league data is shared league-wide, so any Pro
-                // member's linked account works, and the first one seen is
-                // as good as any other.
-                proLeagues.set(league.id, { league, emails: new Set(), userId: row.user_id });
-            }
-            proLeagues.get(league.id).emails.add(profile.email);
+        const { proLeagues, excluded } = selectProLeagues({
+            memberships, profilesById, onlyLeagueId, allowedEmails,
         });
+
+        // "Why wasn't my league in the email?" has three completely
+        // different answers -- it was never selected, it was selected and
+        // failed, or it was selected and the run ran out of time -- and
+        // until this line existed only the last two left any trace. Printed
+        // once per run, and returned in the response for a manual re-run.
+        console.log(
+            `Weekly summary: ${proLeagues.size} league(s) queued`
+            + (excluded.length
+                ? `, ${excluded.length} excluded -- `
+                + excluded.map(e => `${e.leagueName || e.leagueId} [${e.platform || 'no platform'}]: ${e.reason}`).join('; ')
+                : ', none excluded')
+        );
 
         if (proLeagues.size === 0) {
             return res.status(200).json({
@@ -1722,8 +1895,13 @@ export default async function handler(req, res) {
                 message: allowedEmails.length
                     ? `No league found where one of the allowed emails (${allowedEmails.join(', ')}) is a Pro member.`
                     : 'No leagues with a Pro member found.',
+                ...(excluded.length ? { excluded } : {}),
             });
         }
+
+        // Read before any of the work starts, because it decides the order
+        // that work happens in (see orderByStaleness).
+        const latestRecapByLeague = await latestRecapTimes([...proLeagues.keys()]);
 
         const needsSleeper = [...proLeagues.values()].some(({ league }) => league.platform === 'sleeper');
         const playersCache = needsSleeper ? await fetchJson('https://api.sleeper.app/v1/players/nfl') : null;
@@ -1758,7 +1936,17 @@ export default async function handler(req, res) {
         // Capped rather than unbounded so a big account doesn't open a
         // burst of platform requests wide enough to get itself rate
         // limited.
-        const LEAGUE_CONCURRENCY = 4;
+        //
+        // Measured rather than picked: at 4, two real runs logged 184s with
+        // 5 leagues unprocessed and 209s with 2, which puts one league at
+        // roughly 30s -- almost all of it the single Gemini call -- for
+        // close to 30 leagues. That is ~900 league-seconds of mostly idle
+        // waiting, so the ceiling was the width of the pipe, not the work.
+        // Eight halves the wall clock to ~110s and leaves real headroom
+        // inside the budget below. The platform APIs see no more requests
+        // in total, just sooner, and ~8 concurrent Gemini calls is nowhere
+        // near its per-minute limits.
+        const LEAGUE_CONCURRENCY = 8;
         // Stop STARTING new leagues with enough headroom left to still
         // write what finished and send the digests. Overrunning the
         // platform's own timeout loses all of that, so finishing a smaller
@@ -1842,7 +2030,7 @@ export default async function handler(req, res) {
             }
         };
 
-        const queue = [...proLeagues.values()];
+        const queue = orderByStaleness([...proLeagues.values()], latestRecapByLeague);
         const runWorker = async () => {
             while (queue.length) {
                 if (Date.now() - startedAt > TIME_BUDGET_MS) {
@@ -1892,9 +2080,11 @@ export default async function handler(req, res) {
 
         return res.status(200).json({
             processed: results.length,
+            queued: proLeagues.size,
             dryRun,
             allowlistActive: allowedEmails.length > 0,
             digestsSent,
+            ...(excluded.length ? { excluded } : {}),
             elapsedSeconds: Math.round((Date.now() - startedAt) / 1000),
             ...(skipped.length ? { skipped, skippedNote: 'Ran out of time before these leagues. Re-run to finish them.' } : {}),
             results,
