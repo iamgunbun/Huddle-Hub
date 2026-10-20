@@ -68,6 +68,38 @@ export const previewSubtitle = (league) => {
 };
 
 /**
+ * Puts team names onto Sleeper rosters.
+ *
+ * Sleeper's /rosters response carries no team name at all -- names live on
+ * the separate /users endpoint and are joined by roster.owner_id. Without
+ * this, every Sleeper roster has an undefined team_name, so the name match
+ * below can never succeed and no Sleeper league ever shows a preview (and a
+ * forced match would render "Team 1" anyway).
+ *
+ * Reads `metadata.team_name || display_name`, which is exactly the field
+ * AddLeague.jsx stores on the connection, so the two sides are compared on
+ * the same value rather than two different notions of a team's name.
+ */
+export const attachSleeperTeamNames = (rosters, users) => {
+    const nameByUserId = new Map();
+    (users || []).forEach(u => {
+        if (!u?.user_id) return;
+        const name = u.metadata?.team_name || u.display_name || null;
+        if (name) nameByUserId.set(String(u.user_id), name);
+    });
+    if (!nameByUserId.size) return rosters || {};
+
+    const out = {};
+    Object.entries(rosters || {}).forEach(([key, roster]) => {
+        const name = roster?.owner_id ? nameByUserId.get(String(roster.owner_id)) : null;
+        // A co-owned or orphaned roster with no matching user keeps its
+        // original shape rather than gaining an empty name.
+        out[key] = name ? { ...roster, team_name: name } : roster;
+    });
+    return out;
+};
+
+/**
  * Which roster belongs to the signed-in manager.
  *
  * Yahoo and ESPN flag it directly on the roster, which is authoritative.
@@ -195,10 +227,17 @@ export const fetchLeaguePreview = async (league, week, { now = Date.now } = {}) 
 
     try {
         const { getLeagueRosters } = await import('./helperFunctions/leagueRosters');
-        const [{ rosters }, matchups] = await Promise.all([
+        const [{ rosters: rawRosters }, matchups, sleeperUsers] = await Promise.all([
             getLeagueRosters(leagueId, { teamsOnly: true }),
             fetchWeekMatchups(leagueId, week),
+            fetchSleeperUsers(leagueId),
         ]);
+
+        // Yahoo and ESPN already name their teams on the roster; Sleeper
+        // needs its /users join first (see attachSleeperTeamNames).
+        const rosters = sleeperUsers.length
+            ? attachSleeperTeamNames(rawRosters, sleeperUsers)
+            : rawRosters;
 
         const myRosterId = pickMyRosterId(rosters, league?.team_name);
         const value = myRosterId
@@ -239,6 +278,26 @@ const fetchWeekMatchups = async (leagueId, week) => {
     const res = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/matchups/${week}`);
     if (!res.ok) throw new Error(`Sleeper matchups ${res.status}`);
     return res.json();
+};
+
+/**
+ * Sleeper's league members, for the team-name join above. Empty for every
+ * other platform, whose adapters already put the name on the roster.
+ *
+ * Unauthenticated and cheap -- one call alongside the two this already
+ * makes -- and a failure returns empty rather than throwing, which costs
+ * the league its preview but never the whole sidebar.
+ */
+const fetchSleeperUsers = async (leagueId) => {
+    if (isYahooLeagueId(leagueId) || isEspnLeagueId(leagueId)) return [];
+    try {
+        const res = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/users`);
+        if (!res.ok) return [];
+        const users = await res.json();
+        return Array.isArray(users) ? users : [];
+    } catch {
+        return [];
+    }
 };
 
 /** The adapters return { matchupId: [teamA, teamB] }; this is the flat list. */
