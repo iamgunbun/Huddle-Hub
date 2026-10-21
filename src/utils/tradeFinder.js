@@ -187,8 +187,8 @@ export const indexBlocksByRoster = (rosters, claims, blocks) => {
  * declared want can reorder the list but can never surface a deal that makes
  * somebody's team worse.
  */
-export const blockFit = (proposal, block) => {
-    if (!block || !proposal) return { fit: 0, reasons: [] };
+export const blockFit = (proposal, theirBlock, myBlock) => {
+    if (!proposal || (!theirBlock && !myBlock)) return { fit: 0, reasons: [] };
 
     const givePos = new Set((proposal.give || []).map(p => p?.pos).filter(Boolean));
     const getPos = new Set((proposal.get || []).map(p => p?.pos).filter(Boolean));
@@ -197,16 +197,31 @@ export const blockFit = (proposal, block) => {
     const reasons = [];
     let points = 0;
 
-    (block.needs || []).forEach(pos => {
+    // --- what the other manager asked for ---
+    (theirBlock?.needs || []).forEach(pos => {
         if (givePos.has(pos)) { points += 1; reasons.push(`they need ${pos}`); }
     });
-    (block.shopping || []).forEach(pos => {
+    (theirBlock?.shopping || []).forEach(pos => {
         if (getPos.has(pos)) { points += 1; reasons.push(`they're shopping ${pos}`); }
     });
     // A named player is the strongest signal there is -- the manager has
     // already said out loud that he is available.
-    (block.players || []).forEach(id => {
+    (theirBlock?.players || []).forEach(id => {
         if (getIds.has(String(id))) { points += 2; reasons.push('on their block by name'); }
+    });
+
+    // --- and what YOU asked for ---
+    //
+    // The first version weighed only the opponent's block, which meant
+    // editing your own could never change your own results: you could set
+    // "I need WR", re-run, and watch nothing move. Your declaration is a
+    // statement about which trades you actually want to see, so it counts
+    // here on the same footing.
+    (myBlock?.needs || []).forEach(pos => {
+        if (getPos.has(pos)) { points += 1; reasons.push(`you need ${pos}`); }
+    });
+    (myBlock?.shopping || []).forEach(pos => {
+        if (givePos.has(pos)) { points += 1; reasons.push(`you're shopping ${pos}`); }
     });
 
     return { fit: Math.min(1, points / 3), reasons: [...new Set(reasons)] };
@@ -237,7 +252,18 @@ export const findTrades = ({
     // What each opponent has declared, keyed by roster id. Absent or empty,
     // every fit is 0 and the ranking is exactly what it was without it.
     blocks = {},
-    blockWeight = 0.5,
+    myBlock = null,
+    // A declared want is information about whether a trade gets ACCEPTED, not
+    // about what it is worth -- a manager who publicly asked for a running
+    // back is far likelier to say yes than one being cold-called. Ranking on
+    // gain x likelihood is what justifies a multiplier at all, and 0.75 is
+    // about the gap those two cases deserve. At 0.5 the boost was too small
+    // to reorder anything: a matched +2.0 still lost to an unmatched +6.0,
+    // so the list came back looking identical.
+    blockWeight = 0.75,
+    // Show only trades somebody has actually asked for. The surest way to
+    // see what a block is doing is to be able to switch it on.
+    matchingOnly = false,
 } = {}) => {
     const excluded = [];
     const usable = (team) => {
@@ -280,7 +306,8 @@ export const findTrades = ({
                 if (gainThem < minGain) return;
 
                 const mutual = Math.round(Math.min(gainMe, gainThem) * 100) / 100;
-                const { fit, reasons } = blockFit({ give, get }, blocks?.[String(opp.rosterId)]);
+                const { fit, reasons } = blockFit({ give, get }, blocks?.[String(opp.rosterId)], myBlock);
+                if (matchingOnly && fit === 0) return;
 
                 proposals.push({
                     opponent: opp.teamName || opp.rosterId,

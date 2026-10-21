@@ -192,7 +192,10 @@ const declared = findTrades({
 const top = declared.proposals[0];
 check('the declared match is ranked first', [top.give[0].pos, top.get[0].pos], ['RB', 'WR']);
 check('and it says why', top.fitReasons.sort(), ["they need RB", "they're shopping WR"]);
-check('the boost is bounded by blockWeight', top.score <= top.mutual * 1.5 + 0.01, true);
+check('the score is exactly the gain times the declared-want premium',
+    top.score, Math.round(top.mutual * (1 + 0.75 * top.fit) * 100) / 100);
+check('and the premium is bounded however much is declared',
+    top.score <= top.mutual * 1.75 + 0.01, true);
 check('the underlying gains are untouched by the declaration',
     [top.gainMe, top.gainThem],
     [noBlocks.proposals.find(p => p.give[0].pos === 'RB' && p.get[0].pos === 'WR').gainMe,
@@ -240,5 +243,64 @@ check('no blocks yields an empty index, not a crash', indexBlocksByRoster(roster
 check('a claim whose team is not in the league is dropped rather than guessed',
     indexBlocksByRoster(rosters, [{ user_id: 'u2', team_name: 'Some Other Team' }], rows), {});
 check('null arguments do not throw', indexBlocksByRoster(null, null, null), {});
+
+// --- Your own block ---
+//
+// The first version weighed only the opponent's declaration, so a manager
+// could set their own block, re-run, and watch nothing move. That is exactly
+// what got reported, and it is what these cover.
+const mineOnly = findTrades({
+    me, opponents: [them], slots: SLOTS, valueOf: val, maxGive: 1, maxGet: 1,
+    myBlock: { needs: ['WR'], shopping: ['RB'] },
+});
+check('my own block changes my own results', mineOnly.proposals[0].fit > 0, true);
+check('a position I said I need, that I would be getting, counts',
+    mineOnly.proposals[0].fitReasons.includes('you need WR'), true);
+check('a position I said I would move, that I would be giving, counts',
+    mineOnly.proposals[0].fitReasons.includes("you're shopping RB"), true);
+check('my block alone still cannot add a trade that hurts either side',
+    mineOnly.proposals.every(p => p.gainMe > 0 && p.gainThem > 0), true);
+check('an empty block of my own is still no boost',
+    findTrades({ me, opponents: [them], slots: SLOTS, valueOf: val, maxGive: 1, maxGet: 1,
+        myBlock: { needs: [], shopping: [] } }).proposals.every(p => p.fit === 0), true);
+check('a need of mine for something the trade does not bring me does not count',
+    blockFit({ give: [P('g', 'RB', 1)], get: [P('h', 'WR', 1)] }, null, { needs: ['TE'] }).fit, 0);
+check('both blocks can contribute to one fit',
+    blockFit({ give: [P('g', 'RB', 1)], get: [P('h', 'WR', 1)] },
+        { needs: ['RB'] }, { needs: ['WR'] }).reasons.sort(),
+    ['they need RB', 'you need WR']);
+check('no blocks at all on either side is still no fit',
+    blockFit({ give: [], get: [] }, null, null), { fit: 0, reasons: [] });
+
+// --- Matching-only ---
+const onlyMatching = findTrades({
+    me, opponents: [them], slots: SLOTS, valueOf: val, maxGive: 1, maxGet: 1,
+    blocks: { '2': { shopping: ['WR'], needs: ['RB'] } }, matchingOnly: true,
+});
+check('matching-only keeps just the declared ones',
+    onlyMatching.proposals.every(p => p.fit > 0), true);
+// In this fixture my team is RB-heavy and theirs WR-heavy, so EVERY
+// mutually-positive trade is RB-for-WR and matches the declared want --
+// there is nothing for the filter to remove. Asserting it shrinks the list
+// tested the fixture, not the filter. A want that only some trades satisfy
+// is what actually exercises it.
+const narrow = { needs: ['TE'] };
+const narrowAll = findTrades({
+    me, opponents: [them], slots: SLOTS, valueOf: val, maxGive: 1, maxGet: 1, blocks: { '2': narrow },
+});
+const narrowOnly = findTrades({
+    me, opponents: [them], slots: SLOTS, valueOf: val, maxGive: 1, maxGet: 1,
+    blocks: { '2': narrow }, matchingOnly: true,
+});
+check('matching-only keeps exactly the trades that matched',
+    narrowOnly.proposals.length, narrowAll.proposals.filter(p => p.fit > 0).length);
+check('and it genuinely drops the rest',
+    narrowAll.proposals.length > narrowOnly.proposals.length, true);
+check('matching-only with nothing declared anywhere returns nothing, not everything',
+    findTrades({ me, opponents: [them], slots: SLOTS, valueOf: val, matchingOnly: true }).proposals, []);
+check('the filter never changes the gains of what survives it',
+    onlyMatching.proposals[0].gainMe,
+    declared.proposals.find(p => p.give[0].player_id === onlyMatching.proposals[0].give[0].player_id
+        && p.get[0].player_id === onlyMatching.proposals[0].get[0].player_id).gainMe);
 
 console.log(`OK: ${checks} trade-finder checks passed`);

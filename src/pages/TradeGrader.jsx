@@ -61,6 +61,7 @@ export default function TradeGrader() {
     const [finder, setFinder] = useState({ status: 'idle', proposals: [], excluded: [], note: null });
     const [block, setBlock] = useState({ shopping: [], needs: [], note: '' });
     const [blockState, setBlockState] = useState({ status: 'idle', message: null });
+    const [matchingOnly, setMatchingOnly] = useState(false);
     const [leagueBlocks, setLeagueBlocks] = useState([]);
     // user_id -> claimed team name, so a posted block can say whose it is.
     const [blockClaims, setBlockClaims] = useState([]);
@@ -359,7 +360,12 @@ export default function TradeGrader() {
             // found -- see blockFit in utils/tradeFinder.js.
             const blocks = indexBlocksByRoster(rosters, blockClaims, leagueBlocks);
 
-            const result = findTrades({ me: meTeam, opponents, slots, valueOf, limit: 12, blocks });
+            // Your own declaration counts too -- leaving it out was why
+            // editing your block appeared to do nothing.
+            const result = findTrades({
+                me: meTeam, opponents, slots, valueOf, limit: 12,
+                blocks, myBlock: block, matchingOnly,
+            });
             setFinder({ status: 'done', ...result, weeks: weeks.length, myTeam: meTeam.teamName, note: null });
         } catch (err) {
             console.error('Trade finder failed:', err);
@@ -608,6 +614,17 @@ export default function TradeGrader() {
                         </button>
                     </div>
 
+                    {(leagueBlocks.length > 0 || block.shopping.length > 0 || block.needs.length > 0) && (
+                        <label className={styles.onlyToggle}>
+                            <input
+                                type="checkbox"
+                                checked={matchingOnly}
+                                onChange={(e) => { setMatchingOnly(e.target.checked); setFinder({ status: 'idle', proposals: [], excluded: [], note: null }); }}
+                            />
+                            Only trades somebody asked for
+                        </label>
+                    )}
+
                     {finder.status === 'error' && (
                         <div className={styles.errorBox}>
                             <div className={styles.errorHeader}>
@@ -619,9 +636,9 @@ export default function TradeGrader() {
 
                     {finder.status === 'done' && finder.proposals.length === 0 && (
                         <div className={styles.finderEmpty}>
-                            No trade here makes both lineups better right now. That is a real
-                            answer, not a failure &mdash; it usually means your roster is balanced
-                            against the rest of the league.
+                            {matchingOnly
+                                ? 'No trade matches a posted block right now. Untick the filter to see every trade that helps both sides.'
+                                : 'No trade here makes both lineups better right now. That is a real answer, not a failure \u2014 it usually means your roster is balanced against the rest of the league.'}
                         </div>
                     )}
 
