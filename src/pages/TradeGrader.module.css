@@ -110,3 +110,65 @@
     .arena { grid-template-columns: 1fr; } 
     .title { font-size: 1.8em; }
 }
+/* ---- Two-in-one: grade a trade you have, or find one you don't ---- */
+
+.modeTabs { display: flex; gap: 10px; max-width: 400px; margin: 0 auto 26px; }
+.modeTab {
+    flex: 1; padding: 12px 0; border-radius: 9px; font-weight: 900; font-size: 0.8em;
+    letter-spacing: 1.4px; text-transform: uppercase; cursor: pointer; font-family: inherit;
+    color: #64748b; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+    transition: all 0.2s ease;
+}
+.modeTab:hover:not(.modeOn) { color: #cbd5e1; border-color: rgba(255,255,255,0.18); }
+.modeOn { color: #1a1407; background: linear-gradient(180deg, #ffe27a, #eebf1c); border-color: transparent; }
+
+.finderPane { margin-bottom: 30px; }
+.finderIntro { color: #94a3b8; font-size: 0.9em; line-height: 1.65; text-align: center; max-width: 560px; margin: 0 auto 18px; }
+.finderIntro strong { color: #eebf1c; }
+
+.finderWarn {
+    background: rgba(238,191,28,0.08); border-left: 4px solid #eebf1c; border-radius: 4px;
+    padding: 14px 16px; margin: 0 auto 18px; max-width: 560px; color: #cbd5e1;
+    font-size: 0.85em; line-height: 1.6;
+}
+.finderWarn strong { color: #eebf1c; }
+
+.finderMeta { color: #64748b; font-size: 0.75em; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; text-align: center; margin-bottom: 16px; }
+.finderEmpty { color: #94a3b8; font-size: 0.9em; line-height: 1.65; text-align: center; max-width: 520px; margin: 0 auto; padding: 24px 0; }
+
+.proposal {
+    background: #0b0e14; border: 1px solid #1e2530; border-radius: 12px;
+    padding: 18px; margin-bottom: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+}
+.proposalHead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; border-bottom: 1px solid #1e2530; padding-bottom: 12px; margin-bottom: 14px; }
+.oppName { color: #f8fafc; font-weight: 800; font-size: 1em; }
+.mutual { color: #eebf1c; font-weight: 800; font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.8px; text-align: right; flex-shrink: 0; }
+
+.swap { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.swapSide { background: #1e2530; border-radius: 8px; padding: 12px 14px; min-width: 0; }
+.swapLabel { color: #94a3b8; font-size: 0.7em; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 9px; }
+.swapPlayer { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 5px; min-width: 0; }
+.swapPlayer > span:first-child { color: #f8fafc; font-weight: 700; font-size: 0.88em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.swapPos { color: #64748b; font-size: 0.72em; font-weight: 800; flex-shrink: 0; }
+.swapGain { color: #4ade80; font-size: 0.75em; font-weight: 800; margin-top: 9px; }
+
+.proposalBtn {
+    width: 100%; margin-top: 14px; padding: 11px; border-radius: 8px; cursor: pointer;
+    background: transparent; border: 1px solid rgba(238,191,28,0.4); color: #eebf1c;
+    font-family: inherit; font-weight: 900; font-size: 0.78em; text-transform: uppercase; letter-spacing: 1px;
+    transition: all 0.2s ease;
+}
+.proposalBtn:hover { background: rgba(238,191,28,0.1); border-color: #eebf1c; }
+
+.finderExcluded {
+    margin-top: 18px; padding: 14px 16px; border-radius: 8px;
+    background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
+    color: #64748b; font-size: 0.8em; line-height: 1.6;
+}
+.finderExcluded strong { color: #94a3b8; }
+
+@media (max-width: 600px) {
+    .swap { grid-template-columns: 1fr; }
+    .proposalHead { flex-direction: column; gap: 6px; }
+    .mutual { text-align: left; }
+}

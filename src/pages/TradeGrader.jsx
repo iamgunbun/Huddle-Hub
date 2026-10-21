@@ -1,9 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLeague } from '../context/LeagueContext';
-import { loadPlayers, getLeagueData, getLeagueRosters } from '../utils/helper';
+import { loadPlayers, getLeagueData, getLeagueRosters, getNflState } from '../utils/helper';
 import { sleeperLeagueFormat, estimateLeagueFormatFromRosterSets, formatLabel } from '../utils/leagueFormat';
 import styles from './TradeGrader.module.css';
-import { isYahooLeagueId } from '../utils/platformIds';
+import { isYahooLeagueId, isEspnLeagueId } from '../utils/platformIds';
+import { resolveRosterPlayers } from '../utils/playerPool';
+import { attachSleeperTeamNames, sleeperOwnerIdsByName, pickMyRosterId } from '../utils/leaguePreview';
+import { findTrades, makeRosValue, startingSlots, playerLabel } from '../utils/tradeFinder';
+
+// Fantasy regular seasons end here in every format this app supports, so
+// rest-of-season value stops counting at it rather than running to week 18.
+const FANTASY_LAST_WEEK = 17;
 
 const parseGraderResponse = (rawText) => {
     try { 
@@ -42,6 +49,12 @@ export default function TradeGrader() {
     const [isPickModalOpen, setIsPickModalOpen] = useState(null);
     const [pickYear, setPickYear] = useState(new Date().getFullYear());
     const [pickRound, setPickRound] = useState(1);
+
+    // Which half of the tool is showing. Grading a trade you already have in
+    // mind and hunting for one you don't are the same question asked from
+    // opposite ends, so they share a page, a format setting and a roster load.
+    const [mode, setMode] = useState('grade');
+    const [finder, setFinder] = useState({ status: 'idle', proposals: [], excluded: [], note: null });
 
     // Engine States
     const [isEvaluating, setIsEvaluating] = useState(false);
@@ -176,6 +189,91 @@ export default function TradeGrader() {
         return `https://sleepercdn.com/content/nfl/players/thumb/${pId}.jpg`;
     };
 
+    /**
+     * Searches every other roster in the league for swaps that raise BOTH
+     * starting lineups. All of the arithmetic is local (utils/tradeFinder.js)
+     * -- there are thousands of candidate packages and asking an AI to price
+     * them would be slow, expensive and no more accurate than the lineup math
+     * the app already does.
+     */
+    const runFinder = async () => {
+        if (!isPremium) { setShowPremiumModal(true); return; }
+        setFinder({ status: 'loading', proposals: [], excluded: [], note: null });
+        try {
+            const leagueId = activeLeague?.sleeper_league_id;
+            const [pData, lData, rData, nflState] = await Promise.all([
+                loadPlayers(leagueId),
+                getLeagueData(leagueId),
+                getLeagueRosters(leagueId),
+                getNflState(),
+            ]);
+
+            const slots = startingSlots(lData?.roster_positions || lData?.settings?.roster_positions || []);
+            if (!slots.length) throw new Error("Couldn't read this league's starting lineup, so there's nothing to measure a trade against.");
+
+            // Value is what a player is still worth THIS season, so the weeks
+            // already played are not counted.
+            const week = Number(nflState?.week || nflState?.display_week) || 1;
+            const weeks = [];
+            for (let w = week; w <= FANTASY_LAST_WEEK; w++) weeks.push(w);
+            if (!weeks.length) weeks.push(week);
+            const valueOf = makeRosValue(weeks);
+
+            let rosters = rData?.rosters || {};
+            let ownerIds = null;
+            // Sleeper's /rosters carries no team name at all -- the names live
+            // on /users, joined by owner_id (see utils/leaguePreview.js).
+            if (!isYahooLeagueId(leagueId) && !isEspnLeagueId(leagueId)) {
+                const users = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/users`)
+                    .then(r => (r.ok ? r.json() : []))
+                    .catch(() => []);
+                if (Array.isArray(users) && users.length) {
+                    rosters = attachSleeperTeamNames(rosters, users);
+                    ownerIds = sleeperOwnerIdsByName(users);
+                }
+            }
+
+            const myRosterId = pickMyRosterId(rosters, activeLeague?.team_name, ownerIds);
+            if (!myRosterId) throw new Error("Couldn't work out which team is yours in this league. Reconnect it from Add League and the finder will know who to trade for.");
+
+            const playersById = pData?.players || {};
+            const playersByName = pData?.playersByName || {};
+            const platformMeta = rData?.yahooPlayersMeta || {};
+            const toTeam = (id, roster) => ({
+                rosterId: String(id),
+                teamName: roster?.team_name || `Team ${id}`,
+                players: resolveRosterPlayers(roster?.players, playersById, playersByName, platformMeta).players,
+            });
+
+            const meTeam = toTeam(myRosterId, rosters[myRosterId]);
+            if (!meTeam.players.length) throw new Error('Your roster came back empty, so there is nothing to trade from.');
+
+            const opponents = Object.entries(rosters)
+                .filter(([id]) => String(id) !== String(myRosterId))
+                .map(([id, roster]) => toTeam(id, roster))
+                .filter(t => t.players.length);
+
+            const result = findTrades({ me: meTeam, opponents, slots, valueOf, limit: 12 });
+            setFinder({ status: 'done', ...result, weeks: weeks.length, myTeam: meTeam.teamName, note: null });
+        } catch (err) {
+            console.error('Trade finder failed:', err);
+            setFinder({ status: 'error', proposals: [], excluded: [], note: err.message });
+        }
+    };
+
+    /** Drops a found trade into the grader so it can be written up properly. */
+    const loadProposal = (proposal) => {
+        const asAsset = (pl) => ({ ...pl, assetType: 'player', uniqueId: pl.player_id || pl.id });
+        // Side A is always "me" in the grader, and in the finder what I GET is
+        // what side A receives.
+        setSideA(proposal.get.map(asAsset));
+        setSideB(proposal.give.map(asAsset));
+        setGradeResult(null);
+        setUiErrorMessage(null);
+        setMode('grade');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
     const formatAssetForPrompt = (asset) => {
         if (asset.assetType === 'pick') return `- ${asset.year} Round ${asset.round} Draft Pick`;
         const name = `${asset.fn || asset.first_name} ${asset.ln || asset.last_name}`;
@@ -272,6 +370,125 @@ export default function TradeGrader() {
                 <p className={styles.subtitle}>Official Trade Valuation</p>
             </div>
 
+            <div className={styles.modeTabs}>
+                <button
+                    className={`${styles.modeTab} ${mode === 'grade' ? styles.modeOn : ''}`}
+                    onClick={() => setMode('grade')}
+                >Grade a Trade</button>
+                <button
+                    className={`${styles.modeTab} ${mode === 'find' ? styles.modeOn : ''}`}
+                    onClick={() => setMode('find')}
+                >Find a Trade</button>
+            </div>
+
+            {mode === 'find' && (
+                <div className={styles.finderPane}>
+                    <p className={styles.finderIntro}>
+                        Every other roster in your league, searched for swaps that make
+                        <strong> both </strong> starting lineups better. Worked out from
+                        rest-of-season projections and your league&rsquo;s own lineup slots &mdash;
+                        so a running back you never start is priced at what he&rsquo;s worth to
+                        you, not what he&rsquo;s worth in the abstract.
+                    </p>
+
+                    {leagueType === 'Dynasty' && (
+                        <div className={styles.finderWarn}>
+                            This league is set to <strong>Dynasty</strong>. The finder prices
+                            rest-of-season points only &mdash; it cannot value youth or draft
+                            picks, so read these as win-now ideas rather than dynasty advice.
+                        </div>
+                    )}
+
+                    <div className={styles.actionContainer}>
+                        <button
+                            className={`${styles.evalButton} ${finder.status === 'loading' ? styles.analyzing : ''}`}
+                            onClick={runFinder}
+                            disabled={finder.status === 'loading'}
+                        >
+                            {finder.status === 'loading' ? (
+                                <><i className={`material-icons ${styles.spin}`}>autorenew</i> Searching Rosters...</>
+                            ) : (
+                                <><i className="material-icons">travel_explore</i> Find Trades</>
+                            )}
+                        </button>
+                    </div>
+
+                    {finder.status === 'error' && (
+                        <div className={styles.errorBox}>
+                            <div className={styles.errorHeader}>
+                                <i className="material-icons">error_outline</i> Couldn&rsquo;t search
+                            </div>
+                            <p>{finder.note}</p>
+                        </div>
+                    )}
+
+                    {finder.status === 'done' && finder.proposals.length === 0 && (
+                        <div className={styles.finderEmpty}>
+                            No trade here makes both lineups better right now. That is a real
+                            answer, not a failure &mdash; it usually means your roster is balanced
+                            against the rest of the league.
+                        </div>
+                    )}
+
+                    {finder.status === 'done' && finder.proposals.length > 0 && (
+                        <>
+                            <div className={styles.finderMeta}>
+                                {finder.considered.toLocaleString()} packages checked across{' '}
+                                {finder.weeks} remaining week{finder.weeks === 1 ? '' : 's'}
+                            </div>
+                            {finder.proposals.map((proposal, i) => (
+                                <div className={styles.proposal} key={`${proposal.rosterId}-${i}`}>
+                                    <div className={styles.proposalHead}>
+                                        <span className={styles.oppName}>vs {proposal.opponent}</span>
+                                        <span className={styles.mutual}>
+                                            Both gain {proposal.mutual.toFixed(1)}+ pts
+                                        </span>
+                                    </div>
+                                    <div className={styles.swap}>
+                                        <div className={styles.swapSide}>
+                                            <div className={styles.swapLabel}>You get</div>
+                                            {proposal.get.map(pl => (
+                                                <div className={styles.swapPlayer} key={pl.player_id || playerLabel(pl)}>
+                                                    <span>{playerLabel(pl)}</span>
+                                                    <span className={styles.swapPos}>{pl.pos}</span>
+                                                </div>
+                                            ))}
+                                            <div className={styles.swapGain}>+{proposal.gainMe.toFixed(1)} your lineup</div>
+                                        </div>
+                                        <div className={styles.swapSide}>
+                                            <div className={styles.swapLabel}>You give</div>
+                                            {proposal.give.map(pl => (
+                                                <div className={styles.swapPlayer} key={pl.player_id || playerLabel(pl)}>
+                                                    <span>{playerLabel(pl)}</span>
+                                                    <span className={styles.swapPos}>{pl.pos}</span>
+                                                </div>
+                                            ))}
+                                            <div className={styles.swapGain}>+{proposal.gainThem.toFixed(1)} their lineup</div>
+                                        </div>
+                                    </div>
+                                    <button className={styles.proposalBtn} onClick={() => loadProposal(proposal)}>
+                                        Grade this trade
+                                    </button>
+                                </div>
+                            ))}
+                        </>
+                    )}
+
+                    {/* Never silent about a player the projection feed doesn't
+                        cover: scoring him zero is what would put a real starter
+                        at the top of the give-away list. */}
+                    {finder.status === 'done' && finder.excluded.length > 0 && (
+                        <div className={styles.finderExcluded}>
+                            <strong>{finder.excluded.length} player{finder.excluded.length === 1 ? '' : 's'} left out</strong> &mdash;
+                            no projection data, so they can&rsquo;t be priced and were not offered
+                            in either direction: {finder.excluded.slice(0, 8).map(e => e.player).join(', ')}
+                            {finder.excluded.length > 8 ? ` and ${finder.excluded.length - 8} more` : ''}.
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {mode === 'grade' && (<>
             <div className={styles.controlsGrid}>
                 <div className={styles.controlGroup}>
                     <label>Evaluation Format</label>
@@ -404,6 +621,9 @@ export default function TradeGrader() {
                     <h3 className={styles.verdictWinner}>Winner: {gradeResult.winner}</h3>
                     <p className={styles.verdictAnalysis}>{gradeResult.analysis}</p>
                 </div>
+            )}
+
+            </>
             )}
 
             {/* PLAYER SEARCH MODAL */}
