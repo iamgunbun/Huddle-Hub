@@ -219,3 +219,14 @@
     font-size: 0.76em; font-weight: 700; margin: -4px 0 12px;
 }
 .fitNote i { font-size: 1.15em; }
+
+.postedWho {
+    display: flex; align-items: center; gap: 9px; color: #eebf1c;
+    font-weight: 900; font-size: 0.85em; margin-bottom: 10px;
+    padding-bottom: 9px; border-bottom: 1px solid #1e2530;
+}
+.postedMine {
+    color: #1a1407; background: #eebf1c; border-radius: 999px;
+    padding: 2px 9px; font-size: 0.72em; font-weight: 900;
+    text-transform: uppercase; letter-spacing: 0.6px;
+}
