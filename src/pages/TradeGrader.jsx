@@ -62,6 +62,9 @@ export default function TradeGrader() {
     const [block, setBlock] = useState({ shopping: [], needs: [], note: '' });
     const [blockState, setBlockState] = useState({ status: 'idle', message: null });
     const [leagueBlocks, setLeagueBlocks] = useState([]);
+    // user_id -> claimed team name, so a posted block can say whose it is.
+    const [blockClaims, setBlockClaims] = useState([]);
+    const [myUserId, setMyUserId] = useState(null);
 
     // Engine States
     const [isEvaluating, setIsEvaluating] = useState(false);
@@ -204,14 +207,25 @@ export default function TradeGrader() {
         const load = async () => {
             if (!activeLeague?.id) return;
             const { data: { session } } = await supabase.auth.getSession();
-            const { data, error } = await supabase
-                .from('league_trade_blocks')
-                .select('user_id, shopping, needs, players, note, updated_at')
-                .eq('league_id', activeLeague.id);
+            // Claims come along for the ride: a block with no name on it says
+            // somebody wants a running back but not who to go and ask, and the
+            // search needs the same join to know whose block is whose.
+            const [{ data, error }, { data: claims }] = await Promise.all([
+                supabase
+                    .from('league_trade_blocks')
+                    .select('user_id, shopping, needs, players, note, updated_at')
+                    .eq('league_id', activeLeague.id),
+                supabase
+                    .from('user_leagues')
+                    .select('user_id, team_name')
+                    .eq('league_id', activeLeague.id),
+            ]);
             if (!isMounted || error) {
                 if (error) console.warn('Trade blocks unavailable:', error.message);
                 return;
             }
+            setMyUserId(session?.user?.id || null);
+            setBlockClaims(claims || []);
             setLeagueBlocks(data || []);
             const mine = (data || []).find(b => b.user_id === session?.user?.id);
             if (mine) setBlock({ shopping: mine.shopping || [], needs: mine.needs || [], note: mine.note || '' });
@@ -219,6 +233,26 @@ export default function TradeGrader() {
         load();
         return () => { isMounted = false; };
     }, [activeLeague?.id]);
+
+    /**
+     * The posted blocks, named and ordered for reading.
+     *
+     * A row where nobody declared anything is dropped: an empty block is what
+     * you get from opening the tab and saving by accident, and showing it
+     * tells a reader nothing while making the league look busier than it is.
+     * Yours sorts first so a save visibly lands.
+     */
+    const postedBlocks = useMemo(() => {
+        const nameFor = (userId) =>
+            blockClaims.find(c => c.user_id === userId)?.team_name || 'A leaguemate';
+        return (leagueBlocks || [])
+            .filter(b => (b.shopping?.length || b.needs?.length || (b.note || '').trim()))
+            .map(b => ({ ...b, teamName: nameFor(b.user_id), isMine: b.user_id === myUserId }))
+            .sort((a, b) =>
+                (b.isMine ? 1 : 0) - (a.isMine ? 1 : 0)
+                || String(b.updated_at || '').localeCompare(String(a.updated_at || ''))
+                || a.teamName.localeCompare(b.teamName));
+    }, [leagueBlocks, blockClaims, myUserId]);
 
     const toggleBlockPos = (field, pos) => {
         setBlock(prev => ({
@@ -323,11 +357,7 @@ export default function TradeGrader() {
 
             // Declared blocks only reorder what the lineup maths already
             // found -- see blockFit in utils/tradeFinder.js.
-            const { data: claims } = await supabase
-                .from('user_leagues')
-                .select('user_id, team_name')
-                .eq('league_id', activeLeague.id);
-            const blocks = indexBlocksByRoster(rosters, claims || [], leagueBlocks);
+            const blocks = indexBlocksByRoster(rosters, blockClaims, leagueBlocks);
 
             const result = findTrades({ me: meTeam, opponents, slots, valueOf, limit: 12, blocks });
             setFinder({ status: 'done', ...result, weeks: weeks.length, myTeam: meTeam.teamName, note: null });
@@ -519,14 +549,18 @@ export default function TradeGrader() {
                     </div>
 
                     <div className={styles.finderMeta}>What your league has posted</div>
-                    {leagueBlocks.length === 0 ? (
+                    {postedBlocks.length === 0 ? (
                         <div className={styles.finderEmpty}>
                             Nobody has posted a block yet. The finder works without one &mdash;
                             this only changes the order things show up in.
                         </div>
                     ) : (
-                        leagueBlocks.map(b => (
+                        postedBlocks.map(b => (
                             <div className={styles.postedBlock} key={b.user_id}>
+                                <div className={styles.postedWho}>
+                                    {b.teamName}
+                                    {b.isMine && <span className={styles.postedMine}>You</span>}
+                                </div>
                                 <div className={styles.postedRow}>
                                     <span className={styles.postedLabel}>Moving</span>
                                     <span>{b.shopping?.length ? b.shopping.join(', ') : '--'}</span>
