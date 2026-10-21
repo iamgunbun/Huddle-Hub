@@ -22,9 +22,10 @@
     "verify:imagefallback": "node scripts/verify-image-fallback.mjs",
     "verify:weeklysummary": "node scripts/verify-weekly-summary.mjs",
     "verify:injurystatus": "node scripts/verify-injury-status.mjs",
-    "verify": "npm run verify:scoring && npm run verify:pool && npm run verify:history && npm run verify:projections && npm run verify:concurrency && npm run verify:format && npm run verify:statline && npm run verify:livescores && npm run verify:draftcontext && npm run verify:platformids && npm run verify:espn && npm run verify:imagefallback && npm run verify:weeklysummary && npm run verify:injurystatus && npm run verify:adminstats && npm run verify:leaguepreview && npm run verify:weeklynarrative",
+    "verify": "npm run verify:scoring && npm run verify:pool && npm run verify:history && npm run verify:projections && npm run verify:concurrency && npm run verify:format && npm run verify:statline && npm run verify:livescores && npm run verify:draftcontext && npm run verify:platformids && npm run verify:espn && npm run verify:imagefallback && npm run verify:weeklysummary && npm run verify:injurystatus && npm run verify:adminstats && npm run verify:leaguepreview && npm run verify:weeklynarrative && npm run verify:tradefinder",
     "verify:adminstats": "node scripts/verify-admin-stats.mjs",
     "verify:weeklynarrative": "node scripts/verify-weekly-narrative.mjs",
+    "verify:tradefinder": "node scripts/verify-trade-finder.mjs",
     "verify:leaguepreview": "node scripts/verify-league-preview.mjs"
   },
   "dependencies": {
