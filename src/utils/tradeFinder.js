@@ -140,6 +140,78 @@ const packages = (players, max) => {
 const sumValue = (players, valueOf) =>
     players.reduce((t, p) => t + (valueOf(p) || 0), 0);
 
+/** The positions a manager can put on their block or ask for. */
+export const BLOCK_POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
+
+// A local normaliser rather than importing leaguePreview's: this module has no
+// imports at all, which is what lets the whole engine be tested without a
+// browser, a network or a league.
+const normalizeName = (str) => String(str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * Blocks keyed by roster id, from the three things the app can actually read:
+ * the rosters, who claims which team (user_leagues), and what each manager
+ * declared. Matching goes through the claimed team name, the same join the
+ * rest of the app uses to work out whose team is whose.
+ */
+export const indexBlocksByRoster = (rosters, claims, blocks) => {
+    const byUser = new Map();
+    (blocks || []).forEach(b => { if (b?.user_id) byUser.set(String(b.user_id), b); });
+    if (!byUser.size) return {};
+
+    const rosterByName = new Map();
+    Object.entries(rosters || {}).forEach(([rosterId, roster]) => {
+        const key = normalizeName(roster?.team_name);
+        // First claim wins: two rosters sharing a normalised name cannot be
+        // told apart, and guessing would attach a manager's block to somebody
+        // else's team.
+        if (key && !rosterByName.has(key)) rosterByName.set(key, String(rosterId));
+    });
+
+    const out = {};
+    (claims || []).forEach(claim => {
+        const block = byUser.get(String(claim?.user_id));
+        if (!block) return;
+        const rosterId = rosterByName.get(normalizeName(claim?.team_name));
+        if (rosterId) out[rosterId] = block;
+    });
+    return out;
+};
+
+/**
+ * How well a proposal matches what the other manager said they want.
+ *
+ * Returns a 0-1 fit and the reasons behind it, because an unexplained boost
+ * in the ranking is indistinguishable from a bug. Note what this does NOT do:
+ * it never makes a trade valid. Only the lineup maths decides that, so a
+ * declared want can reorder the list but can never surface a deal that makes
+ * somebody's team worse.
+ */
+export const blockFit = (proposal, block) => {
+    if (!block || !proposal) return { fit: 0, reasons: [] };
+
+    const givePos = new Set((proposal.give || []).map(p => p?.pos).filter(Boolean));
+    const getPos = new Set((proposal.get || []).map(p => p?.pos).filter(Boolean));
+    const getIds = new Set((proposal.get || []).map(p => String(p?.player_id ?? '')));
+
+    const reasons = [];
+    let points = 0;
+
+    (block.needs || []).forEach(pos => {
+        if (givePos.has(pos)) { points += 1; reasons.push(`they need ${pos}`); }
+    });
+    (block.shopping || []).forEach(pos => {
+        if (getPos.has(pos)) { points += 1; reasons.push(`they're shopping ${pos}`); }
+    });
+    // A named player is the strongest signal there is -- the manager has
+    // already said out loud that he is available.
+    (block.players || []).forEach(id => {
+        if (getIds.has(String(id))) { points += 2; reasons.push('on their block by name'); }
+    });
+
+    return { fit: Math.min(1, points / 3), reasons: [...new Set(reasons)] };
+};
+
 export const playerLabel = (p) =>
     `${p?.fn || p?.first_name || ''} ${p?.ln || p?.last_name || ''}`.trim() || String(p?.player_id ?? 'Unknown');
 
@@ -162,6 +234,10 @@ export const findTrades = ({
     minGain = 0.5,
     fairness = 0.35,
     limit = 20,
+    // What each opponent has declared, keyed by roster id. Absent or empty,
+    // every fit is 0 and the ranking is exactly what it was without it.
+    blocks = {},
+    blockWeight = 0.5,
 } = {}) => {
     const excluded = [];
     const usable = (team) => {
@@ -203,24 +279,35 @@ export const findTrades = ({
                 const gainThem = lineupGain({ players: opp.players, give: get, get: give, slots, valueOf });
                 if (gainThem < minGain) return;
 
+                const mutual = Math.round(Math.min(gainMe, gainThem) * 100) / 100;
+                const { fit, reasons } = blockFit({ give, get }, blocks?.[String(opp.rosterId)]);
+
                 proposals.push({
                     opponent: opp.teamName || opp.rosterId,
                     rosterId: opp.rosterId,
                     give, get,
                     gainMe, gainThem,
+                    fit,
+                    fitReasons: reasons,
+                    // A bounded multiplier, not an additive bonus: a declared
+                    // want can lift a trade by at most blockWeight, so it can
+                    // reorder the list without ever inventing value that the
+                    // lineups do not actually support.
+                    score: Math.round(mutual * (1 + blockWeight * fit) * 100) / 100,
                     giveValue: Math.round(giveValue * 100) / 100,
                     getValue: Math.round(getValue * 100) / 100,
                     fairnessGap: Math.round(gap * 1000) / 1000,
                     // What both managers are shown. Ranking on it keeps the
                     // list honest about who has a reason to accept.
-                    mutual: Math.round(Math.min(gainMe, gainThem) * 100) / 100,
+                    mutual,
                 });
             });
         });
     });
 
     proposals.sort((a, b) =>
-        b.mutual - a.mutual
+        b.score - a.score
+        || b.mutual - a.mutual
         || (b.gainMe + b.gainThem) - (a.gainMe + a.gainThem)
         || playerLabel(a.get[0]).localeCompare(playerLabel(b.get[0])));
 

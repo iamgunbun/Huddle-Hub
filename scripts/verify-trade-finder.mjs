@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 const {
     SLOT_ELIGIBILITY, startingSlots, rosValue, makeRosValue,
     optimalLineup, lineupGain, findTrades, playerLabel,
+    blockFit, indexBlocksByRoster, BLOCK_POSITIONS,
 } = await import('../src/utils/tradeFinder.js');
 
 let checks = 0;
@@ -162,5 +163,82 @@ check('a package never offers the same player twice',
 
 check('a player label falls back to an id rather than rendering blank',
     playerLabel({ player_id: '4046' }), '4046');
+
+// --- Trade block ---
+//
+// What a manager declares can reorder the list. It must never be able to
+// CREATE an entry: only the lineup maths decides whether a trade helps both
+// sides, so a declared want can lift a real trade up the page and nothing
+// more. The first check below is the one that protects that.
+const noBlocks = findTrades({ me, opponents: [them], slots: SLOTS, valueOf: val, maxGive: 1, maxGet: 1 });
+const emptyBlocks = findTrades({
+    me, opponents: [them], slots: SLOTS, valueOf: val, maxGive: 1, maxGet: 1,
+    blocks: { '2': { shopping: [], needs: [], players: [] } },
+});
+check('an empty block changes nothing at all',
+    emptyBlocks.proposals.map(p => `${p.give[0].player_id}>${p.get[0].player_id}`),
+    noBlocks.proposals.map(p => `${p.give[0].player_id}>${p.get[0].player_id}`));
+check('with no blocks the score is just the mutual gain',
+    noBlocks.proposals.every(p => p.score === p.mutual), true);
+check('and no trade claims a fit it does not have',
+    noBlocks.proposals.every(p => p.fit === 0 && p.fitReasons.length === 0), true);
+
+// They said they need a running back and are shopping receivers -- which is
+// exactly the hand-worked swap, so it should be lifted, with its reasons.
+const declared = findTrades({
+    me, opponents: [them], slots: SLOTS, valueOf: val, maxGive: 1, maxGet: 1,
+    blocks: { '2': { shopping: ['WR'], needs: ['RB'], players: [] } },
+});
+const top = declared.proposals[0];
+check('the declared match is ranked first', [top.give[0].pos, top.get[0].pos], ['RB', 'WR']);
+check('and it says why', top.fitReasons.sort(), ["they need RB", "they're shopping WR"]);
+check('the boost is bounded by blockWeight', top.score <= top.mutual * 1.5 + 0.01, true);
+check('the underlying gains are untouched by the declaration',
+    [top.gainMe, top.gainThem],
+    [noBlocks.proposals.find(p => p.give[0].pos === 'RB' && p.get[0].pos === 'WR').gainMe,
+     noBlocks.proposals.find(p => p.give[0].pos === 'RB' && p.get[0].pos === 'WR').gainThem]);
+// A declaration must not drag a losing trade into the list.
+check('a block never adds a trade that was not already mutually positive',
+    declared.proposals.every(p => p.gainMe > 0 && p.gainThem > 0), true);
+check('and never adds trades that were not there without it',
+    declared.proposals.length <= noBlocks.proposals.length, true);
+
+// --- blockFit on its own ---
+const prop = { give: [P('g', 'RB', 10)], get: [P('h', 'WR', 10)] };
+check('no block is no fit', blockFit(prop, null), { fit: 0, reasons: [] });
+check('a need they have, that I am sending, counts',
+    blockFit(prop, { needs: ['RB'] }).reasons, ['they need RB']);
+check('a position they are shopping, that I am taking, counts',
+    blockFit(prop, { shopping: ['WR'] }).reasons, ["they're shopping WR"]);
+check('a need they have for something I am NOT sending does not count',
+    blockFit(prop, { needs: ['TE'] }).fit, 0);
+check('a player named on their block is the strongest signal',
+    blockFit({ give: [], get: [{ player_id: 'star', pos: 'WR' }] }, { players: ['star'] }).fit > 0.6, true);
+check('fit is capped at 1',
+    blockFit(prop, { needs: ['RB'], shopping: ['WR'], players: ['h'] }).fit, 1);
+check('a reason is never repeated',
+    blockFit(prop, { needs: ['RB', 'RB'] }).reasons, ['they need RB']);
+check('every declarable position is a real lineup position',
+    BLOCK_POSITIONS.every(pos => Object.values(SLOT_ELIGIBILITY).some(e => e.includes(pos))), true);
+
+// --- Joining blocks to rosters ---
+const rosters = {
+    1: { roster_id: 1, team_name: 'Couch Commanders' },
+    2: { roster_id: 2, team_name: 'Gridiron Goblins' },
+};
+const claims = [{ user_id: 'u1', team_name: 'Couch Commanders' }, { user_id: 'u2', team_name: 'Gridiron Goblins' }];
+const rows = [{ user_id: 'u2', needs: ['RB'], shopping: ['WR'], players: [] }];
+check('a declared block lands on the right roster',
+    Object.keys(indexBlocksByRoster(rosters, claims, rows)), ['2']);
+check('the block content survives the join',
+    indexBlocksByRoster(rosters, claims, rows)['2'].needs, ['RB']);
+check('name matching ignores case and punctuation',
+    Object.keys(indexBlocksByRoster(rosters, [{ user_id: 'u2', team_name: 'gridiron  goblins!' }], rows)), ['2']);
+check('a manager with no block is simply absent',
+    indexBlocksByRoster(rosters, claims, rows)['1'], undefined);
+check('no blocks yields an empty index, not a crash', indexBlocksByRoster(rosters, claims, []), {});
+check('a claim whose team is not in the league is dropped rather than guessed',
+    indexBlocksByRoster(rosters, [{ user_id: 'u2', team_name: 'Some Other Team' }], rows), {});
+check('null arguments do not throw', indexBlocksByRoster(null, null, null), {});
 
 console.log(`OK: ${checks} trade-finder checks passed`);

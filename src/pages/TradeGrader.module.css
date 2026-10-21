@@ -172,3 +172,50 @@
     .proposalHead { flex-direction: column; gap: 6px; }
     .mutual { text-align: left; }
 }
+
+/* ---- Trade block ---- */
+
+.blockCard {
+    background: #0b0e14; border: 1px solid #1e2530; border-radius: 12px;
+    padding: 20px; margin-bottom: 26px; box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+}
+.blockLabel {
+    color: #94a3b8; font-size: 0.75em; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 1px; margin-bottom: 10px;
+}
+.chipRow { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+.chip {
+    padding: 9px 16px; border-radius: 999px; cursor: pointer; font-family: inherit;
+    font-weight: 800; font-size: 0.8em; letter-spacing: 0.5px;
+    color: #94a3b8; background: #1e2530; border: 1px solid rgba(255,255,255,0.07);
+    transition: all 0.15s ease;
+}
+.chip:hover:not(.chipOn) { color: #f8fafc; border-color: rgba(238,191,28,0.4); }
+.chipOn { color: #1a1407; background: linear-gradient(180deg, #ffe27a, #eebf1c); border-color: transparent; }
+
+.blockNote {
+    width: 100%; background: #1e2530; border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 8px; padding: 12px 14px; color: #f8fafc; font-family: inherit;
+    font-size: 0.9em; line-height: 1.55; outline: none; resize: vertical;
+}
+.blockNote:focus { border-color: rgba(238,191,28,0.5); }
+.blockNote::placeholder { color: #475569; }
+
+.blockOk { color: #4ade80; font-size: 0.82em; font-weight: 700; margin-top: 12px; text-align: center; }
+.blockErr { color: #ef4444; font-size: 0.82em; font-weight: 700; margin-top: 12px; text-align: center; }
+
+.postedBlock {
+    background: #0b0e14; border: 1px solid #1e2530; border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 10px;
+}
+.postedRow { display: flex; gap: 12px; align-items: baseline; color: #f8fafc; font-size: 0.88em; font-weight: 700; margin-bottom: 5px; }
+.postedLabel { color: #64748b; font-size: 0.78em; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; width: 62px; flex-shrink: 0; }
+.postedNote { color: #94a3b8; font-size: 0.85em; font-style: italic; line-height: 1.55; margin-top: 8px; }
+
+/* Why a proposal was lifted. An unexplained reorder is indistinguishable
+   from a bug, so the reason rides along with the trade. */
+.fitNote {
+    display: flex; align-items: center; gap: 7px; color: #eebf1c;
+    font-size: 0.76em; font-weight: 700; margin: -4px 0 12px;
+}
+.fitNote i { font-size: 1.15em; }

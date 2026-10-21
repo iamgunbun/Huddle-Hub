@@ -6,7 +6,11 @@ import styles from './TradeGrader.module.css';
 import { isYahooLeagueId, isEspnLeagueId } from '../utils/platformIds';
 import { resolveRosterPlayers } from '../utils/playerPool';
 import { attachSleeperTeamNames, sleeperOwnerIdsByName, pickMyRosterId } from '../utils/leaguePreview';
-import { findTrades, makeRosValue, startingSlots, playerLabel } from '../utils/tradeFinder';
+import {
+    findTrades, makeRosValue, startingSlots, playerLabel,
+    indexBlocksByRoster, BLOCK_POSITIONS,
+} from '../utils/tradeFinder';
+import { supabase } from '../supabaseClient';
 
 // Fantasy regular seasons end here in every format this app supports, so
 // rest-of-season value stops counting at it rather than running to week 18.
@@ -55,6 +59,9 @@ export default function TradeGrader() {
     // opposite ends, so they share a page, a format setting and a roster load.
     const [mode, setMode] = useState('grade');
     const [finder, setFinder] = useState({ status: 'idle', proposals: [], excluded: [], note: null });
+    const [block, setBlock] = useState({ shopping: [], needs: [], note: '' });
+    const [blockState, setBlockState] = useState({ status: 'idle', message: null });
+    const [leagueBlocks, setLeagueBlocks] = useState([]);
 
     // Engine States
     const [isEvaluating, setIsEvaluating] = useState(false);
@@ -189,6 +196,67 @@ export default function TradeGrader() {
         return `https://sleepercdn.com/content/nfl/players/thumb/${pId}.jpg`;
     };
 
+    // The league's declared blocks, read once the tool is open. Failing to
+    // read them is not an error worth showing: the finder works without any,
+    // which is the whole reason this could ship after it.
+    useEffect(() => {
+        let isMounted = true;
+        const load = async () => {
+            if (!activeLeague?.id) return;
+            const { data: { session } } = await supabase.auth.getSession();
+            const { data, error } = await supabase
+                .from('league_trade_blocks')
+                .select('user_id, shopping, needs, players, note, updated_at')
+                .eq('league_id', activeLeague.id);
+            if (!isMounted || error) {
+                if (error) console.warn('Trade blocks unavailable:', error.message);
+                return;
+            }
+            setLeagueBlocks(data || []);
+            const mine = (data || []).find(b => b.user_id === session?.user?.id);
+            if (mine) setBlock({ shopping: mine.shopping || [], needs: mine.needs || [], note: mine.note || '' });
+        };
+        load();
+        return () => { isMounted = false; };
+    }, [activeLeague?.id]);
+
+    const toggleBlockPos = (field, pos) => {
+        setBlock(prev => ({
+            ...prev,
+            [field]: prev[field].includes(pos)
+                ? prev[field].filter(p => p !== pos)
+                : [...prev[field], pos],
+        }));
+        setBlockState({ status: 'idle', message: null });
+    };
+
+    const saveBlock = async () => {
+        setBlockState({ status: 'saving', message: null });
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.user) throw new Error('You need to be signed in to post a block.');
+            const row = {
+                league_id: activeLeague.id,
+                user_id: session.user.id,
+                shopping: block.shopping,
+                needs: block.needs,
+                note: block.note?.trim() || null,
+                updated_at: new Date().toISOString(),
+            };
+            const { error } = await supabase
+                .from('league_trade_blocks')
+                .upsert(row, { onConflict: 'league_id,user_id' });
+            if (error) throw error;
+            setLeagueBlocks(prev => [...prev.filter(b => b.user_id !== session.user.id), row]);
+            setBlockState({ status: 'saved', message: 'Posted to your league.' });
+            // A saved block changes the ranking, so a stale result list would
+            // be quietly wrong -- drop it rather than leave it up.
+            setFinder({ status: 'idle', proposals: [], excluded: [], note: null });
+        } catch (err) {
+            setBlockState({ status: 'error', message: err.message });
+        }
+    };
+
     /**
      * Searches every other roster in the league for swaps that raise BOTH
      * starting lineups. All of the arithmetic is local (utils/tradeFinder.js)
@@ -253,7 +321,15 @@ export default function TradeGrader() {
                 .map(([id, roster]) => toTeam(id, roster))
                 .filter(t => t.players.length);
 
-            const result = findTrades({ me: meTeam, opponents, slots, valueOf, limit: 12 });
+            // Declared blocks only reorder what the lineup maths already
+            // found -- see blockFit in utils/tradeFinder.js.
+            const { data: claims } = await supabase
+                .from('user_leagues')
+                .select('user_id, team_name')
+                .eq('league_id', activeLeague.id);
+            const blocks = indexBlocksByRoster(rosters, claims || [], leagueBlocks);
+
+            const result = findTrades({ me: meTeam, opponents, slots, valueOf, limit: 12, blocks });
             setFinder({ status: 'done', ...result, weeks: weeks.length, myTeam: meTeam.teamName, note: null });
         } catch (err) {
             console.error('Trade finder failed:', err);
@@ -374,12 +450,97 @@ export default function TradeGrader() {
                 <button
                     className={`${styles.modeTab} ${mode === 'grade' ? styles.modeOn : ''}`}
                     onClick={() => setMode('grade')}
-                >Grade a Trade</button>
+                >Grade</button>
                 <button
                     className={`${styles.modeTab} ${mode === 'find' ? styles.modeOn : ''}`}
                     onClick={() => setMode('find')}
-                >Find a Trade</button>
+                >Find</button>
+                <button
+                    className={`${styles.modeTab} ${mode === 'block' ? styles.modeOn : ''}`}
+                    onClick={() => setMode('block')}
+                >Block</button>
             </div>
+
+            {mode === 'block' && (
+                <div className={styles.finderPane}>
+                    <p className={styles.finderIntro}>
+                        Say what you&rsquo;d move and what you&rsquo;re after. Your leaguemates see it,
+                        and the finder pushes trades that match somebody&rsquo;s stated wants to the
+                        top &mdash; it never invents one, it just reorders what the lineups already
+                        support.
+                    </p>
+
+                    <div className={styles.blockCard}>
+                        <div className={styles.blockLabel}>I&rsquo;d move</div>
+                        <div className={styles.chipRow}>
+                            {BLOCK_POSITIONS.map(pos => (
+                                <button
+                                    key={pos}
+                                    className={`${styles.chip} ${block.shopping.includes(pos) ? styles.chipOn : ''}`}
+                                    onClick={() => toggleBlockPos('shopping', pos)}
+                                >{pos}</button>
+                            ))}
+                        </div>
+
+                        <div className={styles.blockLabel}>I need</div>
+                        <div className={styles.chipRow}>
+                            {BLOCK_POSITIONS.map(pos => (
+                                <button
+                                    key={pos}
+                                    className={`${styles.chip} ${block.needs.includes(pos) ? styles.chipOn : ''}`}
+                                    onClick={() => toggleBlockPos('needs', pos)}
+                                >{pos}</button>
+                            ))}
+                        </div>
+
+                        <div className={styles.blockLabel}>Anything else</div>
+                        <textarea
+                            className={styles.blockNote}
+                            rows={3}
+                            maxLength={280}
+                            placeholder="Not moving my RB1. Open on anything else."
+                            value={block.note}
+                            onChange={(e) => { setBlock(p => ({ ...p, note: e.target.value })); setBlockState({ status: 'idle', message: null }); }}
+                        />
+
+                        <button
+                            className={styles.evalButton}
+                            style={{ marginTop: '16px' }}
+                            onClick={saveBlock}
+                            disabled={blockState.status === 'saving'}
+                        >
+                            {blockState.status === 'saving' ? 'Posting...' : 'Post to League'}
+                        </button>
+                        {blockState.message && (
+                            <div className={blockState.status === 'error' ? styles.blockErr : styles.blockOk}>
+                                {blockState.message}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className={styles.finderMeta}>What your league has posted</div>
+                    {leagueBlocks.length === 0 ? (
+                        <div className={styles.finderEmpty}>
+                            Nobody has posted a block yet. The finder works without one &mdash;
+                            this only changes the order things show up in.
+                        </div>
+                    ) : (
+                        leagueBlocks.map(b => (
+                            <div className={styles.postedBlock} key={b.user_id}>
+                                <div className={styles.postedRow}>
+                                    <span className={styles.postedLabel}>Moving</span>
+                                    <span>{b.shopping?.length ? b.shopping.join(', ') : '--'}</span>
+                                </div>
+                                <div className={styles.postedRow}>
+                                    <span className={styles.postedLabel}>Needs</span>
+                                    <span>{b.needs?.length ? b.needs.join(', ') : '--'}</span>
+                                </div>
+                                {b.note && <div className={styles.postedNote}>&ldquo;{b.note}&rdquo;</div>}
+                            </div>
+                        ))
+                    )}
+                </div>
+            )}
 
             {mode === 'find' && (
                 <div className={styles.finderPane}>
@@ -444,6 +605,12 @@ export default function TradeGrader() {
                                             Both gain {proposal.mutual.toFixed(1)}+ pts
                                         </span>
                                     </div>
+                                    {proposal.fitReasons.length > 0 && (
+                                        <div className={styles.fitNote}>
+                                            <i className="material-icons">campaign</i>
+                                            Matches their block &mdash; {proposal.fitReasons.join(', ')}
+                                        </div>
+                                    )}
                                     <div className={styles.swap}>
                                         <div className={styles.swapSide}>
                                             <div className={styles.swapLabel}>You get</div>

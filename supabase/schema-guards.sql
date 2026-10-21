@@ -281,3 +281,62 @@ create policy league_weekly_summaries_select_member on public.league_weekly_summ
 -- `authenticated` at all. Only api/weekly-summary.js writes these, using the
 -- service-role key (which bypasses RLS entirely), the same way every other
 -- server-only write in this app works.
+
+-- ---------------------------------------------------------------------------
+-- Trade block
+-- ---------------------------------------------------------------------------
+-- What a manager has said out loud about what they'd move and what they want.
+-- One row per manager per league, written only by that manager.
+--
+-- This is deliberately NOT the input to the trade finder -- the finder works
+-- from lineup maths alone and does so on day one, before anybody has declared
+-- anything (see src/utils/tradeFinder.js). A block only reorders results that
+-- the maths already found, so an empty table costs the feature nothing. That
+-- is the whole reason it could ship second.
+--
+-- `players` holds platform player ids a manager has explicitly put up. The
+-- column exists from the start because adding it later is a migration;
+-- the first version of the UI collects positions and a note, and the engine
+-- already scores named players when they arrive.
+create table if not exists public.league_trade_blocks (
+    league_id  uuid not null references public.leagues(id) on delete cascade,
+    user_id    uuid not null references auth.users(id) on delete cascade,
+    shopping   text[] not null default '{}',
+    needs      text[] not null default '{}',
+    players    text[] not null default '{}',
+    note       text,
+    updated_at timestamptz not null default now(),
+    primary key (league_id, user_id)
+);
+
+alter table public.league_trade_blocks enable row level security;
+
+drop policy if exists league_trade_blocks_select_member on public.league_trade_blocks;
+drop policy if exists league_trade_blocks_write_own on public.league_trade_blocks;
+drop policy if exists league_trade_blocks_update_own on public.league_trade_blocks;
+drop policy if exists league_trade_blocks_delete_own on public.league_trade_blocks;
+
+-- Read: every member of the league. A trade block that only its author can
+-- see is a diary, not a trade block.
+create policy league_trade_blocks_select_member on public.league_trade_blocks
+    for select using (league_id in (select public.current_user_league_ids()));
+
+-- Write: your own row, in a league you are actually in. Both halves matter --
+-- without the membership test a user could post a block into a league they
+-- have nothing to do with, and without the user_id test they could overwrite
+-- a leaguemate's.
+create policy league_trade_blocks_write_own on public.league_trade_blocks
+    for insert with check (
+        user_id = auth.uid()
+        and league_id in (select public.current_user_league_ids())
+    );
+
+create policy league_trade_blocks_update_own on public.league_trade_blocks
+    for update using (user_id = auth.uid())
+    with check (
+        user_id = auth.uid()
+        and league_id in (select public.current_user_league_ids())
+    );
+
+create policy league_trade_blocks_delete_own on public.league_trade_blocks
+    for delete using (user_id = auth.uid());
