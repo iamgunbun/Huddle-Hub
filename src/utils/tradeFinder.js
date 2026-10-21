@@ -179,52 +179,76 @@ export const indexBlocksByRoster = (rosters, claims, blocks) => {
 };
 
 /**
- * How well a proposal matches what the other manager said they want.
+ * How well a proposal matches what the two managers have declared.
  *
- * Returns a 0-1 fit and the reasons behind it, because an unexplained boost
- * in the ranking is indistinguishable from a bug. Note what this does NOT do:
- * it never makes a trade valid. Only the lineup maths decides that, so a
- * declared want can reorder the list but can never surface a deal that makes
- * somebody's team worse.
+ * A block match is a HANDSHAKE, with two legs:
+ *
+ *   outbound -- the player leaving your roster is one they said they need,
+ *               and/or one you said you would move
+ *   inbound  -- the player coming back is one they said they are shopping,
+ *               and/or one you said you need
+ *
+ * Both legs have to connect. The first version scored the four signals
+ * independently and added them up, which meant a trade could be boosted off
+ * "they need RB" alone -- while nothing said you would part with a back, or
+ * that you wanted anything coming the other way. That is not a trade anybody
+ * asked for, it is half of one, and it was the reported problem: results that
+ * did not look like they matched the blocks at all.
+ *
+ * Each leg scores 0.5 for one side declaring it and 1.0 when both sides
+ * agree, so a full four-way handshake is a perfect fit and a thinner one
+ * still counts. Either leg at zero is no match at all.
+ *
+ * Note what this still does NOT do: it never makes a trade valid. Only the
+ * lineup maths decides that, so a declaration can reorder the list and can
+ * never surface a deal that makes somebody's team worse.
  */
 export const blockFit = (proposal, theirBlock, myBlock) => {
-    if (!proposal || (!theirBlock && !myBlock)) return { fit: 0, reasons: [] };
+    const none = { fit: 0, reasons: [], legs: { outbound: 0, inbound: 0 } };
+    if (!proposal || (!theirBlock && !myBlock)) return none;
 
     const givePos = new Set((proposal.give || []).map(p => p?.pos).filter(Boolean));
     const getPos = new Set((proposal.get || []).map(p => p?.pos).filter(Boolean));
     const getIds = new Set((proposal.get || []).map(p => String(p?.player_id ?? '')));
 
-    const reasons = [];
-    let points = 0;
+    const outReasons = [];
+    const inReasons = [];
+    let theyNeedIt = false, iWouldMoveIt = false;
+    let theyWouldMoveIt = false, iNeedIt = false, namedByThem = false;
 
-    // --- what the other manager asked for ---
+    // --- outbound: is the player leaving one anybody wanted to move? ---
     (theirBlock?.needs || []).forEach(pos => {
-        if (givePos.has(pos)) { points += 1; reasons.push(`they need ${pos}`); }
-    });
-    (theirBlock?.shopping || []).forEach(pos => {
-        if (getPos.has(pos)) { points += 1; reasons.push(`they're shopping ${pos}`); }
-    });
-    // A named player is the strongest signal there is -- the manager has
-    // already said out loud that he is available.
-    (theirBlock?.players || []).forEach(id => {
-        if (getIds.has(String(id))) { points += 2; reasons.push('on their block by name'); }
-    });
-
-    // --- and what YOU asked for ---
-    //
-    // The first version weighed only the opponent's block, which meant
-    // editing your own could never change your own results: you could set
-    // "I need WR", re-run, and watch nothing move. Your declaration is a
-    // statement about which trades you actually want to see, so it counts
-    // here on the same footing.
-    (myBlock?.needs || []).forEach(pos => {
-        if (getPos.has(pos)) { points += 1; reasons.push(`you need ${pos}`); }
+        if (givePos.has(pos)) { theyNeedIt = true; outReasons.push(`they need ${pos}`); }
     });
     (myBlock?.shopping || []).forEach(pos => {
-        if (givePos.has(pos)) { points += 1; reasons.push(`you're shopping ${pos}`); }
+        if (givePos.has(pos)) { iWouldMoveIt = true; outReasons.push(`you're shopping ${pos}`); }
     });
 
-    return { fit: Math.min(1, points / 3), reasons: [...new Set(reasons)] };
+    // --- inbound: is the player coming back one anybody wanted here? ---
+    (theirBlock?.shopping || []).forEach(pos => {
+        if (getPos.has(pos)) { theyWouldMoveIt = true; inReasons.push(`they're shopping ${pos}`); }
+    });
+    (myBlock?.needs || []).forEach(pos => {
+        if (getPos.has(pos)) { iNeedIt = true; inReasons.push(`you need ${pos}`); }
+    });
+    // A manager who named a player has already said out loud that he is
+    // available, which settles the inbound leg on its own.
+    (theirBlock?.players || []).forEach(id => {
+        if (getIds.has(String(id))) { namedByThem = true; inReasons.push('on their block by name'); }
+    });
+
+    const outbound = (theyNeedIt ? 0.5 : 0) + (iWouldMoveIt ? 0.5 : 0);
+    const inbound = namedByThem ? 1 : ((theyWouldMoveIt ? 0.5 : 0) + (iNeedIt ? 0.5 : 0));
+
+    // Half a handshake is not a match. Reasons are dropped with it, so the
+    // UI can never claim a trade "matches a block" while it scores nothing.
+    if (!outbound || !inbound) return none;
+
+    return {
+        fit: Math.min(1, (outbound + inbound) / 2),
+        reasons: [...new Set([...outReasons, ...inReasons])],
+        legs: { outbound, inbound },
+    };
 };
 
 export const playerLabel = (p) =>

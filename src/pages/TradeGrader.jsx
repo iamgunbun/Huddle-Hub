@@ -501,9 +501,10 @@ export default function TradeGrader() {
                 <div className={styles.finderPane}>
                     <p className={styles.finderIntro}>
                         Say what you&rsquo;d move and what you&rsquo;re after. Your leaguemates see it,
-                        and the finder pushes trades that match somebody&rsquo;s stated wants to the
-                        top &mdash; it never invents one, it just reorders what the lineups already
-                        support.
+                        and the finder lifts trades that line up <strong>both ways</strong> &mdash;
+                        somebody wanting what you&rsquo;d send, and offering what you want back. Half a
+                        match is half a trade, so it doesn&rsquo;t count. It never invents a trade
+                        either; it only reorders what the lineups already support.
                     </p>
 
                     <div className={styles.blockCard}>
@@ -621,7 +622,7 @@ export default function TradeGrader() {
                                 checked={matchingOnly}
                                 onChange={(e) => { setMatchingOnly(e.target.checked); setFinder({ status: 'idle', proposals: [], excluded: [], note: null }); }}
                             />
-                            Only trades somebody asked for
+                            Only trades both sides asked for
                         </label>
                     )}
 
@@ -637,7 +638,7 @@ export default function TradeGrader() {
                     {finder.status === 'done' && finder.proposals.length === 0 && (
                         <div className={styles.finderEmpty}>
                             {matchingOnly
-                                ? 'No trade matches a posted block right now. Untick the filter to see every trade that helps both sides.'
+                                ? 'No trade lines up with the blocks both ways right now \u2014 that needs somebody wanting what you\u2019d send AND offering what you want back. Untick the filter to see every trade that helps both lineups.'
                                 : 'No trade here makes both lineups better right now. That is a real answer, not a failure \u2014 it usually means your roster is balanced against the rest of the league.'}
                         </div>
                     )}
@@ -658,8 +659,8 @@ export default function TradeGrader() {
                                     </div>
                                     {proposal.fitReasons.length > 0 && (
                                         <div className={styles.fitNote}>
-                                            <i className="material-icons">campaign</i>
-                                            Matches their block &mdash; {proposal.fitReasons.join(', ')}
+                                            <i className="material-icons">handshake</i>
+                                            Both sides asked for this &mdash; {proposal.fitReasons.join(', ')}
                                         </div>
                                     )}
                                     <div className={styles.swap}>

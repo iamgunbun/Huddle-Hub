@@ -206,21 +206,66 @@ check('a block never adds a trade that was not already mutually positive',
 check('and never adds trades that were not there without it',
     declared.proposals.length <= noBlocks.proposals.length, true);
 
-// --- blockFit on its own ---
+// --- blockFit: a match is a HANDSHAKE, not a single signal ---
+//
+// Reported as results that did not look like they matched the blocks. The
+// cause was scoring the four signals independently and adding them, so one
+// lone "they need RB" boosted a trade while nothing said the sender would
+// part with a back or wanted anything coming the other way. Both legs --
+// something they want going out, something you want coming back -- now have
+// to connect, and these are the checks that hold that line.
 const prop = { give: [P('g', 'RB', 10)], get: [P('h', 'WR', 10)] };
-check('no block is no fit', blockFit(prop, null), { fit: 0, reasons: [] });
-check('a need they have, that I am sending, counts',
-    blockFit(prop, { needs: ['RB'] }).reasons, ['they need RB']);
-check('a position they are shopping, that I am taking, counts',
-    blockFit(prop, { shopping: ['WR'] }).reasons, ["they're shopping WR"]);
-check('a need they have for something I am NOT sending does not count',
-    blockFit(prop, { needs: ['TE'] }).fit, 0);
-check('a player named on their block is the strongest signal',
-    blockFit({ give: [], get: [{ player_id: 'star', pos: 'WR' }] }, { players: ['star'] }).fit > 0.6, true);
-check('fit is capped at 1',
-    blockFit(prop, { needs: ['RB'], shopping: ['WR'], players: ['h'] }).fit, 1);
+const NO_FIT = { fit: 0, reasons: [], legs: { outbound: 0, inbound: 0 } };
+
+check('no block at all is no fit', blockFit(prop, null), NO_FIT);
+check('no block on either side is no fit', blockFit(prop, null, null), NO_FIT);
+
+// ONE-WAY: each of these is half a trade, and none of them should count.
+check('"they need what I am sending" alone is not a match',
+    blockFit(prop, { needs: ['RB'] }), NO_FIT);
+check('"they are shopping what I am taking" alone is not a match',
+    blockFit(prop, { shopping: ['WR'] }), NO_FIT);
+check('"I need what I am getting" alone is not a match',
+    blockFit(prop, null, { needs: ['WR'] }), NO_FIT);
+check('"I would move what I am sending" alone is not a match',
+    blockFit(prop, null, { shopping: ['RB'] }), NO_FIT);
+check('a one-way signal carries no reasons either, so nothing can claim a match it does not have',
+    blockFit(prop, { needs: ['RB'] }).reasons, []);
+
+// TWO-WAY: both legs connect.
+const theirs = blockFit(prop, { needs: ['RB'], shopping: ['WR'] });
+check('their need plus their shopping list is a two-way match', theirs.fit, 0.5);
+check('and it names both legs', theirs.reasons.sort(), ['they need RB', "they're shopping WR"]);
+
+const mine = blockFit(prop, null, { shopping: ['RB'], needs: ['WR'] });
+check('my own block can complete the handshake by itself', mine.fit, 0.5);
+check('and it names both legs too', mine.reasons.sort(), ["you need WR", "you're shopping RB"]);
+
+const across = blockFit(prop, { needs: ['RB'] }, { needs: ['WR'] });
+check('one leg from each manager is still a handshake', across.fit, 0.5);
+check('their outbound and my inbound', across.reasons.sort(), ['they need RB', 'you need WR']);
+
+// All four declarations agreeing is the strongest case there is.
+const full = blockFit(prop, { needs: ['RB'], shopping: ['WR'] }, { shopping: ['RB'], needs: ['WR'] });
+check('all four declarations agreeing is a perfect fit', full.fit, 1);
+check('both legs are full', full.legs, { outbound: 1, inbound: 1 });
+check('a perfect fit beats a thin one', full.fit > theirs.fit, true);
+
+// A named player settles the inbound leg, but still needs an outbound one.
+const namedOnly = blockFit(prop, { players: ['h'] });
+check('a named player alone is still only half a trade', namedOnly, NO_FIT);
+const namedPlusOut = blockFit(prop, { players: ['h'], needs: ['RB'] });
+check('a named player with an outbound leg matches', namedPlusOut.fit, 0.75);
+check('and the named signal fills the inbound leg on its own', namedPlusOut.legs.inbound, 1);
+
+check('a need for something the trade does not move does not count',
+    blockFit(prop, { needs: ['TE'], shopping: ['WR'] }), NO_FIT);
+check('fit never exceeds 1',
+    blockFit(prop, { needs: ['RB'], shopping: ['WR'], players: ['h'] },
+        { shopping: ['RB'], needs: ['WR'] }).fit, 1);
 check('a reason is never repeated',
-    blockFit(prop, { needs: ['RB', 'RB'] }).reasons, ['they need RB']);
+    blockFit(prop, { needs: ['RB', 'RB'], shopping: ['WR'] }).reasons.sort(),
+    ['they need RB', "they're shopping WR"]);
 check('every declarable position is a real lineup position',
     BLOCK_POSITIONS.every(pos => Object.values(SLOT_ELIGIBILITY).some(e => e.includes(pos))), true);
 
@@ -265,12 +310,16 @@ check('an empty block of my own is still no boost',
         myBlock: { needs: [], shopping: [] } }).proposals.every(p => p.fit === 0), true);
 check('a need of mine for something the trade does not bring me does not count',
     blockFit({ give: [P('g', 'RB', 1)], get: [P('h', 'WR', 1)] }, null, { needs: ['TE'] }).fit, 0);
-check('both blocks can contribute to one fit',
+// The reported case, stated directly: half a handshake must not rank.
+check('one of my own signals alone does not make a match either',
+    findTrades({ me, opponents: [them], slots: SLOTS, valueOf: val, maxGive: 1, maxGet: 1,
+        myBlock: { needs: ['WR'], shopping: [] } }).proposals.every(p => p.fit === 0), true);
+check('both blocks can contribute to one handshake',
     blockFit({ give: [P('g', 'RB', 1)], get: [P('h', 'WR', 1)] },
         { needs: ['RB'] }, { needs: ['WR'] }).reasons.sort(),
     ['they need RB', 'you need WR']);
 check('no blocks at all on either side is still no fit',
-    blockFit({ give: [], get: [] }, null, null), { fit: 0, reasons: [] });
+    blockFit({ give: [], get: [] }, null, null).fit, 0);
 
 // --- Matching-only ---
 const onlyMatching = findTrades({
