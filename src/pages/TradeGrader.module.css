@@ -230,3 +230,11 @@
     padding: 2px 9px; font-size: 0.72em; font-weight: 900;
     text-transform: uppercase; letter-spacing: 0.6px;
 }
+
+.onlyToggle {
+    display: flex; align-items: center; justify-content: center; gap: 9px;
+    color: #94a3b8; font-size: 0.82em; font-weight: 700; cursor: pointer;
+    margin: -10px 0 20px; user-select: none;
+}
+.onlyToggle input { accent-color: #eebf1c; width: 16px; height: 16px; cursor: pointer; }
+.onlyToggle:hover { color: #f8fafc; }
